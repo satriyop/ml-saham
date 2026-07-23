@@ -51,8 +51,8 @@ ml-saham/
 ├── artifacts.md
 ├── mvp_acceptance.md
 ├── problem_backlog.md
-├── specs.md                  # original intent
-├── chapter_proposal.md       # discussion log (may delete later)
+├── roadmap.md
+├── archive/                  # local drafts only (gitignored)
 ├── src/ml_saham/
 │   ├── __init__.py
 │   ├── cli/

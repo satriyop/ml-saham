@@ -3,7 +3,7 @@
 Build order for the personal IDX ML learning CLI.  
 Locked design: [chapters.md](./chapters.md) · [ux.md](./ux.md) · [architecture.md](./architecture.md) · [data_contract.md](./data_contract.md) · [artifacts.md](./artifacts.md) · [mvp_acceptance.md](./mvp_acceptance.md)
 
-Discussion log (historical): [chapter_proposal.md](./chapter_proposal.md)
+Early drafts (local only): `archive/` (gitignored).
 
 ---
 

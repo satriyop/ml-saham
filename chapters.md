@@ -2,8 +2,7 @@
 
 Final curriculum for `ml-saham`: problem-centric, IDX-only, personal self-teaching with **real** market data.
 
-Related discussion log (keep until frozen): [chapter_proposal.md](./chapter_proposal.md)  
-Original intent: [specs.md](./specs.md)  
+Frozen design docs (this set). Early drafts live locally under `archive/` (gitignored).  
 Ideas not scheduled: [problem_backlog.md](./problem_backlog.md)  
 CLI UX: [ux.md](./ux.md)  
 Architecture: [architecture.md](./architecture.md) · Data: [data_contract.md](./data_contract.md) · Artifacts: [artifacts.md](./artifacts.md) · MVP: [mvp_acceptance.md](./mvp_acceptance.md)  

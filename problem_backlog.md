@@ -3,7 +3,7 @@
 Ideas that are **not** scheduled in [chapters.md](./chapters.md).  
 Keep this list small. Promote only with a generic IDX problem statement (then optional `ai-saham` deep-dive).
 
-Discussion context: [chapter_proposal.md](./chapter_proposal.md)
+Discussion context: early drafts in local `archive/` (gitignored).
 
 ---
 
