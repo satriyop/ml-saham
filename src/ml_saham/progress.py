@@ -1,11 +1,27 @@
-"""Lightweight progress tracking under ~/.ml-saham/."""
+"""Lightweight progress tracking under ~/.ml-saham (or ML_SAHAM_HOME)."""
 
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
+ENV_HOME = "ML_SAHAM_HOME"
+
+
+def progress_dir() -> Path:
+    override = os.environ.get(ENV_HOME)
+    if override:
+        return Path(override).expanduser().resolve()
+    return Path.home() / ".ml-saham"
+
+
+def progress_file() -> Path:
+    return progress_dir() / "progress.json"
+
+
+# Back-compat aliases (resolved at import — prefer progress_dir()/progress_file())
 PROGRESS_DIR = Path.home() / ".ml-saham"
 PROGRESS_FILE = PROGRESS_DIR / "progress.json"
 
@@ -15,10 +31,11 @@ def _empty() -> dict[str, Any]:
 
 
 def load_progress() -> dict[str, Any]:
-    if not PROGRESS_FILE.exists():
+    path = progress_file()
+    if not path.exists():
         return _empty()
     try:
-        data = json.loads(PROGRESS_FILE.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return _empty()
     if not isinstance(data, dict):
@@ -29,8 +46,9 @@ def load_progress() -> dict[str, Any]:
 
 
 def save_progress(data: dict[str, Any]) -> None:
-    PROGRESS_DIR.mkdir(parents=True, exist_ok=True)
-    PROGRESS_FILE.write_text(
+    d = progress_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "progress.json").write_text(
         json.dumps(data, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )

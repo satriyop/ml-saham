@@ -172,8 +172,8 @@ Phase 0 scaffold
 
 ## Immediate next actions
 
-1. Phase 2: shared metrics + artifact writer + explore pager.  
-2. Phase 3.1: `orientasi` as first real chapter.
+1. Phase 3.1: `orientasi` as first real chapter.  
+2. Then Ch.1–4, 6 per MVP order in this roadmap.
 
 ---
 
@@ -183,6 +183,7 @@ Phase 0 scaffold
 |---|---|
 | Design freeze (chapters/ux/arch/data/artifacts/mvp) | **Yes** |
 | Phase 0 scaffold | **Done** |
-| Phase 1 data plane + doctor | **Done** (`ml-saham doctor` MVP checks + fixture tests) |
-| Implementation | Phase 2 next (metrics + artifacts) |
-| Current focus | Phase 2 |
+| Phase 1 data plane + doctor | **Done** |
+| Phase 2 shared eval + artifacts | **Done** (metrics, costs, writer, explore pager) |
+| Implementation | Phase 3 next (`orientasi`) |
+| Current focus | Phase 3 |

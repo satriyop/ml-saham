@@ -15,5 +15,5 @@ build/
 
 # Local runtime
 .ml-saham/
-artifacts/
+/artifacts/
 data/learning.db

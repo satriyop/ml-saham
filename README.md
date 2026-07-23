@@ -32,14 +32,17 @@ Isi data lewat `ai-saham` (`saham fetch market`, dll). `ml-saham` tidak scrape p
 ml-saham chapters          # jalur MVP + progress
 ml-saham chapters --all
 ml-saham status
-ml-saham doctor            # cek path + tabel MVP data
-ml-saham explore orientasi # stub sampai Phase 3
-ml-saham demo orientasi
-ml-saham deepdive orientasi
+ml-saham doctor
+ml-saham explore orientasi --no-pager   # pager default; --verbose untuk detail
+ml-saham demo orientasi                 # tulis artifacts/<topic>/… (kecuali --no-artifact)
+ml-saham demo orientasi --with-costs
+ml-saham compare factor-score --baseline hand --against elastic-net
+ml-saham deepdive broker-flow
 ml-saham glossary
 ```
 
-Progress disimpan di `~/.ml-saham/progress.json` (E=explore, D=demo, DV=deepdive).
+Progress disimpan di `~/.ml-saham/progress.json` (E=explore, D=demo, DV=deepdive).  
+Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir` (folder di-gitignore).
 
 ## Status implementasi
 
@@ -47,8 +50,8 @@ Progress disimpan di `~/.ml-saham/progress.json` (E=explore, D=demo, DV=deepdive
 |---|---|---|
 | 0 | Scaffold CLI + registry + DB resolve | **done** |
 | 1 | Doctor tabel MVP + loaders + universe | **done** |
-| 2 | Metrics + artifacts | berikutnya |
-| 3 | Chapter 0,1,2,3,4,6 | belum |
+| 2 | Metrics + artifacts + explore pager | **done** |
+| 3 | Chapter 0,1,2,3,4,6 | berikutnya |
 
 ## Catatan
 

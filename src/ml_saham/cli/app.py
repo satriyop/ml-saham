@@ -10,12 +10,20 @@ from rich.console import Console
 from rich.table import Table
 
 from ml_saham import __version__
+from ml_saham.artifacts import (
+    ArtifactWriteRequest,
+    ScoreboardMeta,
+    resolve_artifacts_root,
+    stub_demo_metrics,
+    write_artifact_pack,
+)
 from ml_saham.chapters import get as get_chapter
 from ml_saham.chapters import mvp_chapters
 from ml_saham.chapters.registry import all_chapters
+from ml_saham.cli.explore_view import explore_body, print_explore
 from ml_saham.data.connection import resolve_db_path
 from ml_saham.data.doctor_checks import format_doctor_report, run_doctor
-from ml_saham.eval import default_banners
+from ml_saham.eval import costs_label, default_banners
 from ml_saham.progress import mark, topic_flags
 
 app = typer.Typer(
@@ -60,10 +68,20 @@ def main_callback(
         file_okay=True,
         resolve_path=False,
     ),
+    artifacts_dir: Optional[Path] = typer.Option(
+        None,
+        "--artifacts-dir",
+        help="Root folder artifact (default: ML_SAHAM_ARTIFACTS atau ./artifacts)",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=False,
+    ),
 ) -> None:
     """Global options."""
     ctx.ensure_object(dict)
     ctx.obj["db"] = resolve_db_path(db)
+    ctx.obj["artifacts_dir"] = artifacts_dir
 
 
 @app.command("chapters")
@@ -114,6 +132,17 @@ def status_cmd(ctx: typer.Context) -> None:
 @app.command("explore")
 def explore_cmd(
     topic: str = typer.Argument(help="Topic slug, mis. factor-score"),
+    no_pager: bool = typer.Option(
+        False,
+        "--no-pager",
+        help="Cetak explore tanpa pager",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Tambah detail di bawah caveat",
+    ),
 ) -> None:
     """Jelaskan masalah umum + opsi + caveat (belum train)."""
     try:
@@ -121,19 +150,25 @@ def explore_cmd(
     except KeyError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
-    console.print(f"[bold]Ch.{ch.number}  {ch.title}[/bold]")
-    console.print(f"topic={ch.slug}  phase={_phase_label(ch.phase)}  data={ch.required_data}")
-    console.print(
-        "\n[yellow]Konten explore belum diisi "
-        f"(Phase 3 — chapter {ch.slug}).[/yellow]"
-    )
-    console.print(f"\nLanjut:  ml-saham demo {ch.slug}")
+    text = explore_body(ch, verbose=verbose)
+    print_explore(console, text, use_pager=not no_pager)
     mark(topic, "explore")
 
 
 @app.command("demo")
 def demo_cmd(
+    ctx: typer.Context,
     topic: str = typer.Argument(help="Topic slug"),
+    with_costs: bool = typer.Option(
+        False,
+        "--with-costs",
+        help="Terapkan haircut biaya sederhana pada metrik stub",
+    ),
+    no_artifact: bool = typer.Option(
+        False,
+        "--no-artifact",
+        help="Jangan tulis artifact pack",
+    ),
 ) -> None:
     """Jalankan demo pada data real."""
     try:
@@ -141,21 +176,67 @@ def demo_cmd(
     except KeyError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
+
+    db_path: Path = ctx.obj["db"]
     console.print(f"[bold]Demo Ch.{ch.number} {ch.slug}[/bold]")
+    console.print(f"Data     db={db_path}")
     console.print(
-        "[yellow]Demo belum diimplementasi "
-        f"(Phase 3 — chapter {ch.slug}).[/yellow]"
+        "[yellow]Demo chapter belum diimplementasi "
+        f"(Phase 3 — {ch.slug}); menulis artifact stub Phase 2.[/yellow]"
+    )
+
+    metrics = stub_demo_metrics(with_costs=with_costs)
+    console.print(
+        f"Stub metrics  rank_ic={metrics['rank_ic']:.4f}  n={metrics['n']}"
     )
     console.print()
-    console.print(default_banners().render())
+    console.print(default_banners(with_costs=with_costs).render())
+
+    if not no_artifact:
+        root = resolve_artifacts_root(ctx.obj.get("artifacts_dir"))
+        pack = write_artifact_pack(
+            ArtifactWriteRequest(
+                topic=ch.slug,
+                chapter=ch.number,
+                mode="demo",
+                db_path=db_path,
+                model="stub",
+                scoreboard=ScoreboardMeta(costs=costs_label(with_costs=with_costs)),
+                summary_md=(
+                    f"# Demo stub · {ch.slug}\n\n"
+                    f"Phase 2 frame saja. Chapter {ch.number} belum punya "
+                    f"`run_demo` real.\n\n"
+                    f"- rank_ic (stub): {metrics['rank_ic']:.4f}\n"
+                    f"- with_costs: {with_costs}\n\n"
+                    "## Caveat\n\n"
+                    "- Bukan saran trading / investasi.\n"
+                    "- Metrik di metrics.json adalah toy data deterministik.\n"
+                ),
+                metrics=metrics,
+            ),
+            artifacts_root=root,
+        )
+        console.print(f"\nArtifact:  {pack.path}")
+
     mark(topic, "demo")
 
 
 @app.command("compare")
 def compare_cmd(
+    ctx: typer.Context,
     topic: str = typer.Argument(help="Topic slug"),
     baseline: str = typer.Option(..., "--baseline", help="Baseline id"),
     against: str = typer.Option(..., "--against", help="Model pembanding"),
+    with_costs: bool = typer.Option(
+        False,
+        "--with-costs",
+        help="Terapkan haircut biaya sederhana pada metrik stub",
+    ),
+    no_artifact: bool = typer.Option(
+        False,
+        "--no-artifact",
+        help="Jangan tulis artifact pack",
+    ),
 ) -> None:
     """Bandingkan baseline vs model."""
     try:
@@ -163,15 +244,62 @@ def compare_cmd(
     except KeyError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
+
+    db_path: Path = ctx.obj["db"]
     console.print(
         f"[yellow]Compare belum diimplementasi untuk {ch.slug} "
-        f"({baseline} vs {against}).[/yellow]"
+        f"({baseline} vs {against}); artifact stub Phase 2.[/yellow]"
     )
+    base_m = stub_demo_metrics(with_costs=with_costs)
+    # Slightly weaker toy IC for "against" so compare.json is non-trivial
+    against_m = dict(base_m)
+    against_m["rank_ic"] = float(base_m["rank_ic"]) * 0.85
+    against_m["model"] = against
+    base_m = dict(base_m)
+    base_m["model"] = baseline
+    compare_payload = {"baseline": base_m, "against": against_m}
+
+    console.print(
+        f"Stub  {baseline} rank_ic={base_m['rank_ic']:.4f}  |  "
+        f"{against} rank_ic={against_m['rank_ic']:.4f}"
+    )
+    console.print()
+    console.print(default_banners(with_costs=with_costs).render())
+
+    if not no_artifact:
+        root = resolve_artifacts_root(ctx.obj.get("artifacts_dir"))
+        pack = write_artifact_pack(
+            ArtifactWriteRequest(
+                topic=ch.slug,
+                chapter=ch.number,
+                mode="compare",
+                db_path=db_path,
+                model=f"{baseline}_vs_{against}",
+                scoreboard=ScoreboardMeta(costs=costs_label(with_costs=with_costs)),
+                summary_md=(
+                    f"# Compare stub · {ch.slug}\n\n"
+                    f"`{baseline}` vs `{against}` — Phase 2 frame.\n\n"
+                    "## Caveat\n\n"
+                    "- Bukan saran trading / investasi.\n"
+                    "- Angka stub, bukan hasil chapter real.\n"
+                ),
+                metrics=against_m,
+                compare=compare_payload,
+            ),
+            artifacts_root=root,
+        )
+        console.print(f"\nArtifact:  {pack.path}")
 
 
 @app.command("deepdive")
 def deepdive_cmd(
+    ctx: typer.Context,
     topic: str = typer.Argument(help="Topic slug"),
+    no_artifact: bool = typer.Option(
+        False,
+        "--no-artifact",
+        help="Jangan tulis artifact pack",
+    ),
 ) -> None:
     """Opsional: kaitkan ke ai-saham + artifact."""
     try:
@@ -179,12 +307,45 @@ def deepdive_cmd(
     except KeyError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
-    console.print(f"[bold]Deep-dive · kaitkan ke ai-saham[/bold]")
+
+    db_path: Path = ctx.obj["db"]
+    console.print("[bold]Deep-dive · kaitkan ke ai-saham[/bold]")
     console.print(f"topic={ch.slug}")
     console.print(
         "[yellow]Deep-dive belum diisi "
         f"(opsional setelah chapter {ch.slug} live).[/yellow]"
     )
+
+    if not no_artifact:
+        root = resolve_artifacts_root(ctx.obj.get("artifacts_dir"))
+        suggestions = (
+            "# Suggestions for ai-saham (manual review)\n\n"
+            f"Related: {ch.slug}\n\n"
+            "## Evidence\n"
+            "- (stub Phase 2 — isi setelah chapter live)\n\n"
+            "## Possible knobs (do not apply blindly)\n"
+            "- Validate on walk-forward before changing YAML\n\n"
+            "## Not claimed\n"
+            "- Live edge, auto-promote, or smart-money proof\n"
+        )
+        pack = write_artifact_pack(
+            ArtifactWriteRequest(
+                topic=ch.slug,
+                chapter=ch.number,
+                mode="deepdive",
+                db_path=db_path,
+                model=None,
+                ai_saham_deepdive=True,
+                summary_md=(
+                    f"# Deep-dive stub · {ch.slug}\n\n"
+                    "Human-applied suggestions only — tidak auto-edit ai-saham.\n"
+                ),
+                suggestions_md=suggestions,
+            ),
+            artifacts_root=root,
+        )
+        console.print(f"\nArtifact:  {pack.path}")
+
     mark(topic, "deepdive")
 
 
