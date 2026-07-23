@@ -58,7 +58,8 @@ Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir`.
 | 1 | Doctor tabel MVP + loaders + universe | **done** |
 | 2 | Metrics + artifacts + explore pager | **done** |
 | 3 | Chapter 0,1,2,3,4,6 | **done** |
-| 4 | MVP harden / sign-off | berikutnya |
+| 4 | MVP harden / sign-off | **done** |
+| 5 | v1.1 chapters 5,7,8 | berikutnya |
 
 ## Catatan
 

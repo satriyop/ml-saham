@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ml_saham.chapters.deepdive_stub import deepdive_stub
+from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import resolve_universe
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
@@ -50,8 +52,8 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         from sklearn.model_selection import train_test_split
         from sklearn.tree import DecisionTreeClassifier
     except ImportError as exc:
-        raise RuntimeError(
-            "Butuh scikit-learn: pip install scikit-learn / 'ml-saham[ml]'"
+        raise ChapterError(
+            "Butuh scikit-learn: pip install -e ."
         ) from exc
 
     with connect(ctx.db_path) as conn:
@@ -78,7 +80,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             y_list.append(y)
 
     if len(X_list) < 100:
-        raise RuntimeError(f"Sample terlalu kecil (n={len(X_list)}).")
+        raise ChapterDataError(f"Sample terlalu kecil (n={len(X_list)}).")
 
     X = np.array(X_list)
     y = np.array(y_list)
@@ -128,4 +130,12 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             "Lanjut: factor-score, broker-flow, walk-forward.\n"
         ),
         scoreboard=False,  # accuracy lab, not IHSG scoreboard
+    )
+
+
+def deepdive_text() -> str:
+    return deepdive_stub(
+        topic=META.slug,
+        related="— (failure lab; tidak ada engine claim)",
+        bring_back="ingat framing salah → lanjut factor-score / broker-flow / walk-forward",
     )

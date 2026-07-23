@@ -172,8 +172,8 @@ Phase 0 scaffold
 
 ## Immediate next actions
 
-1. Phase 4: smoke harden, error UX, progress ticks, deepdive stubs polish.  
-2. Maintainer sign-off on [mvp_acceptance.md](./mvp_acceptance.md) with real DB.
+1. Phase 5: v1.1 doctor + chapters `cluster-peers`, `insider`, `volume-anomaly`.  
+2. Optional polish only if needed before v1.1.
 
 ---
 
@@ -182,9 +182,8 @@ Phase 0 scaffold
 | Item | State |
 |---|---|
 | Design freeze (chapters/ux/arch/data/artifacts/mvp) | **Yes** |
-| Phase 0 scaffold | **Done** |
-| Phase 1 data plane + doctor | **Done** |
-| Phase 2 shared eval + artifacts | **Done** |
-| Phase 3 MVP chapters (0,1,2,3,4,6) | **Done** |
-| Implementation | Phase 4 next (MVP harden) |
-| Current focus | Phase 4 |
+| Phase 0–3 | **Done** |
+| Phase 4 MVP harden | **Done** (smoke, error UX, deepdive stubs, acceptance signed) |
+| MVP acceptance | **Accepted** — see [mvp_acceptance.md](./mvp_acceptance.md) |
+| Implementation | Phase 5 next (v1.1 chapters) |
+| Current focus | Phase 5 |

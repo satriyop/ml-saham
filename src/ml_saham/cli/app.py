@@ -18,6 +18,7 @@ from ml_saham.artifacts import (
 )
 from ml_saham.chapters import get as get_chapter
 from ml_saham.chapters import mvp_chapters
+from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.loader import has_chapter_module, load_chapter
 from ml_saham.chapters.registry import all_chapters
 from ml_saham.chapters.types import ChapterContext
@@ -51,12 +52,24 @@ def _progress_cell(slug: str) -> str:
     flags = topic_flags(slug)
     bits = []
     if flags["explore"]:
-        bits.append("E")
+        bits.append("E✓")
     if flags["demo"]:
-        bits.append("D")
+        bits.append("D✓")
     if flags["deepdive"]:
-        bits.append("DV")
-    return "/".join(bits) if bits else "—"
+        bits.append("DV✓")
+    return " ".join(bits) if bits else "—"
+
+
+def _fail_cmd(exc: BaseException, *, what: str = "Perintah") -> None:
+    """Print learner-facing error without dumping a Python traceback."""
+    console.print(f"[red]{what} gagal: {exc}[/red]")
+    if isinstance(exc, ChapterDataError):
+        console.print(f"[dim]{exc.hint}[/dim]")
+    elif isinstance(exc, ChapterError):
+        pass
+    else:
+        console.print("[dim]Cek: ml-saham doctor[/dim]")
+    raise typer.Exit(code=1) from None
 
 
 def _build_ctx(
@@ -147,7 +160,7 @@ def chapters_cmd(
     console.print(table)
     if not all_phases:
         console.print(
-            "\n[dim]MVP saja. Progress: E=explore D=demo DV=deepdive. "
+            "\n[dim]MVP saja. Progress: E✓=explore D✓=demo DV✓=deepdive. "
             "Lihat semua: ml-saham chapters --all[/dim]"
         )
 
@@ -238,10 +251,10 @@ def demo_cmd(
     mod = load_chapter(topic)
     try:
         result = mod.run_demo(chapter_ctx)
-    except Exception as exc:  # noqa: BLE001 — surface as CLI error
-        console.print(f"[red]Demo gagal: {exc}[/red]")
-        console.print("Cek: ml-saham doctor")
-        raise typer.Exit(code=1) from exc
+    except (ChapterDataError, ChapterError) as exc:
+        _fail_cmd(exc, what="Demo")
+    except Exception as exc:  # noqa: BLE001
+        _fail_cmd(exc, what="Demo")
 
     console.print(f"[bold]{result.title}[/bold]")
     console.print(f"Data     db={chapter_ctx.db_path}")
@@ -330,10 +343,10 @@ def compare_cmd(
     chapter_ctx = _build_ctx(ctx, with_costs=with_costs, as_of=as_of)
     try:
         result = mod.run_compare(chapter_ctx, baseline=baseline, against=against)
+    except (ChapterDataError, ChapterError) as exc:
+        _fail_cmd(exc, what="Compare")
     except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]Compare gagal: {exc}[/red]")
-        console.print("Cek: ml-saham doctor")
-        raise typer.Exit(code=1) from exc
+        _fail_cmd(exc, what="Compare")
 
     console.print(f"[bold]{result.title}[/bold]")
     for line in result.lines:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ml_saham.chapters.deepdive_stub import deepdive_stub
+from ml_saham.chapters.errors import ChapterDataError
 from ml_saham.chapters.panel import (
     foreign_net_nday,
     forward_returns_by_ticker,
@@ -60,22 +62,21 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     ]
     if any(i.status != "ok" for i in hard_broker):
         detail = ", ".join(f"{i.name}={i.status}" for i in hard_broker)
-        raise RuntimeError(
-            f"Data broker/foreign belum siap ({detail}). Jalankan: ml-saham doctor"
+        raise ChapterDataError(
+            f"Data broker/foreign belum siap ({detail})."
         )
 
     with connect(ctx.db_path) as conn:
         if not table_exists(conn, "broker_summaries") and not table_exists(
             conn, "foreign_flow_points"
         ):
-            raise RuntimeError(
-                "Tabel broker_summaries/foreign_flow_points hilang. "
-                "Jalankan: ml-saham doctor"
+            raise ChapterDataError(
+                "Tabel broker_summaries/foreign_flow_points hilang."
             )
         uni = ctx.universe or resolve_universe(conn, limit=50)
         as_of = ctx.as_of or pick_as_of(conn, uni, min_forward=5)
         if not as_of:
-            raise RuntimeError("Tidak cukup history untuk as_of.")
+            raise ChapterDataError("Tidak cukup history untuk as_of.")
         flow = foreign_net_nday(conn, uni, as_of=as_of, window=5)
         mom = momentum_nday(conn, uni, as_of=as_of, window=20)
         fwd = forward_returns_by_ticker(conn, uni, as_of=as_of, horizon=5)
@@ -83,7 +84,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     tickers = sorted(set(flow) & set(fwd) & set(mom))
     if len(tickers) < 10:
-        raise RuntimeError(f"Panel flow terlalu kecil (n={len(tickers)}).")
+        raise ChapterDataError(f"Panel flow terlalu kecil (n={len(tickers)}).")
 
     flow_vals = [flow[t] for t in tickers]
     flow_z = zscore(flow_vals)
@@ -164,10 +165,8 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
 
 def deepdive_text() -> str:
-    return (
-        "Deep-dive · kaitkan ke ai-saham\n"
-        f"topic={META.slug}\n\n"
-        "Terkait (manual review): komponen accum / foreign-flow score, BCI.\n"
-        "Yang bisa dibawa balik: kebiasaan eval rank IC + cek vs momentum.\n"
-        "Jangan auto-edit YAML ai-saham.\n"
+    return deepdive_stub(
+        topic=META.slug,
+        related="accum / foreign-flow score components, BCI (manual review)",
+        bring_back="foreign-net rank IC + cek inkremental vs momentum",
     )

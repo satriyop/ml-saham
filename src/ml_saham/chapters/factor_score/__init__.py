@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ml_saham.chapters.deepdive_stub import deepdive_stub
+from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import (
     forward_returns_by_ticker,
     ihsg_forward_return,
@@ -60,7 +62,7 @@ def _build_rows(ctx: ChapterContext):
         uni = ctx.universe or resolve_universe(conn, limit=50)
         as_of = ctx.as_of or pick_as_of(conn, uni, min_forward=5)
         if not as_of:
-            raise RuntimeError("Tidak cukup history untuk as_of.")
+            raise ChapterDataError("Tidak cukup history untuk as_of.")
         fundies = load_fundie_map(conn, uni)
         owners = load_owner_map(conn, uni)
         mom = momentum_nday(conn, uni, as_of=as_of, window=20)
@@ -136,7 +138,7 @@ def _elastic_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], 
         import numpy as np
         from sklearn.linear_model import ElasticNet, Ridge
     except ImportError as exc:
-        raise RuntimeError("Butuh scikit-learn") from exc
+        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
     arr = np.array(X, dtype=float)
     yy = np.array(y, dtype=float)
     model = ElasticNet(alpha=0.01, l1_ratio=0.3, random_state=42, max_iter=10000)
@@ -153,7 +155,7 @@ def _elastic_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     as_of, rows, bench, ownership_used = _build_rows(ctx)
     if len(rows) < 12:
-        raise RuntimeError(f"Panel faktor terlalu kecil (n={len(rows)}).")
+        raise ChapterDataError(f"Panel faktor terlalu kecil (n={len(rows)}).")
     hand, X = _factor_matrix(rows, use_ownership=ownership_used)
     rets_raw = [r["fwd"] for r in rows]
     rets = maybe_haircut(rets_raw, with_costs=ctx.with_costs)
@@ -265,4 +267,12 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
         model=f"{baseline}_vs_{against}",
         summary_md=f"# Compare factor-score\n\n`{baseline}` vs `{against}`.\n",
         scoreboard=True,
+    )
+
+
+def deepdive_text() -> str:
+    return deepdive_stub(
+        topic=META.slug,
+        related="fundamentals / shareholding caches di ai-saham",
+        bring_back="z-score factor blend + rank IC vs IHSG habit",
     )

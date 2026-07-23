@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ml_saham.chapters.deepdive_stub import deepdive_stub
+from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import (
     forward_returns_by_ticker,
     load_fundie_map,
@@ -51,7 +53,7 @@ def _panel(ctx: ChapterContext):
         uni = ctx.universe or resolve_universe(conn, limit=50)
         as_of = ctx.as_of or pick_as_of(conn, uni, min_forward=5)
         if not as_of:
-            raise RuntimeError("Tidak cukup history candles untuk as_of.")
+            raise ChapterDataError("Tidak cukup history candles untuk as_of.")
         fundies = load_fundie_map(conn, uni)
         fwd = forward_returns_by_ticker(conn, uni, as_of=as_of, horizon=5)
     rows = []
@@ -95,8 +97,8 @@ def _learned_scores(rows: list[dict]) -> tuple[list[float], str]:
         from sklearn.linear_model import LogisticRegression
         from sklearn.tree import DecisionTreeClassifier
     except ImportError as exc:
-        raise RuntimeError(
-            "Butuh scikit-learn: pip install 'ml-saham[ml]' atau scikit-learn"
+        raise ChapterError(
+            "Butuh scikit-learn: pip install -e . (scikit-learn sudah di dependencies)"
         ) from exc
 
     pe_z = zscore([r["pe"] for r in rows])
@@ -133,7 +135,7 @@ def _learned_scores(rows: list[dict]) -> tuple[list[float], str]:
 def run_demo(ctx: ChapterContext) -> DemoResult:
     as_of, rows = _panel(ctx)
     if len(rows) < 10:
-        raise RuntimeError(
+        raise ChapterDataError(
             f"Panel terlalu kecil (n={len(rows)}). Cek fundamentals + candles."
         )
     hand = [_hand_score(r) for r in rows]
@@ -247,4 +249,12 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
             f"# Compare screen-rules\n\n`{baseline}` vs `{against}` as_of={as_of}.\n"
         ),
         scoreboard=True,
+    )
+
+
+def deepdive_text() -> str:
+    return deepdive_stub(
+        topic=META.slug,
+        related="risk-gate precursors (fund/liquidity features) di ai-saham",
+        bring_back="kontrast hand screen vs learned rank + habit compare",
     )

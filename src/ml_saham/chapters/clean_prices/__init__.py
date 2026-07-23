@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 
+from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.panel import resolve_universe
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
@@ -180,4 +181,12 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         scoreboard=True,
         top_names=top[:20],
         extra_files={"top_names.csv": "\n".join(csv_lines) + "\n"},
+    )
+
+
+def deepdive_text() -> str:
+    return deepdive_stub(
+        topic=META.slug,
+        related="corp-action break hygiene di cache candles ai-saham",
+        bring_back="habit flag z-score/IQR/IF sebelum train model harga",
     )

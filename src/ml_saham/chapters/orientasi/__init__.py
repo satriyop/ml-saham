@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
 from ml_saham.data.aisaham_read import (
@@ -125,4 +126,12 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         model="status",
         summary_md=summary,
         scoreboard=True,
+    )
+
+
+def deepdive_text() -> str:
+    return deepdive_stub(
+        topic=META.slug,
+        related="path data ai-saham + PIT/fetched_date honesty",
+        bring_back="selalu doctor dulu; bedakan fetched_date vs tanggal ekonomi",
     )
