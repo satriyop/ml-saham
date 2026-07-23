@@ -26,7 +26,7 @@ CHAPTERS: tuple[ChapterMeta, ...] = (
     ChapterMeta(6, "broker-flow", "Aliran broker & asing", "Medium", "mvp", "mvp"),
     ChapterMeta(7, "insider", "Aktivitas insider", "Medium", "v1_1", "v1_1"),
     ChapterMeta(8, "volume-anomaly", "Volume & lonjakan tidak biasa", "Medium", "v1_1", "v1_1"),
-    ChapterMeta(9, "headline-tone", "Membaca berita singkat", "Medium", "phase2", "phase2"),
+    ChapterMeta(9, "headline-tone", "Membaca berita singkat", "Medium", "phase2", "mvp"),
     ChapterMeta(10, "volatility-sizing", "Volatilitas & ukuran posisi", "Medium", "phase2", "mvp"),
     ChapterMeta(11, "market-regime", "Rezim pasar", "Hard", "phase2", "phase2"),
     ChapterMeta(12, "walk-forward", "Prediksi multi-fitur + walk-forward", "Hard", "phase2", "phase2"),
@@ -35,7 +35,7 @@ CHAPTERS: tuple[ChapterMeta, ...] = (
     ChapterMeta(15, "earnings-surprise", "Earnings surprise", "Hard", "phase2", "phase2"),
     ChapterMeta(16, "pre-open-rank", "Peringkat menjelang pembukaan", "Hard", "phase2", "phase2"),
     ChapterMeta(17, "research-pipeline", "Pipeline riset ujung-ke-ujung", "Complex", "phase2", "phase2"),
-    ChapterMeta(18, "rl-sandbox", "Sandbox keputusan berurutan (opsional)", "Complex", "optional", "phase2"),
+    ChapterMeta(18, "rl-sandbox", "Sandbox keputusan berurutan (opsional)", "Complex", "optional", "mvp"),
 )
 
 _BY_SLUG = {c.slug: c for c in CHAPTERS}
@@ -59,6 +59,14 @@ def mvp_chapters() -> tuple[ChapterMeta, ...]:
 
 def v1_1_chapters() -> tuple[ChapterMeta, ...]:
     return tuple(c for c in CHAPTERS if c.phase == "v1_1")
+
+
+def phase2_chapters() -> tuple[ChapterMeta, ...]:
+    return tuple(c for c in CHAPTERS if c.phase == "phase2")
+
+
+def optional_chapters() -> tuple[ChapterMeta, ...]:
+    return tuple(c for c in CHAPTERS if c.phase == "optional")
 
 
 def known_slugs() -> list[str]:

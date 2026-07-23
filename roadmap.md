@@ -172,8 +172,8 @@ Phase 0 scaffold
 
 ## Immediate next actions
 
-1. Phase 6 when needed: phase-2 chapters (start where data exists).  
-2. Optional: learning-store ETL only if Direct mode blocks Ch.12+.
+1. Use the CLI (MVP → v1.1 → phase-2).  
+2. Phase 7 UX extras only if needed (`--plot`, notebooks, TUI).
 
 ---
 
@@ -183,6 +183,7 @@ Phase 0 scaffold
 |---|---|
 | Design freeze | **Yes** |
 | Phase 0–4 (MVP) | **Done / accepted** |
-| Phase 5 v1.1 chapters | **Done** — see [v1_1_acceptance.md](./v1_1_acceptance.md) |
-| Implementation | Phase 6 next (optional / later) |
-| Current focus | idle / Phase 6 on demand |
+| Phase 5 v1.1 | **Done** — [v1_1_acceptance.md](./v1_1_acceptance.md) |
+| Phase 6 phase-2 curriculum | **Done** — [phase2_acceptance.md](./phase2_acceptance.md) |
+| Implementation | idle / Phase 7 on demand |
+| Current focus | idle |

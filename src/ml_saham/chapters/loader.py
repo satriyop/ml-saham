@@ -15,6 +15,16 @@ _SLUG_TO_MOD = {
     "cluster-peers": "ml_saham.chapters.cluster_peers",
     "insider": "ml_saham.chapters.insider",
     "volume-anomaly": "ml_saham.chapters.volume_anomaly",
+    "headline-tone": "ml_saham.chapters.headline_tone",
+    "volatility-sizing": "ml_saham.chapters.volatility_sizing",
+    "market-regime": "ml_saham.chapters.market_regime",
+    "walk-forward": "ml_saham.chapters.walk_forward",
+    "portfolio-small": "ml_saham.chapters.portfolio_small",
+    "corp-events": "ml_saham.chapters.corp_events",
+    "earnings-surprise": "ml_saham.chapters.earnings_surprise",
+    "pre-open-rank": "ml_saham.chapters.pre_open_rank",
+    "research-pipeline": "ml_saham.chapters.research_pipeline",
+    "rl-sandbox": "ml_saham.chapters.rl_sandbox",
 }
 
 
@@ -23,7 +33,7 @@ def load_chapter(slug: str) -> ModuleType:
     if mod_name is None:
         raise KeyError(
             f"Belum ada modul chapter untuk topic {slug!r} "
-            "(MVP + v1.1: cluster-peers, insider, volume-anomaly)."
+            "(MVP + v1.1 + phase2 + optional — cek registry)."
         )
     return importlib.import_module(mod_name)
 

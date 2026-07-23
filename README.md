@@ -65,7 +65,8 @@ Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir`.
 | 3 | Chapter 0,1,2,3,4,6 | **done** |
 | 4 | MVP harden / sign-off | **done** |
 | 5 | v1.1 chapters 5,7,8 | **done** |
-| 6 | Phase-2 curriculum 9–17 | nanti |
+| 6 | Phase-2 curriculum 9–17 (+18) | **done** |
+| 7 | UX extras | opsional |
 
 ## Catatan
 

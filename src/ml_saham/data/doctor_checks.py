@@ -60,6 +60,9 @@ class DoctorReport:
     v1_1: TierReport = field(
         default_factory=lambda: TierReport(name="v1.1 data", status="missing")
     )
+    phase2: TierReport = field(
+        default_factory=lambda: TierReport(name="Phase-2 data", status="missing")
+    )
     universe_tickers: list[str] = field(default_factory=list)
     remediation: list[str] = field(default_factory=list)
 
@@ -81,12 +84,22 @@ class DoctorReport:
             return False
         return all(i.status == "ok" for i in hard)
 
+    @property
+    def phase2_hard_ok(self) -> bool:
+        if not self.mvp_hard_ok:
+            return False
+        hard = [i for i in self.phase2.items if i.hard]
+        if not hard:
+            return False
+        return all(i.status == "ok" for i in hard)
+
     def tier_ok(self, required_data: str) -> bool:
         if required_data == "mvp":
             return self.mvp_hard_ok
         if required_data == "v1_1":
             return self.v1_1_hard_ok
-        # phase2 not fully implemented — require at least MVP for now
+        if required_data == "phase2":
+            return self.phase2_hard_ok
         return self.mvp_hard_ok
 
 
@@ -238,9 +251,107 @@ def _v11_insider(conn) -> CheckItem:
     return CheckItem("insider_cache", status, detail, hard=True)
 
 
+def _phase2_checks(conn) -> list[CheckItem]:
+    from ml_saham.data.phase2_read import headline_table_name
+
+    items: list[CheckItem] = []
+    items.append(
+        _check_table(
+            conn,
+            "earnings_cache",
+            required_cols={"ticker", "year", "quarter", "eps_surprise_pct", "fetched_date"},
+            hard=True,
+        )
+    )
+    # corp: either cache or events
+    if table_exists(conn, "corp_action_cache") and count_rows(conn, "corp_action_cache") > 0:
+        items.append(
+            _check_table(
+                conn,
+                "corp_action_cache",
+                required_cols={"ticker", "event_type", "ex_date"},
+                hard=True,
+            )
+        )
+    elif table_exists(conn, "corporate_action_events") and count_rows(
+        conn, "corporate_action_events"
+    ) > 0:
+        items.append(
+            CheckItem(
+                "corporate_action_events",
+                "ok",
+                f"rows={count_rows(conn, 'corporate_action_events')}",
+                hard=True,
+            )
+        )
+    else:
+        items.append(
+            CheckItem(
+                "corp_actions",
+                "missing",
+                "corp_action_cache / corporate_action_events kosong",
+                hard=True,
+            )
+        )
+
+    items.append(
+        _check_table(
+            conn,
+            "iev_snapshots",
+            required_cols={"date", "ticker", "iev", "rank"},
+            hard=True,
+        )
+    )
+    items.append(
+        _check_table(
+            conn,
+            "signal_forward_labels",
+            required_cols={"ticker", "signal_date", "horizon", "close_return"},
+            hard=True,
+        )
+    )
+    items.append(
+        _check_table(
+            conn,
+            "regime_observations",
+            required_cols={"observation_date", "regime"},
+            hard=False,
+        )
+    )
+    items.append(
+        _check_table(
+            conn,
+            "candidate_observations",
+            required_cols={"ticker", "snapshot_date"},
+            hard=False,
+        )
+    )
+    hname = headline_table_name(conn)
+    if hname:
+        items.append(
+            CheckItem(
+                "headlines",
+                "ok",
+                f"{hname} rows={count_rows(conn, hname)}",
+                hard=False,
+            )
+        )
+    else:
+        items.append(
+            CheckItem(
+                "headlines",
+                "missing",
+                "tidak ada tabel headline — Ch.9 pakai korpus sintetis",
+                hard=False,
+            )
+        )
+    return items
+
+
 def run_doctor(db_path: Path | str) -> DoctorReport:
     path = Path(db_path)
     empty_v11 = TierReport(name="v1.1 data", status="missing", items=[])
+    empty_p2 = TierReport(name="Phase-2 data", status="missing", items=[])
     if not path.is_file():
         mvp = TierReport(name="MVP data", status="missing", items=[])
         return DoctorReport(
@@ -248,6 +359,7 @@ def run_doctor(db_path: Path | str) -> DoctorReport:
             db_exists=False,
             mvp=mvp,
             v1_1=empty_v11,
+            phase2=empty_p2,
             remediation=[
                 "Set --db PATH atau env ML_SAHAM_DB.",
                 "Atau di ai-saham: saham fetch market --universe lq45",
@@ -336,6 +448,10 @@ def run_doctor(db_path: Path | str) -> DoctorReport:
         v1_1 = TierReport(name="v1.1 data", status="missing", items=v11_items)
         v1_1.recompute()
 
+        p2_items = _phase2_checks(conn)
+        phase2 = TierReport(name="Phase-2 data", status="missing", items=p2_items)
+        phase2.recompute()
+
         remediation: list[str] = []
         if not mvp_hard_ok_items(items):
             remediation.append(
@@ -362,12 +478,18 @@ def run_doctor(db_path: Path | str) -> DoctorReport:
                     "Insider: scrub tanggal absurd (<1990) di chapter; "
                     "re-fetch jika terlalu banyak placeholder."
                 )
+        if not all(i.status == "ok" for i in p2_items if i.hard):
+            remediation.append(
+                "Untuk phase-2: earnings_cache, corp actions, iev_snapshots, "
+                "signal_forward_labels di ai-saham."
+            )
 
         return DoctorReport(
             db_path=path.resolve(),
             db_exists=True,
             mvp=mvp,
             v1_1=v1_1,
+            phase2=phase2,
             universe_tickers=universe,
             remediation=remediation,
         )
@@ -377,29 +499,28 @@ def mvp_hard_ok_items(items: list[CheckItem]) -> bool:
     return all(i.status == "ok" for i in items if i.hard)
 
 
+def _format_tier(lines: list[str], tier: TierReport) -> None:
+    lines.append(f"{tier.name}: {tier.status}")
+    for item in tier.items:
+        detail = f"  {item.name:<22} {item.status}"
+        if item.detail:
+            detail += f"  {item.detail}"
+        if not item.hard and item.status != "ok":
+            detail += "  (soft)"
+        lines.append(detail)
+
+
 def format_doctor_report(report: DoctorReport) -> str:
     lines = [f"DB: {report.db_path}"]
     if not report.db_exists:
         lines.append("MVP data: missing")
         lines.append("  (file DB tidak ada)")
         lines.append("v1.1 data: missing")
+        lines.append("Phase-2 data: missing")
     else:
-        lines.append(f"MVP data: {report.mvp.status}")
-        for item in report.mvp.items:
-            detail = f"  {item.name:<22} {item.status}"
-            if item.detail:
-                detail += f"  {item.detail}"
-            if not item.hard and item.status != "ok":
-                detail += "  (soft)"
-            lines.append(detail)
-        lines.append(f"v1.1 data: {report.v1_1.status}")
-        for item in report.v1_1.items:
-            detail = f"  {item.name:<22} {item.status}"
-            if item.detail:
-                detail += f"  {item.detail}"
-            if not item.hard and item.status != "ok":
-                detail += "  (soft)"
-            lines.append(detail)
+        _format_tier(lines, report.mvp)
+        _format_tier(lines, report.v1_1)
+        _format_tier(lines, report.phase2)
         lines.append(
             f"Universe default: {len(report.universe_tickers)} tickers"
             + (

@@ -17,7 +17,7 @@ from ml_saham.artifacts import (
     write_artifact_pack,
 )
 from ml_saham.chapters import get as get_chapter
-from ml_saham.chapters import mvp_chapters, v1_1_chapters
+from ml_saham.chapters import mvp_chapters, phase2_chapters, v1_1_chapters
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.loader import has_chapter_module, load_chapter
 from ml_saham.chapters.registry import all_chapters
@@ -27,7 +27,7 @@ from ml_saham.data.aisaham_read import connect
 from ml_saham.data.connection import resolve_db_path
 from ml_saham.data.doctor_checks import format_doctor_report, run_doctor
 from ml_saham.data.universe import default_universe
-from ml_saham.eval import costs_label, default_banners
+from ml_saham.eval import costs_label, default_banners, open_session_banners
 from ml_saham.progress import mark, topic_flags
 
 app = typer.Typer(
@@ -153,7 +153,7 @@ def chapters_cmd(
     if all_phases:
         rows = all_chapters()
     else:
-        rows = (*mvp_chapters(), *v1_1_chapters())
+        rows = (*mvp_chapters(), *v1_1_chapters(), *phase2_chapters())
     for ch in rows:
         table.add_row(
             str(ch.number),
@@ -165,8 +165,8 @@ def chapters_cmd(
     console.print(table)
     if not all_phases:
         console.print(
-            "\n[dim]MVP + v1.1. Progress: E✓=explore D✓=demo DV✓=deepdive. "
-            "Lihat semua: ml-saham chapters --all[/dim]"
+            "\n[dim]MVP + v1.1 + phase-2. Opsional (Ch.18): ml-saham chapters --all. "
+            "Progress: E✓ D✓ DV✓.[/dim]"
         )
 
 
@@ -270,7 +270,10 @@ def demo_cmd(
         console.print(line)
     console.print("─" * 40)
     if result.scoreboard:
-        console.print(default_banners(with_costs=with_costs).render())
+        if getattr(result, "scoreboard_kind", "long_only") == "open_session":
+            console.print(open_session_banners(with_costs=with_costs).render())
+        else:
+            console.print(default_banners(with_costs=with_costs).render())
     else:
         console.print("⚠ Bukan saran trading / investasi")
         console.print(
@@ -279,6 +282,15 @@ def demo_cmd(
 
     if not no_artifact:
         root = resolve_artifacts_root(ctx.obj.get("artifacts_dir"))
+        sb_type = (
+            "open_session"
+            if getattr(result, "scoreboard_kind", "") == "open_session"
+            else (
+                "long_only_vs_ihsg"
+                if result.scoreboard
+                else "failure_lab"
+            )
+        )
         pack = write_artifact_pack(
             ArtifactWriteRequest(
                 topic=ch.slug,
@@ -288,11 +300,7 @@ def demo_cmd(
                 model=result.model,
                 as_of=chapter_ctx.as_of or result.metrics.get("as_of"),
                 scoreboard=ScoreboardMeta(
-                    type=(
-                        "long_only_vs_ihsg"
-                        if result.scoreboard
-                        else "failure_lab"
-                    ),
+                    type=sb_type,
                     costs=costs_label(with_costs=with_costs),
                 ),
                 summary_md=result.summary_md,

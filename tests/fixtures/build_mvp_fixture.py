@@ -214,6 +214,79 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                     "INSERT INTO foreign_flow_points VALUES (?,?,?,?,?)",
                     (t, d, "stockbit", buy - sell, 200.0 + si),
                 )
+
+        # Phase-2 tables (minimal for doctor + demos)
+        conn.executescript(
+            """
+            CREATE TABLE earnings_cache (
+                ticker TEXT, year INT, quarter INT,
+                eps_actual REAL, eps_estimate REAL, eps_surprise_pct REAL,
+                eps_yoy_change REAL, fetched_date TEXT
+            );
+            CREATE TABLE corp_action_cache (
+                ticker TEXT, event_type TEXT, ex_date TEXT, cum_date TEXT,
+                announcement_date TEXT, detail TEXT, fetched_date TEXT
+            );
+            CREATE TABLE iev_snapshots (
+                date TEXT, ticker TEXT, iev REAL, rank INT, iep REAL,
+                fetched_at TEXT, is_ncp_locked INT
+            );
+            CREATE TABLE signal_forward_labels (
+                id INTEGER PRIMARY KEY,
+                ticker TEXT, signal_date TEXT, horizon INT,
+                close_return REAL, max_forward_return REAL,
+                max_adverse_excursion REAL
+            );
+            CREATE TABLE regime_observations (
+                observation_date TEXT, regime TEXT, regime_score REAL,
+                regime_confidence REAL, forward_ihsg_return_5d REAL
+            );
+            """
+        )
+        as_of_fix = (start + timedelta(days=min_bars - 8)).isoformat()
+        iev_date = as_of_fix
+        for si, t in enumerate(_STOCKS):
+            conn.execute(
+                "INSERT INTO earnings_cache VALUES (?,?,?,?,?,?,?,?)",
+                (t, 2024, 1, 100.0 + si, 90.0 + si, float(si - 5), float(si - 3), "2024-06-01"),
+            )
+            conn.execute(
+                "INSERT INTO corp_action_cache VALUES (?,?,?,?,?,?,?)",
+                (
+                    t,
+                    "DIVIDEND" if si % 2 == 0 else "RIGHTS",
+                    (start + timedelta(days=45 + si)).isoformat(),
+                    None,
+                    None,
+                    "fixture",
+                    "2024-06-01",
+                ),
+            )
+            conn.execute(
+                "INSERT INTO iev_snapshots VALUES (?,?,?,?,?,?,?)",
+                (iev_date, t, 100.0 + si * 0.5, si + 1, 99.0 + si, "2024-06-01", 0),
+            )
+            # labels across dates for walk-forward
+            for j in range(20):
+                sd = (start + timedelta(days=30 + j)).isoformat()
+                conn.execute(
+                    "INSERT INTO signal_forward_labels "
+                    "(ticker, signal_date, horizon, close_return, "
+                    "max_forward_return, max_adverse_excursion) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (t, sd, 5, 0.01 * ((si + j) % 7 - 3), 0.02, -0.01),
+                )
+        for k in range(30):
+            conn.execute(
+                "INSERT INTO regime_observations VALUES (?,?,?,?,?)",
+                (
+                    (start + timedelta(days=20 + k)).isoformat(),
+                    "risk_on" if k % 3 else "risk_off",
+                    0.5 + (k % 5) * 0.1,
+                    0.7,
+                    0.01 * ((k % 5) - 2),
+                ),
+            )
         conn.commit()
     finally:
         conn.close()

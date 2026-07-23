@@ -24,6 +24,7 @@ class DemoResult:
     model: str | None = None
     summary_md: str = ""
     scoreboard: bool = True  # False for Ch.3 failure-lab style
+    scoreboard_kind: str = "long_only"  # long_only | open_session | none
     top_names: list[dict[str, Any]] = field(default_factory=list)
     extra_files: dict[str, str] = field(default_factory=dict)
 
