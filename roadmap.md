@@ -172,8 +172,8 @@ Phase 0 scaffold
 
 ## Immediate next actions
 
-1. Phase 0.1–0.3: package + Typer + DB resolve.  
-2. Phase 1.1–1.2: MVP table loaders + `doctor`.  
+1. Phase 1.1–1.2: MVP table loaders + `doctor` checks.  
+2. Phase 1.3–1.5: universe helper + scoreboard banners.  
 3. Phase 3.1: `orientasi` as first real chapter.
 
 ---
@@ -183,5 +183,6 @@ Phase 0 scaffold
 | Item | State |
 |---|---|
 | Design freeze (chapters/ux/arch/data/artifacts/mvp) | **Yes** |
-| Implementation | **Not started** |
-| Current focus | Phase 0 |
+| Phase 0 scaffold | **Done** (`ml-saham chapters` works) |
+| Implementation | Phase 1 next (doctor + MVP table loaders) |
+| Current focus | Phase 1 |

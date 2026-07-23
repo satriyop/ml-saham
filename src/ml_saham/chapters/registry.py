@@ -1,0 +1,61 @@
+"""Chapter registry — topic slug → metadata."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class ChapterMeta:
+    number: int
+    slug: str
+    title: str
+    tier: str
+    phase: str  # mvp | v1_1 | phase2 | optional
+    required_data: str  # mvp | v1_1 | phase2
+
+
+# Titles (ID) aligned with chapters.md / ux.md topic slugs.
+CHAPTERS: tuple[ChapterMeta, ...] = (
+    ChapterMeta(0, "orientasi", "Orientasi — cara menilai hasil tanpa menipu diri", "—", "mvp", "mvp"),
+    ChapterMeta(1, "clean-prices", "Membersihkan harga saham", "Simple", "mvp", "mvp"),
+    ChapterMeta(2, "screen-rules", "Saring saham dengan aturan", "Simple", "mvp", "mvp"),
+    ChapterMeta(3, "pattern-fail", "Mengenali pola harga sederhana (failure lab)", "Simple", "mvp", "mvp"),
+    ChapterMeta(4, "factor-score", "Skor faktor: value, momentum, quality", "Medium", "mvp", "mvp"),
+    ChapterMeta(5, "cluster-peers", "Mengelompokkan saham yang bergerak mirip", "Medium", "v1_1", "v1_1"),
+    ChapterMeta(6, "broker-flow", "Aliran broker & asing", "Medium", "mvp", "mvp"),
+    ChapterMeta(7, "insider", "Aktivitas insider", "Medium", "v1_1", "v1_1"),
+    ChapterMeta(8, "volume-anomaly", "Volume & lonjakan tidak biasa", "Medium", "v1_1", "v1_1"),
+    ChapterMeta(9, "headline-tone", "Membaca berita singkat", "Medium", "phase2", "phase2"),
+    ChapterMeta(10, "volatility-sizing", "Volatilitas & ukuran posisi", "Medium", "phase2", "mvp"),
+    ChapterMeta(11, "market-regime", "Rezim pasar", "Hard", "phase2", "phase2"),
+    ChapterMeta(12, "walk-forward", "Prediksi multi-fitur + walk-forward", "Hard", "phase2", "phase2"),
+    ChapterMeta(13, "portfolio-small", "Membangun portofolio kecil", "Hard", "phase2", "mvp"),
+    ChapterMeta(14, "corp-events", "Peristiwa korporasi massal", "Hard", "phase2", "phase2"),
+    ChapterMeta(15, "earnings-surprise", "Earnings surprise", "Hard", "phase2", "phase2"),
+    ChapterMeta(16, "pre-open-rank", "Peringkat menjelang pembukaan", "Hard", "phase2", "phase2"),
+    ChapterMeta(17, "research-pipeline", "Pipeline riset ujung-ke-ujung", "Complex", "phase2", "phase2"),
+    ChapterMeta(18, "rl-sandbox", "Sandbox keputusan berurutan (opsional)", "Complex", "optional", "phase2"),
+)
+
+_BY_SLUG = {c.slug: c for c in CHAPTERS}
+
+
+def get(slug: str) -> ChapterMeta:
+    try:
+        return _BY_SLUG[slug]
+    except KeyError as exc:
+        known = ", ".join(c.slug for c in CHAPTERS)
+        raise KeyError(f"Topic tidak dikenal: {slug!r}. Dikenal: {known}") from exc
+
+
+def all_chapters() -> tuple[ChapterMeta, ...]:
+    return CHAPTERS
+
+
+def mvp_chapters() -> tuple[ChapterMeta, ...]:
+    return tuple(c for c in CHAPTERS if c.phase == "mvp")
+
+
+def known_slugs() -> list[str]:
+    return [c.slug for c in CHAPTERS]

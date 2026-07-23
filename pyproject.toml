@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ml-saham"
+version = "0.1.0"
+description = "CLI kursus ML problem-centric untuk pasar saham IDX (personal learning)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.12",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+ml = [
+    "pandas>=2.0",
+    "scikit-learn>=1.4",
+    "lightgbm>=4.0",
+]
+
+[project.scripts]
+ml-saham = "ml_saham.cli.app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ml_saham"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
