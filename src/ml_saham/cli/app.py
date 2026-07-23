@@ -14,6 +14,8 @@ from ml_saham.chapters import get as get_chapter
 from ml_saham.chapters import mvp_chapters
 from ml_saham.chapters.registry import all_chapters
 from ml_saham.data.connection import resolve_db_path
+from ml_saham.data.doctor_checks import format_doctor_report, run_doctor
+from ml_saham.eval import default_banners
 from ml_saham.progress import mark, topic_flags
 
 app = typer.Typer(
@@ -144,10 +146,8 @@ def demo_cmd(
         "[yellow]Demo belum diimplementasi "
         f"(Phase 3 — chapter {ch.slug}).[/yellow]"
     )
-    console.print(
-        "\n⚠ Skorboard: long-only vs IHSG · belum termasuk biaya"
-        "\n⚠ Bukan saran trading / investasi"
-    )
+    console.print()
+    console.print(default_banners().render())
     mark(topic, "demo")
 
 
@@ -204,21 +204,12 @@ def glossary_cmd(
 
 @app.command("doctor")
 def doctor_cmd(ctx: typer.Context) -> None:
-    """Cek DB path + kesiapan data (cek tabel: Phase 1)."""
+    """Cek DB path + kesiapan data MVP."""
     db_path: Path = ctx.obj["db"]
-    console.print(f"DB: {db_path}")
-    if not db_path.is_file():
-        console.print("[red]File DB tidak ditemukan.[/red]")
-        console.print(
-            "Set --db PATH atau env ML_SAHAM_DB, "
-            "atau jalankan saham fetch market di ai-saham."
-        )
+    report = run_doctor(db_path)
+    console.print(format_doctor_report(report))
+    if not report.mvp_hard_ok:
         raise typer.Exit(code=1)
-    console.print("[green]File DB ada.[/green]")
-    console.print(
-        "[yellow]Pemeriksaan tabel MVP data belum diimplementasi "
-        "(Phase 1 — doctor checks).[/yellow]"
-    )
 
 
 def main() -> None:

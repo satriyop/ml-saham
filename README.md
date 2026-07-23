@@ -32,7 +32,7 @@ Isi data lewat `ai-saham` (`saham fetch market`, dll). `ml-saham` tidak scrape p
 ml-saham chapters          # jalur MVP + progress
 ml-saham chapters --all
 ml-saham status
-ml-saham doctor            # cek path DB (cek tabel: Phase 1)
+ml-saham doctor            # cek path + tabel MVP data
 ml-saham explore orientasi # stub sampai Phase 3
 ml-saham demo orientasi
 ml-saham deepdive orientasi
@@ -45,9 +45,9 @@ Progress disimpan di `~/.ml-saham/progress.json` (E=explore, D=demo, DV=deepdive
 
 | Phase | Isi | Status |
 |---|---|---|
-| 0 | Scaffold CLI + registry + DB resolve | **sekarang** |
-| 1 | Doctor tabel MVP + loaders | belum |
-| 2 | Metrics + artifacts | belum |
+| 0 | Scaffold CLI + registry + DB resolve | **done** |
+| 1 | Doctor tabel MVP + loaders + universe | **done** |
+| 2 | Metrics + artifacts | berikutnya |
 | 3 | Chapter 0,1,2,3,4,6 | belum |
 
 ## Catatan
