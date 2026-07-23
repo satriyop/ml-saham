@@ -6,8 +6,27 @@ import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
 
+# Must intersect LQ45_LIKE in universe.py
+_STOCKS = (
+    "BBCA",
+    "BBRI",
+    "BMRI",
+    "BBNI",
+    "TLKM",
+    "ASII",
+    "UNVR",
+    "ICBP",
+    "KLBF",
+    "INDF",
+    "ADRO",
+    "PTBA",
+    "ANTM",
+    "MDKA",
+    "GOTO",
+)
 
-def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 65) -> Path:
+
+def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80) -> Path:
     """Create a small SQLite matching MVP hard tables (or empty shell)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
@@ -75,47 +94,60 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 65)
         )
 
         start = date(2024, 1, 2)
-        tickers = ("BBCA", "BBRI", "IHSG")
-        rows = []
-        for t in tickers:
-            px = 100.0 if t != "IHSG" else 7000.0
+        candle_rows = []
+        for si, t in enumerate((*_STOCKS, "IHSG")):
+            px = 7000.0 if t == "IHSG" else 100.0 + si * 3.0
+            drift = 0.15 if t == "IHSG" else 0.05 + (si % 5) * 0.03
             for i in range(min_bars):
                 d = (start + timedelta(days=i)).isoformat()
-                rows.append((t, d, px, px + 1, px - 1, px + 0.5, 1_000_000.0))
-                px += 0.1
+                # mild spike early for clean-prices to flag
+                shock = 0.0
+                if t != "IHSG" and i == 40 and si == 0:
+                    shock = px * 0.12
+                close = px + shock
+                vol = 1_000_000.0 + si * 10_000 + (i % 7) * 1000
+                candle_rows.append(
+                    (t, d, close - 1, close + 1, close - 2, close, vol)
+                )
+                px += drift
         conn.executemany(
             "INSERT INTO candles VALUES (?,?,?,?,?,?,?)",
-            rows,
+            candle_rows,
         )
+
+        fundie_rows = []
+        meta_rows = []
+        share_rows = []
+        for si, t in enumerate(_STOCKS):
+            pe = 8.0 + si * 1.5
+            roe = 0.05 + (si % 6) * 0.03
+            pbv = 1.0 + si * 0.2
+            fundie_rows.append((t, "2024-06-01", pe, roe, pbv, 0.02, 1e14 * (si + 1)))
+            meta_rows.append((t, "Sector", "Sub"))
+            share_rows.append((t, "2024-06-01", 40.0 + si, 60.0 - si, "Holder", 5.0))
         conn.executemany(
             "INSERT INTO company_fundamentals VALUES (?,?,?,?,?,?,?)",
-            [
-                ("BBCA", "2024-06-01", 20.0, 0.18, 3.0, 0.02, 1e15),
-                ("BBRI", "2024-06-01", 12.0, 0.15, 2.0, 0.04, 8e14),
-            ],
+            fundie_rows,
         )
+        conn.executemany("INSERT INTO stock_meta VALUES (?,?,?)", meta_rows)
         conn.executemany(
-            "INSERT INTO stock_meta VALUES (?,?,?)",
-            [
-                ("BBCA", "Financials", "Banks"),
-                ("BBRI", "Financials", "Banks"),
-            ],
+            "INSERT INTO shareholding_composition VALUES (?,?,?,?,?,?)",
+            share_rows,
         )
-        for t in ("BBCA", "BBRI"):
-            for i in range(20):
+
+        for si, t in enumerate(_STOCKS):
+            for i in range(min_bars):
                 d = (start + timedelta(days=i)).isoformat()
+                buy = 1e9 + si * 1e7 + i * 1e5
+                sell = 8e8 + (14 - si) * 1e7
                 conn.execute(
                     "INSERT INTO broker_summaries VALUES (?,?,?,?,?,?,?,?,?)",
-                    (t, d, "stockbit", 1e9, 8e8, 1000, 800, 2e9, 2000),
+                    (t, d, "stockbit", buy, sell, 1000, 800, buy + sell, 1800),
                 )
                 conn.execute(
                     "INSERT INTO foreign_flow_points VALUES (?,?,?,?,?)",
-                    (t, d, "stockbit", 2e8, 200),
+                    (t, d, "stockbit", buy - sell, 200.0 + si),
                 )
-        conn.execute(
-            "INSERT INTO shareholding_composition VALUES (?,?,?,?,?,?)",
-            ("BBCA", "2024-06-01", 60.0, 40.0, "Foo", 10.0),
-        )
         conn.commit()
     finally:
         conn.close()

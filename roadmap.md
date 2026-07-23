@@ -172,8 +172,8 @@ Phase 0 scaffold
 
 ## Immediate next actions
 
-1. Phase 3.1: `orientasi` as first real chapter.  
-2. Then Ch.1–4, 6 per MVP order in this roadmap.
+1. Phase 4: smoke harden, error UX, progress ticks, deepdive stubs polish.  
+2. Maintainer sign-off on [mvp_acceptance.md](./mvp_acceptance.md) with real DB.
 
 ---
 
@@ -184,6 +184,7 @@ Phase 0 scaffold
 | Design freeze (chapters/ux/arch/data/artifacts/mvp) | **Yes** |
 | Phase 0 scaffold | **Done** |
 | Phase 1 data plane + doctor | **Done** |
-| Phase 2 shared eval + artifacts | **Done** (metrics, costs, writer, explore pager) |
-| Implementation | Phase 3 next (`orientasi`) |
-| Current focus | Phase 3 |
+| Phase 2 shared eval + artifacts | **Done** |
+| Phase 3 MVP chapters (0,1,2,3,4,6) | **Done** |
+| Implementation | Phase 4 next (MVP harden) |
+| Current focus | Phase 4 |

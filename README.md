@@ -33,16 +33,22 @@ ml-saham chapters          # jalur MVP + progress
 ml-saham chapters --all
 ml-saham status
 ml-saham doctor
-ml-saham explore orientasi --no-pager   # pager default; --verbose untuk detail
-ml-saham demo orientasi                 # tulis artifacts/<topic>/… (kecuali --no-artifact)
-ml-saham demo orientasi --with-costs
-ml-saham compare factor-score --baseline hand --against elastic-net
+ml-saham explore orientasi --no-pager
+ml-saham demo orientasi
+ml-saham demo clean-prices
+ml-saham demo screen-rules
+ml-saham compare screen-rules --baseline hand --against tree
+ml-saham demo pattern-fail
+ml-saham demo factor-score
+ml-saham compare factor-score --baseline equal-weight --against elastic-net
+ml-saham demo broker-flow
 ml-saham deepdive broker-flow
-ml-saham glossary
 ```
 
-Progress disimpan di `~/.ml-saham/progress.json` (E=explore, D=demo, DV=deepdive).  
-Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir` (folder di-gitignore).
+Butuh: `pip install -e .` (pandas + scikit-learn termasuk). LightGBM opsional via `pip install -e ".[ml]"`.
+
+Progress: `~/.ml-saham/progress.json` (override `ML_SAHAM_HOME`).  
+Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir`.
 
 ## Status implementasi
 
@@ -51,7 +57,8 @@ Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir` (fold
 | 0 | Scaffold CLI + registry + DB resolve | **done** |
 | 1 | Doctor tabel MVP + loaders + universe | **done** |
 | 2 | Metrics + artifacts + explore pager | **done** |
-| 3 | Chapter 0,1,2,3,4,6 | berikutnya |
+| 3 | Chapter 0,1,2,3,4,6 | **done** |
+| 4 | MVP harden / sign-off | berikutnya |
 
 ## Catatan
 

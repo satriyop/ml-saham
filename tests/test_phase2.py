@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 
 import pytest
@@ -98,9 +97,14 @@ def test_resolve_artifacts_env(tmp_path: Path, monkeypatch):
 
 
 def test_demo_writes_artifact(tmp_path: Path):
+    from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+
+    db = build_mvp_fixture(tmp_path / "mvp.db")
     result = runner.invoke(
         app,
         [
+            "--db",
+            str(db),
             "--artifacts-dir",
             str(tmp_path / "out"),
             "demo",
@@ -115,14 +119,18 @@ def test_demo_writes_artifact(tmp_path: Path):
     assert manifest["schema_version"] == 1
     assert (packs[0] / "metrics.json").is_file()
     metrics = json.loads((packs[0] / "metrics.json").read_text())
-    assert metrics.get("stub") is True
-    assert not math.isnan(metrics["rank_ic"])
+    assert metrics.get("mvp_hard_ok") is True
 
 
 def test_demo_no_artifact(tmp_path: Path):
+    from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+
+    db = build_mvp_fixture(tmp_path / "mvp.db")
     result = runner.invoke(
         app,
         [
+            "--db",
+            str(db),
             "--artifacts-dir",
             str(tmp_path / "out"),
             "demo",
@@ -136,16 +144,21 @@ def test_demo_no_artifact(tmp_path: Path):
 
 
 def test_compare_and_deepdive_artifacts(tmp_path: Path):
+    from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+
     root = tmp_path / "out"
+    db = build_mvp_fixture(tmp_path / "mvp.db")
     cmp = runner.invoke(
         app,
         [
+            "--db",
+            str(db),
             "--artifacts-dir",
             str(root),
             "compare",
             "factor-score",
             "--baseline",
-            "hand",
+            "equal-weight",
             "--against",
             "elastic-net",
         ],
@@ -157,7 +170,14 @@ def test_compare_and_deepdive_artifacts(tmp_path: Path):
 
     dd = runner.invoke(
         app,
-        ["--artifacts-dir", str(root), "deepdive", "broker-flow"],
+        [
+            "--db",
+            str(db),
+            "--artifacts-dir",
+            str(root),
+            "deepdive",
+            "broker-flow",
+        ],
     )
     assert dd.exit_code == 0, dd.stdout
     dpacks = list((root / "broker-flow").glob("*_deepdive"))
@@ -172,7 +192,7 @@ def test_explore_no_pager_verbose():
     )
     assert result.exit_code == 0
     assert "Masalah" in result.stdout
-    assert "--verbose" in result.stdout or "Detail" in result.stdout
+    assert "fetched_date" in result.stdout or "Detail" in result.stdout
 
 
 def test_stub_demo_metrics_with_costs():

@@ -14,15 +14,18 @@ from ml_saham.artifacts import (
     ArtifactWriteRequest,
     ScoreboardMeta,
     resolve_artifacts_root,
-    stub_demo_metrics,
     write_artifact_pack,
 )
 from ml_saham.chapters import get as get_chapter
 from ml_saham.chapters import mvp_chapters
+from ml_saham.chapters.loader import has_chapter_module, load_chapter
 from ml_saham.chapters.registry import all_chapters
-from ml_saham.cli.explore_view import explore_body, print_explore
+from ml_saham.chapters.types import ChapterContext
+from ml_saham.cli.explore_view import print_explore
+from ml_saham.data.aisaham_read import connect
 from ml_saham.data.connection import resolve_db_path
 from ml_saham.data.doctor_checks import format_doctor_report, run_doctor
+from ml_saham.data.universe import default_universe
 from ml_saham.eval import costs_label, default_banners
 from ml_saham.progress import mark, topic_flags
 
@@ -54,6 +57,38 @@ def _progress_cell(slug: str) -> str:
     if flags["deepdive"]:
         bits.append("DV")
     return "/".join(bits) if bits else "—"
+
+
+def _build_ctx(
+    ctx: typer.Context,
+    *,
+    with_costs: bool = False,
+    verbose: bool = False,
+    as_of: str | None = None,
+) -> ChapterContext:
+    db_path: Path = ctx.obj["db"]
+    universe: list[str] = []
+    if db_path.is_file():
+        with connect(db_path) as conn:
+            universe = default_universe(conn)
+    return ChapterContext(
+        db_path=db_path,
+        universe=universe,
+        as_of=as_of,
+        with_costs=with_costs,
+        verbose=verbose,
+    )
+
+
+def _doctor_gate(db_path: Path, required_data: str) -> None:
+    if required_data != "mvp":
+        return
+    report = run_doctor(db_path)
+    if not report.mvp_hard_ok:
+        console.print("[red]Data MVP belum siap untuk demo/compare.[/red]")
+        console.print(format_doctor_report(report))
+        console.print("\nPerbaiki data, lalu: ml-saham doctor")
+        raise typer.Exit(code=1)
 
 
 @app.callback()
@@ -150,7 +185,16 @@ def explore_cmd(
     except KeyError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
-    text = explore_body(ch, verbose=verbose)
+
+    if has_chapter_module(topic):
+        mod = load_chapter(topic)
+        text = mod.explore_text(verbose=verbose)
+    else:
+        text = (
+            f"Ch.{ch.number}  {ch.title}\n"
+            f"topic={ch.slug}  phase={_phase_label(ch.phase)}\n\n"
+            "[Belum diimplementasi — di luar MVP Phase 3.]\n"
+        )
     print_explore(console, text, use_pager=not no_pager)
     mark(topic, "explore")
 
@@ -162,12 +206,17 @@ def demo_cmd(
     with_costs: bool = typer.Option(
         False,
         "--with-costs",
-        help="Terapkan haircut biaya sederhana pada metrik stub",
+        help="Terapkan haircut biaya sederhana pada metrik return",
     ),
     no_artifact: bool = typer.Option(
         False,
         "--no-artifact",
         help="Jangan tulis artifact pack",
+    ),
+    as_of: Optional[str] = typer.Option(
+        None,
+        "--as-of",
+        help="Tanggal as_of (YYYY-MM-DD); default dipilih otomatis",
     ),
 ) -> None:
     """Jalankan demo pada data real."""
@@ -177,20 +226,38 @@ def demo_cmd(
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
 
-    db_path: Path = ctx.obj["db"]
-    console.print(f"[bold]Demo Ch.{ch.number} {ch.slug}[/bold]")
-    console.print(f"Data     db={db_path}")
-    console.print(
-        "[yellow]Demo chapter belum diimplementasi "
-        f"(Phase 3 — {ch.slug}); menulis artifact stub Phase 2.[/yellow]"
-    )
+    if not has_chapter_module(topic):
+        console.print(
+            f"[yellow]Demo belum diimplementasi untuk {ch.slug} "
+            "(di luar MVP Phase 3).[/yellow]"
+        )
+        raise typer.Exit(code=1)
 
-    metrics = stub_demo_metrics(with_costs=with_costs)
-    console.print(
-        f"Stub metrics  rank_ic={metrics['rank_ic']:.4f}  n={metrics['n']}"
-    )
-    console.print()
-    console.print(default_banners(with_costs=with_costs).render())
+    _doctor_gate(ctx.obj["db"], ch.required_data)
+    chapter_ctx = _build_ctx(ctx, with_costs=with_costs, as_of=as_of)
+    mod = load_chapter(topic)
+    try:
+        result = mod.run_demo(chapter_ctx)
+    except Exception as exc:  # noqa: BLE001 — surface as CLI error
+        console.print(f"[red]Demo gagal: {exc}[/red]")
+        console.print("Cek: ml-saham doctor")
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"[bold]{result.title}[/bold]")
+    console.print(f"Data     db={chapter_ctx.db_path}")
+    if chapter_ctx.universe:
+        console.print(f"Universe n={len(chapter_ctx.universe)}")
+    console.print("─" * 40)
+    for line in result.lines:
+        console.print(line)
+    console.print("─" * 40)
+    if result.scoreboard:
+        console.print(default_banners(with_costs=with_costs).render())
+    else:
+        console.print("⚠ Bukan saran trading / investasi")
+        console.print(
+            "[dim](Ch. ini failure-lab accuracy — bukan skorboard vs IHSG)[/dim]"
+        )
 
     if not no_artifact:
         root = resolve_artifacts_root(ctx.obj.get("artifacts_dir"))
@@ -199,20 +266,20 @@ def demo_cmd(
                 topic=ch.slug,
                 chapter=ch.number,
                 mode="demo",
-                db_path=db_path,
-                model="stub",
-                scoreboard=ScoreboardMeta(costs=costs_label(with_costs=with_costs)),
-                summary_md=(
-                    f"# Demo stub · {ch.slug}\n\n"
-                    f"Phase 2 frame saja. Chapter {ch.number} belum punya "
-                    f"`run_demo` real.\n\n"
-                    f"- rank_ic (stub): {metrics['rank_ic']:.4f}\n"
-                    f"- with_costs: {with_costs}\n\n"
-                    "## Caveat\n\n"
-                    "- Bukan saran trading / investasi.\n"
-                    "- Metrik di metrics.json adalah toy data deterministik.\n"
+                db_path=chapter_ctx.db_path,
+                model=result.model,
+                as_of=chapter_ctx.as_of or result.metrics.get("as_of"),
+                scoreboard=ScoreboardMeta(
+                    type=(
+                        "long_only_vs_ihsg"
+                        if result.scoreboard
+                        else "failure_lab"
+                    ),
+                    costs=costs_label(with_costs=with_costs),
                 ),
-                metrics=metrics,
+                summary_md=result.summary_md,
+                metrics=result.metrics,
+                extra_files=result.extra_files,
             ),
             artifacts_root=root,
         )
@@ -230,12 +297,17 @@ def compare_cmd(
     with_costs: bool = typer.Option(
         False,
         "--with-costs",
-        help="Terapkan haircut biaya sederhana pada metrik stub",
+        help="Terapkan haircut biaya sederhana pada metrik return",
     ),
     no_artifact: bool = typer.Option(
         False,
         "--no-artifact",
         help="Jangan tulis artifact pack",
+    ),
+    as_of: Optional[str] = typer.Option(
+        None,
+        "--as-of",
+        help="Tanggal as_of (YYYY-MM-DD); default dipilih otomatis",
     ),
 ) -> None:
     """Bandingkan baseline vs model."""
@@ -245,26 +317,30 @@ def compare_cmd(
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
 
-    db_path: Path = ctx.obj["db"]
-    console.print(
-        f"[yellow]Compare belum diimplementasi untuk {ch.slug} "
-        f"({baseline} vs {against}); artifact stub Phase 2.[/yellow]"
-    )
-    base_m = stub_demo_metrics(with_costs=with_costs)
-    # Slightly weaker toy IC for "against" so compare.json is non-trivial
-    against_m = dict(base_m)
-    against_m["rank_ic"] = float(base_m["rank_ic"]) * 0.85
-    against_m["model"] = against
-    base_m = dict(base_m)
-    base_m["model"] = baseline
-    compare_payload = {"baseline": base_m, "against": against_m}
+    if not has_chapter_module(topic):
+        console.print(f"[yellow]Compare N/A untuk {ch.slug}.[/yellow]")
+        raise typer.Exit(code=1)
 
-    console.print(
-        f"Stub  {baseline} rank_ic={base_m['rank_ic']:.4f}  |  "
-        f"{against} rank_ic={against_m['rank_ic']:.4f}"
-    )
-    console.print()
-    console.print(default_banners(with_costs=with_costs).render())
+    mod = load_chapter(topic)
+    if not hasattr(mod, "run_compare"):
+        console.print(f"[yellow]Compare belum tersedia untuk {ch.slug}.[/yellow]")
+        raise typer.Exit(code=1)
+
+    _doctor_gate(ctx.obj["db"], ch.required_data)
+    chapter_ctx = _build_ctx(ctx, with_costs=with_costs, as_of=as_of)
+    try:
+        result = mod.run_compare(chapter_ctx, baseline=baseline, against=against)
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"[red]Compare gagal: {exc}[/red]")
+        console.print("Cek: ml-saham doctor")
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"[bold]{result.title}[/bold]")
+    for line in result.lines:
+        console.print(line)
+    if result.scoreboard:
+        console.print()
+        console.print(default_banners(with_costs=with_costs).render())
 
     if not no_artifact:
         root = resolve_artifacts_root(ctx.obj.get("artifacts_dir"))
@@ -273,18 +349,13 @@ def compare_cmd(
                 topic=ch.slug,
                 chapter=ch.number,
                 mode="compare",
-                db_path=db_path,
-                model=f"{baseline}_vs_{against}",
+                db_path=chapter_ctx.db_path,
+                model=result.model,
+                as_of=result.compare.get("as_of") if result.compare else None,
                 scoreboard=ScoreboardMeta(costs=costs_label(with_costs=with_costs)),
-                summary_md=(
-                    f"# Compare stub · {ch.slug}\n\n"
-                    f"`{baseline}` vs `{against}` — Phase 2 frame.\n\n"
-                    "## Caveat\n\n"
-                    "- Bukan saran trading / investasi.\n"
-                    "- Angka stub, bukan hasil chapter real.\n"
-                ),
-                metrics=against_m,
-                compare=compare_payload,
+                summary_md=result.summary_md,
+                metrics=result.metrics,
+                compare=result.compare,
             ),
             artifacts_root=root,
         )
@@ -308,38 +379,45 @@ def deepdive_cmd(
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
 
-    db_path: Path = ctx.obj["db"]
     console.print("[bold]Deep-dive · kaitkan ke ai-saham[/bold]")
     console.print(f"topic={ch.slug}")
-    console.print(
-        "[yellow]Deep-dive belum diisi "
-        f"(opsional setelah chapter {ch.slug} live).[/yellow]"
+    suggestions = None
+    summary = (
+        f"# Deep-dive · {ch.slug}\n\n"
+        "Human-applied suggestions only — tidak auto-edit ai-saham.\n"
     )
-
-    if not no_artifact:
-        root = resolve_artifacts_root(ctx.obj.get("artifacts_dir"))
+    if has_chapter_module(topic):
+        mod = load_chapter(topic)
+        if hasattr(mod, "deepdive_text"):
+            console.print(mod.deepdive_text())
+        else:
+            console.print(
+                "[yellow]Deep-dive singkat (stub OK untuk MVP).[/yellow]\n"
+                "Chapter utama sudah lengkap tanpa deep-dive."
+            )
         suggestions = (
             "# Suggestions for ai-saham (manual review)\n\n"
             f"Related: {ch.slug}\n\n"
             "## Evidence\n"
-            "- (stub Phase 2 — isi setelah chapter live)\n\n"
+            "- Lihat artifact demo/compare chapter ini.\n\n"
             "## Possible knobs (do not apply blindly)\n"
             "- Validate on walk-forward before changing YAML\n\n"
             "## Not claimed\n"
             "- Live edge, auto-promote, or smart-money proof\n"
         )
+    else:
+        console.print("[yellow]Deep-dive belum diisi (di luar MVP).[/yellow]")
+
+    if not no_artifact:
+        root = resolve_artifacts_root(ctx.obj.get("artifacts_dir"))
         pack = write_artifact_pack(
             ArtifactWriteRequest(
                 topic=ch.slug,
                 chapter=ch.number,
                 mode="deepdive",
-                db_path=db_path,
-                model=None,
+                db_path=ctx.obj["db"],
                 ai_saham_deepdive=True,
-                summary_md=(
-                    f"# Deep-dive stub · {ch.slug}\n\n"
-                    "Human-applied suggestions only — tidak auto-edit ai-saham.\n"
-                ),
+                summary_md=summary,
                 suggestions_md=suggestions,
             ),
             artifacts_root=root,
