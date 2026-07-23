@@ -90,7 +90,37 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                 top_holder_pct REAL,
                 PRIMARY KEY (ticker, fetched_date)
             );
+            CREATE TABLE insider_cache (
+                ticker TEXT NOT NULL,
+                name TEXT,
+                role TEXT,
+                action_type TEXT,
+                shares REAL,
+                price REAL,
+                transaction_date TEXT,
+                ownership_before_pct REAL,
+                ownership_after_pct REAL,
+                fetched_date TEXT
+            );
             """
+        )
+
+        sectors = (
+            "Financials",
+            "Financials",
+            "Financials",
+            "Financials",
+            "Communications",
+            "Consumer Cyclical",
+            "Consumer Defensive",
+            "Consumer Defensive",
+            "Healthcare",
+            "Consumer Defensive",
+            "Energy",
+            "Energy",
+            "Basic Materials",
+            "Basic Materials",
+            "Technology",
         )
 
         start = date(2024, 1, 2)
@@ -100,12 +130,14 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
             drift = 0.15 if t == "IHSG" else 0.05 + (si % 5) * 0.03
             for i in range(min_bars):
                 d = (start + timedelta(days=i)).isoformat()
-                # mild spike early for clean-prices to flag
                 shock = 0.0
                 if t != "IHSG" and i == 40 and si == 0:
                     shock = px * 0.12
                 close = px + shock
                 vol = 1_000_000.0 + si * 10_000 + (i % 7) * 1000
+                # volume spike for Ch.8
+                if t != "IHSG" and i == 55 and si == 1:
+                    vol *= 25
                 candle_rows.append(
                     (t, d, close - 1, close + 1, close - 2, close, vol)
                 )
@@ -118,13 +150,43 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
         fundie_rows = []
         meta_rows = []
         share_rows = []
+        insider_rows = []
         for si, t in enumerate(_STOCKS):
             pe = 8.0 + si * 1.5
             roe = 0.05 + (si % 6) * 0.03
             pbv = 1.0 + si * 0.2
             fundie_rows.append((t, "2024-06-01", pe, roe, pbv, 0.02, 1e14 * (si + 1)))
-            meta_rows.append((t, "Sector", "Sub"))
+            meta_rows.append((t, sectors[si], "Sub"))
             share_rows.append((t, "2024-06-01", 40.0 + si, 60.0 - si, "Holder", 5.0))
+            # usable insider + one absurd placeholder
+            insider_rows.append(
+                (
+                    t,
+                    "Name",
+                    "Director",
+                    "BUY" if si % 2 == 0 else "SELL",
+                    100_000.0 * (si + 1),
+                    100.0,
+                    (start + timedelta(days=50 + si)).isoformat(),
+                    1.0,
+                    1.1,
+                    "2024-06-01",
+                )
+            )
+        insider_rows.append(
+            (
+                "BBCA",
+                "__NONE__",
+                "",
+                "NONE",
+                0,
+                0.0,
+                "1970-01-01",
+                0.0,
+                0.0,
+                "2024-06-01",
+            )
+        )
         conn.executemany(
             "INSERT INTO company_fundamentals VALUES (?,?,?,?,?,?,?)",
             fundie_rows,
@@ -133,6 +195,10 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
         conn.executemany(
             "INSERT INTO shareholding_composition VALUES (?,?,?,?,?,?)",
             share_rows,
+        )
+        conn.executemany(
+            "INSERT INTO insider_cache VALUES (?,?,?,?,?,?,?,?,?,?)",
+            insider_rows,
         )
 
         for si, t in enumerate(_STOCKS):

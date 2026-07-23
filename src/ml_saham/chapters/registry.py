@@ -57,5 +57,9 @@ def mvp_chapters() -> tuple[ChapterMeta, ...]:
     return tuple(c for c in CHAPTERS if c.phase == "mvp")
 
 
+def v1_1_chapters() -> tuple[ChapterMeta, ...]:
+    return tuple(c for c in CHAPTERS if c.phase == "v1_1")
+
+
 def known_slugs() -> list[str]:
     return [c.slug for c in CHAPTERS]

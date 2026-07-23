@@ -17,7 +17,7 @@ from ml_saham.artifacts import (
     write_artifact_pack,
 )
 from ml_saham.chapters import get as get_chapter
-from ml_saham.chapters import mvp_chapters
+from ml_saham.chapters import mvp_chapters, v1_1_chapters
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.loader import has_chapter_module, load_chapter
 from ml_saham.chapters.registry import all_chapters
@@ -94,14 +94,16 @@ def _build_ctx(
 
 
 def _doctor_gate(db_path: Path, required_data: str) -> None:
-    if required_data != "mvp":
-        return
     report = run_doctor(db_path)
-    if not report.mvp_hard_ok:
-        console.print("[red]Data MVP belum siap untuk demo/compare.[/red]")
-        console.print(format_doctor_report(report))
-        console.print("\nPerbaiki data, lalu: ml-saham doctor")
-        raise typer.Exit(code=1)
+    if report.tier_ok(required_data):
+        return
+    label = {"mvp": "MVP", "v1_1": "v1.1", "phase2": "phase-2"}.get(
+        required_data, required_data
+    )
+    console.print(f"[red]Data {label} belum siap untuk demo/compare.[/red]")
+    console.print(format_doctor_report(report))
+    console.print("\nPerbaiki data, lalu: ml-saham doctor")
+    raise typer.Exit(code=1)
 
 
 @app.callback()
@@ -137,7 +139,7 @@ def chapters_cmd(
     all_phases: bool = typer.Option(
         False,
         "--all",
-        help="Tampilkan semua chapter (default: sorot MVP + ringkas sisanya)",
+        help="Tampilkan semua chapter (default: MVP + v1.1)",
     ),
 ) -> None:
     """Tampilkan jalur chapter dan progress."""
@@ -148,7 +150,10 @@ def chapters_cmd(
     table.add_column("judul")
     table.add_column("progress", justify="center")
 
-    rows = all_chapters() if all_phases else mvp_chapters()
+    if all_phases:
+        rows = all_chapters()
+    else:
+        rows = (*mvp_chapters(), *v1_1_chapters())
     for ch in rows:
         table.add_row(
             str(ch.number),
@@ -160,7 +165,7 @@ def chapters_cmd(
     console.print(table)
     if not all_phases:
         console.print(
-            "\n[dim]MVP saja. Progress: E✓=explore D✓=demo DV✓=deepdive. "
+            "\n[dim]MVP + v1.1. Progress: E✓=explore D✓=demo DV✓=deepdive. "
             "Lihat semua: ml-saham chapters --all[/dim]"
         )
 

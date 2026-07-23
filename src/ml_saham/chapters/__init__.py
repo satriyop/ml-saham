@@ -7,6 +7,7 @@ from ml_saham.chapters.registry import (
     get,
     known_slugs,
     mvp_chapters,
+    v1_1_chapters,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "get",
     "known_slugs",
     "mvp_chapters",
+    "v1_1_chapters",
 ]

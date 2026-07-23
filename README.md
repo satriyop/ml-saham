@@ -42,10 +42,15 @@ ml-saham demo pattern-fail
 ml-saham demo factor-score
 ml-saham compare factor-score --baseline equal-weight --against elastic-net
 ml-saham demo broker-flow
+ml-saham demo cluster-peers
+ml-saham demo insider
+ml-saham demo volume-anomaly
 ml-saham deepdive broker-flow
 ```
 
-Butuh: `pip install -e .` (pandas + scikit-learn termasuk). LightGBM opsional via `pip install -e ".[ml]"`.
+Acceptance: [mvp_acceptance.md](./mvp_acceptance.md) · [v1_1_acceptance.md](./v1_1_acceptance.md)
+
+Butuh: `pip install -e .` (pandas + scikit-learn). LightGBM opsional: `pip install -e ".[ml]"`.
 
 Progress: `~/.ml-saham/progress.json` (override `ML_SAHAM_HOME`).  
 Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir`.
@@ -59,7 +64,8 @@ Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir`.
 | 2 | Metrics + artifacts + explore pager | **done** |
 | 3 | Chapter 0,1,2,3,4,6 | **done** |
 | 4 | MVP harden / sign-off | **done** |
-| 5 | v1.1 chapters 5,7,8 | berikutnya |
+| 5 | v1.1 chapters 5,7,8 | **done** |
+| 6 | Phase-2 curriculum 9–17 | nanti |
 
 ## Catatan
 

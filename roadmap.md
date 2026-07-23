@@ -172,8 +172,8 @@ Phase 0 scaffold
 
 ## Immediate next actions
 
-1. Phase 5: v1.1 doctor + chapters `cluster-peers`, `insider`, `volume-anomaly`.  
-2. Optional polish only if needed before v1.1.
+1. Phase 6 when needed: phase-2 chapters (start where data exists).  
+2. Optional: learning-store ETL only if Direct mode blocks Ch.12+.
 
 ---
 
@@ -181,9 +181,8 @@ Phase 0 scaffold
 
 | Item | State |
 |---|---|
-| Design freeze (chapters/ux/arch/data/artifacts/mvp) | **Yes** |
-| Phase 0–3 | **Done** |
-| Phase 4 MVP harden | **Done** (smoke, error UX, deepdive stubs, acceptance signed) |
-| MVP acceptance | **Accepted** — see [mvp_acceptance.md](./mvp_acceptance.md) |
-| Implementation | Phase 5 next (v1.1 chapters) |
-| Current focus | Phase 5 |
+| Design freeze | **Yes** |
+| Phase 0–4 (MVP) | **Done / accepted** |
+| Phase 5 v1.1 chapters | **Done** — see [v1_1_acceptance.md](./v1_1_acceptance.md) |
+| Implementation | Phase 6 next (optional / later) |
+| Current focus | idle / Phase 6 on demand |

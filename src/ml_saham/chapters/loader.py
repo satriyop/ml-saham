@@ -12,13 +12,19 @@ _SLUG_TO_MOD = {
     "pattern-fail": "ml_saham.chapters.pattern_fail",
     "factor-score": "ml_saham.chapters.factor_score",
     "broker-flow": "ml_saham.chapters.broker_flow",
+    "cluster-peers": "ml_saham.chapters.cluster_peers",
+    "insider": "ml_saham.chapters.insider",
+    "volume-anomaly": "ml_saham.chapters.volume_anomaly",
 }
 
 
 def load_chapter(slug: str) -> ModuleType:
     mod_name = _SLUG_TO_MOD.get(slug)
     if mod_name is None:
-        raise KeyError(f"Belum ada modul chapter untuk topic {slug!r} (Phase 3 MVP saja).")
+        raise KeyError(
+            f"Belum ada modul chapter untuk topic {slug!r} "
+            "(MVP + v1.1: cluster-peers, insider, volume-anomaly)."
+        )
     return importlib.import_module(mod_name)
 
 

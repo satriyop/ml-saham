@@ -251,3 +251,99 @@ def filter_tickers_with_min_bars(
         if ticker_candle_count(conn, t) >= min_bars:
             out.append(t)
     return out
+
+
+_INSIDER_MIN_DATE = "1990-01-01"
+
+
+def load_insider_events(
+    conn: sqlite3.Connection,
+    tickers: Sequence[str] | None = None,
+    *,
+    start: str | None = None,
+    end: str | None = None,
+    scrub_absurd_dates: bool = True,
+) -> list[dict[str, Any]]:
+    """Load insider rows; by default drop absurd dates (e.g. 1970 placeholders)."""
+    if not table_exists(conn, "insider_cache"):
+        return []
+    cols = table_columns(conn, "insider_cache")
+    needed = {"ticker", "transaction_date", "action_type", "shares"}
+    if not needed <= cols:
+        return []
+    select = [
+        "ticker",
+        "transaction_date",
+        "action_type",
+        "shares",
+    ]
+    for optional in ("role", "fetched_date", "price", "name"):
+        if optional in cols:
+            select.append(optional)
+    sql = f"SELECT {', '.join(select)} FROM insider_cache WHERE 1=1"
+    params: list[Any] = []
+    if scrub_absurd_dates:
+        sql += " AND transaction_date >= ?"
+        params.append(_INSIDER_MIN_DATE)
+    if tickers:
+        sql += f" AND ticker IN ({_placeholders(len(tickers))})"
+        params.extend(tickers)
+    if start:
+        sql += " AND transaction_date >= ?"
+        params.append(start)
+    if end:
+        sql += " AND transaction_date <= ?"
+        params.append(end)
+    sql += " ORDER BY transaction_date, ticker"
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+def insider_date_stats(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Counts for doctor: total, scrubbed absurd, usable BUY/SELL."""
+    if not table_exists(conn, "insider_cache"):
+        return {"total": 0, "absurd": 0, "usable": 0}
+    total = count_rows(conn, "insider_cache")
+    absurd = int(
+        conn.execute(
+            "SELECT COUNT(*) AS n FROM insider_cache WHERE transaction_date < ?",
+            (_INSIDER_MIN_DATE,),
+        ).fetchone()["n"]
+    )
+    usable = int(
+        conn.execute(
+            """
+            SELECT COUNT(*) AS n FROM insider_cache
+            WHERE transaction_date >= ?
+              AND UPPER(COALESCE(action_type,'')) IN ('BUY','SELL')
+              AND COALESCE(shares, 0) > 0
+            """,
+            (_INSIDER_MIN_DATE,),
+        ).fetchone()["n"]
+    )
+    return {"total": total, "absurd": absurd, "usable": usable}
+
+
+def load_sector_map(conn: sqlite3.Connection) -> dict[str, str]:
+    """Best-effort ticker → sector from stock_meta or ticker_notation_cache."""
+    out: dict[str, str] = {}
+    for tname, sector_col in (
+        ("stock_meta", "sector"),
+        ("ticker_notation_cache", "sector"),
+    ):
+        if not table_exists(conn, tname):
+            continue
+        cols = table_columns(conn, tname)
+        if "ticker" not in cols or sector_col not in cols:
+            continue
+        rows = conn.execute(
+            f"SELECT ticker, {sector_col} AS sector FROM {tname}"
+        ).fetchall()
+        for r in rows:
+            sec = (r["sector"] or "").strip()
+            if sec and r["ticker"] not in out:
+                out[str(r["ticker"])] = sec
+    return out
+
+
+def distinct_sector_count(conn: sqlite3.Connection) -> int:
+    return len({s for s in load_sector_map(conn).values() if s})

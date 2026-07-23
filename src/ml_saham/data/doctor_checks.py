@@ -1,4 +1,4 @@
-"""Doctor checks for MVP / later data tiers."""
+"""Doctor checks for MVP / v1.1 / later data tiers."""
 
 from __future__ import annotations
 
@@ -10,8 +10,10 @@ from ml_saham.data.aisaham_read import (
     candle_date_range,
     connect,
     count_rows,
+    distinct_sector_count,
     distinct_ticker_count,
     has_ihsg,
+    insider_date_stats,
     table_columns,
     table_exists,
     ticker_candle_count,
@@ -20,13 +22,15 @@ from ml_saham.data.universe import default_universe
 
 Status = str  # ok | partial | missing
 
+_MIN_SECTORS_V11 = 3
+
 
 @dataclass
 class CheckItem:
     name: str
     status: Status
     detail: str = ""
-    hard: bool = True  # hard missing fails MVP tier
+    hard: bool = True  # hard missing fails its tier
 
 
 @dataclass
@@ -53,6 +57,9 @@ class DoctorReport:
     db_path: Path
     db_exists: bool
     mvp: TierReport
+    v1_1: TierReport = field(
+        default_factory=lambda: TierReport(name="v1.1 data", status="missing")
+    )
     universe_tickers: list[str] = field(default_factory=list)
     remediation: list[str] = field(default_factory=list)
 
@@ -64,6 +71,23 @@ class DoctorReport:
         if not hard:
             return False
         return all(i.status == "ok" for i in hard)
+
+    @property
+    def v1_1_hard_ok(self) -> bool:
+        if not self.mvp_hard_ok:
+            return False
+        hard = [i for i in self.v1_1.items if i.hard]
+        if not hard:
+            return False
+        return all(i.status == "ok" for i in hard)
+
+    def tier_ok(self, required_data: str) -> bool:
+        if required_data == "mvp":
+            return self.mvp_hard_ok
+        if required_data == "v1_1":
+            return self.v1_1_hard_ok
+        # phase2 not fully implemented — require at least MVP for now
+        return self.mvp_hard_ok
 
 
 _MVP_REQUIRED_COLS: dict[str, set[str]] = {
@@ -91,6 +115,15 @@ _MVP_REQUIRED_COLS: dict[str, set[str]] = {
         "institution_pct",
         "individual_pct",
     },
+}
+
+_INSIDER_COLS = {
+    "ticker",
+    "transaction_date",
+    "action_type",
+    "shares",
+    "role",
+    "fetched_date",
 }
 
 
@@ -125,14 +158,96 @@ def _check_table(
     return CheckItem(name, "ok", detail.strip(), hard=hard)
 
 
+def _sector_check(conn) -> CheckItem:
+    """MVP soft sector presence (stock_meta OR notation)."""
+    sector_ok = False
+    sector_detail = ""
+    for tname, col_hint in (
+        ("stock_meta", "sector"),
+        ("ticker_notation_cache", "sector"),
+    ):
+        if table_exists(conn, tname) and count_rows(conn, tname) > 0:
+            cols = table_columns(conn, tname)
+            if "ticker" in cols and (
+                col_hint in cols or "sub_sector" in cols or "industry" in cols
+            ):
+                sector_ok = True
+                sector_detail = (
+                    f"{tname} rows={count_rows(conn, tname)} "
+                    f"tickers={distinct_ticker_count(conn, tname)}"
+                )
+                break
+    return CheckItem(
+        "sector_meta",
+        "ok" if sector_ok else "partial",
+        sector_detail or "stock_meta/ticker_notation_cache belum siap",
+        hard=False,
+    )
+
+
+def _v11_sector_coverage(conn) -> CheckItem:
+    n = distinct_sector_count(conn)
+    if n >= _MIN_SECTORS_V11:
+        return CheckItem(
+            "sector_coverage",
+            "ok",
+            f"distinct_sectors={n} (min {_MIN_SECTORS_V11})",
+            hard=True,
+        )
+    if n > 0:
+        return CheckItem(
+            "sector_coverage",
+            "partial",
+            f"distinct_sectors={n} < {_MIN_SECTORS_V11}",
+            hard=True,
+        )
+    return CheckItem(
+        "sector_coverage",
+        "missing",
+        "tidak ada sector di stock_meta/notation",
+        hard=True,
+    )
+
+
+def _v11_insider(conn) -> CheckItem:
+    base = _check_table(
+        conn,
+        "insider_cache",
+        required_cols=_INSIDER_COLS,
+        hard=True,
+    )
+    if base.status == "missing":
+        return base
+    stats = insider_date_stats(conn)
+    detail = (
+        f"{base.detail} usable={stats['usable']} "
+        f"absurd_dates={stats['absurd']}"
+    )
+    if stats["usable"] <= 0:
+        return CheckItem(
+            "insider_cache",
+            "partial" if stats["total"] > 0 else "missing",
+            detail + " (tidak ada BUY/SELL usable setelah scrub)",
+            hard=True,
+        )
+    status: Status = "ok"
+    if stats["absurd"] > 0 and stats["absurd"] >= stats["usable"]:
+        status = "partial"
+    elif base.status != "ok":
+        status = base.status
+    return CheckItem("insider_cache", status, detail, hard=True)
+
+
 def run_doctor(db_path: Path | str) -> DoctorReport:
     path = Path(db_path)
+    empty_v11 = TierReport(name="v1.1 data", status="missing", items=[])
     if not path.is_file():
         mvp = TierReport(name="MVP data", status="missing", items=[])
         return DoctorReport(
             db_path=path,
             db_exists=False,
             mvp=mvp,
+            v1_1=empty_v11,
             remediation=[
                 "Set --db PATH atau env ML_SAHAM_DB.",
                 "Atau di ai-saham: saham fetch market --universe lq45",
@@ -175,33 +290,7 @@ def run_doctor(db_path: Path | str) -> DoctorReport:
                 hard=True,
             )
         )
-
-        # sector: stock_meta OR ticker_notation_cache
-        sector_ok = False
-        sector_detail = ""
-        for tname, col_hint in (
-            ("stock_meta", "sector"),
-            ("ticker_notation_cache", "sector"),
-        ):
-            if table_exists(conn, tname) and count_rows(conn, tname) > 0:
-                cols = table_columns(conn, tname)
-                if "ticker" in cols and (
-                    col_hint in cols or "sub_sector" in cols or "industry" in cols
-                ):
-                    sector_ok = True
-                    sector_detail = (
-                        f"{tname} rows={count_rows(conn, tname)} "
-                        f"tickers={distinct_ticker_count(conn, tname)}"
-                    )
-                    break
-        items.append(
-            CheckItem(
-                "sector_meta",
-                "ok" if sector_ok else "partial",
-                sector_detail or "stock_meta/ticker_notation_cache belum siap",
-                hard=False,
-            )
-        )
+        items.append(_sector_check(conn))
 
         bmin, bmax = broker_summaries_date_range(conn)
         broker_extra = f"range={bmin}..{bmax}" if bmin and bmax else ""
@@ -243,6 +332,10 @@ def run_doctor(db_path: Path | str) -> DoctorReport:
         mvp = TierReport(name="MVP data", status="missing", items=items)
         mvp.recompute()
 
+        v11_items = [_v11_sector_coverage(conn), _v11_insider(conn)]
+        v1_1 = TierReport(name="v1.1 data", status="missing", items=v11_items)
+        v1_1.recompute()
+
         remediation: list[str] = []
         if not mvp_hard_ok_items(items):
             remediation.append(
@@ -257,11 +350,24 @@ def run_doctor(db_path: Path | str) -> DoctorReport:
             remediation.append(
                 "Universe kosong: cache lebih banyak ticker LQ45-like di candles."
             )
+        if not all(i.status == "ok" for i in v11_items if i.hard):
+            remediation.append(
+                "Untuk v1.1: pastikan stock_meta/sector terisi + "
+                "insider enrichment (insider_cache) di ai-saham."
+            )
+            if any(
+                i.name == "insider_cache" and "absurd" in i.detail for i in v11_items
+            ):
+                remediation.append(
+                    "Insider: scrub tanggal absurd (<1990) di chapter; "
+                    "re-fetch jika terlalu banyak placeholder."
+                )
 
         return DoctorReport(
             db_path=path.resolve(),
             db_exists=True,
             mvp=mvp,
+            v1_1=v1_1,
             universe_tickers=universe,
             remediation=remediation,
         )
@@ -276,11 +382,19 @@ def format_doctor_report(report: DoctorReport) -> str:
     if not report.db_exists:
         lines.append("MVP data: missing")
         lines.append("  (file DB tidak ada)")
+        lines.append("v1.1 data: missing")
     else:
         lines.append(f"MVP data: {report.mvp.status}")
         for item in report.mvp.items:
-            mark = item.status
-            detail = f"  {item.name:<22} {mark}"
+            detail = f"  {item.name:<22} {item.status}"
+            if item.detail:
+                detail += f"  {item.detail}"
+            if not item.hard and item.status != "ok":
+                detail += "  (soft)"
+            lines.append(detail)
+        lines.append(f"v1.1 data: {report.v1_1.status}")
+        for item in report.v1_1.items:
+            detail = f"  {item.name:<22} {item.status}"
             if item.detail:
                 detail += f"  {item.detail}"
             if not item.hard and item.status != "ok":
