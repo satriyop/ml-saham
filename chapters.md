@@ -45,9 +45,9 @@ Roadmap: [roadmap.md](./roadmap.md)
 | Phase | Chapters |
 |---|---|
 | **MVP (v1)** | 0, 1, 2, 3, 4, 6 |
-| **v1.1** | 5, 7, 8 |
-| **Phase 2** | 9–17 |
-| **Optional appendix** | 18 (RL) |
+| **v1.1** | 5, 7, 9 |
+| **Phase 2** | 8, 10–20 |
+| **Phase 3 (Advanced)** | 21–36 |
 
 **Evaluation spine:** light honesty in Ch.0 + Ch.3 (train/test, no future peek, coin-flip, biaya banner); full walk-forward in Ch.12.
 
@@ -74,39 +74,42 @@ Roadmap: [roadmap.md](./roadmap.md)
 | # | Title (generic problem) | Tier | Implemented Algorithms & Quant Suite | Optional deep-dive → `ai-saham` |
 |---|---|---|---|---|
 | 0 | **Orientasi** — how we judge “good” without fooling ourselves | — | Baselines (buy & hold, rules), PIT/`fetched_date` checks | Data paths, PIT/`fetched_date` honesty |
-| 1 | **Membersihkan harga saham** — missing bars, splits, spikes | Simple | z-score / IQR + Isolation Forest + CUSUM Change-Point Detection | Corp-action break hygiene in caches |
-| 2 | **Saring saham dengan aturan** — rules vs learned rank | Simple | Hand rules vs DecisionTree classifier + feature importances & split rules | Risk-gate *precursors* (fund/liquidity features) |
-| 3 | **Mengenali pola harga sederhana** — next-day / pattern **failure lab** | Simple | DecisionTree vs 50% coin-flip baseline + Binomial Z-test ($p$-value) | — |
-| 4 | **Skor faktor** — value, momentum, quality (+ ownership sleeve) | Medium | Equal-weight hand blend vs ElasticNet / Ridge + feature weights (`coef_`) | Fundamentals / shareholding caches |
-| 5 | **Mengelompokkan saham yang bergerak mirip** — peers / clusters | Medium | k-means + Agglomerative clustering + PCA 2D + Silhouette & Davies-Bouldin | Sector-context diagnostics |
-| 6 | **Aliran broker & asing** — *who* ranks from flow | Medium | Foreign-net 5d z-score vs momentum + Logistic/Ridge feature importance | Accum / foreign-flow score components, BCI |
-| 7 | **Aktivitas insider** — sparse disclosed insider events | Medium | Insider net shares rule vs Logistic Regression on transaction types & feature weights | Insider enrichment flags |
-| 8 | **Volume & lonjakan tidak biasa** — *how much* anomalies | Medium | Multivariate IsolationForest vs One-Class SVM price-volume anomaly overlap | — |
-| 9 | **Membaca berita singkat** — headline tone | Medium | TF-IDF + MultinomialNB vs LogisticRegression + top sentiment vocabulary log-ratios | Sentiment path (when headlines exist) |
-| 10 | **Volatilitas & ukuran posisi** — forecast risk for sizing | Medium | 20d realized vol vs EWMA ($\lambda=0.94$) volatility forecasting & risk-targeted weights | — |
-| 11 | **Rezim pasar** — when the same edge stops working | Hard | Sorted Gaussian Mixture Model (Bearish, Neutral, Bullish) + posterior probabilities | Market context / regime engine |
-| 12 | **Prediksi multi-fitur + walk-forward** — honest evaluation | Hard | ElasticNet / Ridge + Purged Time-Series Split ($H=5$ days gap) + feature weights | Calibrate rule score weights vs forward labels; regime-stratified checks |
-| 13 | **Membangun portofolio kecil** — constraints & holdings | Hard | Equal-weight vs Capped-weight vs Hierarchical Risk Parity (HRP) inverse-variance | Risk funnel as filters before sizing |
-| 14 | **Peristiwa korporasi massal** — rights, buybacks, index events | Hard | Event study Cumulative Abnormal Return (CAR) vs IHSG market benchmark | Corp-action calendars / events |
-| 15 | **Earnings surprise** — miss/beat → short-horizon return | Hard | EPS surprise rank + Ridge Post-Earnings Announcement Drift (PEAD) slope ($\beta_1$) & $R^2$ | Earnings cache |
-| 16 | **Peringkat menjelang pembukaan** — opening-session ranking | Hard | Pre-open IEV/IEP price imbalance ratio & open-session scoreboard | IEV movers + pre-open screen |
-| 17 | **Pipeline riset ujung-ke-ujung** — ingest → model → report | Complex | Feature engineering → stacked metrics + Combinatorial Purged CV ($P_{\text{CSCV}}$) | Artifact pack (factor-card style; human-applied) |
-| 18 | **Sandbox keputusan berurutan** — sequential allocation under costs | Complex | Multi-armed bandit epsilon-greedy vs random + Policy Shannon Entropy ($H(\pi)$) | — |
-| 19 | **Efek musiman & anomali kalender** — seasonality drift | Hard | Kruskal-Wallis ANOVA H-test ($p$-value) + Ridge Calendar Regression | `seasonality_cache` |
-| 20 | **Konsensus analis & revisi target harga** — analyst consensus | Hard | Quantile Regression (Q25/Q50/Q75) + Consensus Buy Ratio & Target Upside % | `analyst_cache` |
-| 21 | **Akumulasi broker top-N & konsentrasi kepemilikan** — broker accumulation | Hard | Ownership Gini Concentration Index + Top-3 Broker Accumulation Ratio | `broker_distribution_cache` & `shareholding_composition` |
-| 22 | **Partisipasi pasar & rotasi sektor** — sector breadth | Hard | PCA Primary Sector Breadth Factor & Sector Market Participation (> SMA-20) | `factor_card_sector_breadth.py` |
-| 23 | **Kompresi volatilitas & klasifikasi breakout** — volatility squeeze | Hard | RandomForest Breakout Classifier pada Bollinger Bandwidth Squeeze & Surge Volume Ratio | `strategies/bb-squeeze` |
-| 24 | **Relative strength Mansfield vs IHSG** — relative strength | Hard | Regresi ElasticNet Relative Strength Mansfield vs IHSG Benchmark | `strategies/rs-momentum` |
-| 25 | **Skor kualitas akuntansi Piotroski F-Score** — financial quality | Hard | Matriks 9 Sinyal Akuntansi Piotroski F-Score & Regresi Logistik | `company_financials` |
-| 26 | **Model kebangkrutan Altman Z-Score** — financial distress | Hard | Emerging Market Altman Z'-Score Model & Isolation Forest Anomaly Filter | `company_financials` |
-| 27 | **Klasifikasi breakout awan Kumo Ichimoku** — ichimoku cloud | Hard | RandomForest Kumo Cloud Breakout Classifier pada Tenkan/Kijun/Span A/B | `plugins/indicators/ichimoku.py` |
-| 28 | **Klasifikasi sinyal akumulasi broker bandar** — bandar detector | Hard | RandomForest Multi-Window Bandar Accumulation/Distribution Classifier | `bandar_detector` |
-| 29 | **Valuasi konsensus Forward P/E & rasio PEG** — forward valuation | Hard | Regresi Ridge Konsensus Forward P/E & Model Rasio PEG Growth | `forward_estimates_cache` |
-| 30 | **Notasi khusus bursa, UMA & risiko likuiditas** — special monitoring | Hard | DecisionTree Exchange Notations, UMA Warning & Haircut Tail-Risk Classifier | `ticker_notation_cache` |
-| 31 | **Anomali akrual Sloan & kualitas laba** — earnings quality | Hard | Regresi Huber Robust Anomali Akrual Sloan & Kualitas Arus Kas | `company_financials` |
-| 32 | **Ilikuiditas Amihud & dampak harga mikrostruk** — microstructure impact | Hard | Model SVR Dampak Harga & Rasio Ilikuiditas Amihud | `candles` |
-| 33 | **Super learner ensemble multi-faktor terstack** — meta ensemble | Complex | Stacked Generalization Level-1 Meta-Learner (RF + Ridge) | Multi-factor stacked pipelines |
+| 1 | **Membersihkan harga saham** — missing bars, splits, spikes | Simple | LOF & MAD (default) vs Isolation Forest (compare) | Corp-action break hygiene in caches |
+| 2 | **Saring saham dengan aturan** — rules vs learned rank | Simple | LightGBM (default) vs DecisionTree (compare) | Risk-gate *precursors* (fund/liquidity features) |
+| 3 | **Mengenali pola harga sederhana** — next-day / pattern **failure lab** | Simple | LightGBM (default) vs 50% coin-flip baseline (compare) | — |
+| 4 | **Skor faktor** — value, momentum, quality (+ ownership sleeve) | Medium | LightGBM + SHAP (default) vs ElasticNet/Ridge (compare) | Fundamentals / shareholding caches |
+| 5 | **Mengelompokkan saham yang bergerak mirip** — peers / clusters | Medium | HDBSCAN + UMAP (default) vs k-means (compare) | Sector-context diagnostics |
+| 6 | **Aliran broker & asing** — *who* ranks from flow | Medium | LightGBM + SHAP (default) vs Logistic/Ridge (compare) | Accum / foreign-flow score components, BCI |
+| 7 | **Aktivitas insider** — sparse disclosed insider events | Medium | Logistic Regression (default) vs Insider net shares rule (compare) | Insider enrichment flags |
+| 8 | **Memprediksi waktu reaksi harga (Survival Analysis)** — time-to-event | Hard | XGBoost Survival Embeddings (default) vs Kaplan-Meier (compare) | `insider_cache` (waktu hingga profit) |
+| 9 | **Volume & lonjakan tidak biasa** — *how much* anomalies | Medium | Autoencoders (default) vs Multivariate IsolationForest (compare) | — |
+| 10 | **Membaca berita singkat** — headline tone | Medium | TF-IDF + MultinomialNB vs LogisticRegression + top sentiment vocabulary log-ratios | Sentiment path (when headlines exist) |
+| 11 | **Volatilitas & ukuran posisi** — forecast risk for sizing | Medium | GARCH(1,1) Volatility Forecasting (default) vs EWMA (compare) | — |
+| 12 | **Rezim pasar** — when the same edge stops working | Hard | Hidden Markov Models (default) vs Gaussian Mixture Model (compare) | Market context / regime engine |
+| 13 | **Prediksi multi-fitur + walk-forward** — honest evaluation | Hard | LightGBM (default) vs ElasticNet (compare) + Purged Time-Series Split | Calibrate rule score weights vs forward labels |
+| 14 | **Membangun portofolio kecil** — constraints & holdings | Hard | Equal-weight vs Capped-weight vs Hierarchical Risk Parity (HRP) inverse-variance | Risk funnel as filters before sizing |
+| 15 | **Peristiwa korporasi massal** — rights, buybacks, index events | Hard | Event study Cumulative Abnormal Return (CAR) vs IHSG market benchmark | Corp-action calendars / events |
+| 16 | **Earnings surprise** — miss/beat → short-horizon return | Hard | EPS surprise rank + Ridge Post-Earnings Announcement Drift (PEAD) slope ($\beta_1$) | Earnings cache |
+| 17 | **Nowcasting fundamental (Mixed-Frequency)** — fundamental lag | Hard | MIDAS (Mixed-Data Sampling) Regression pada data harian & kuartalan | `company_fundamentals` As-Of Join |
+| 18 | **Peringkat menjelang pembukaan** — opening-session ranking | Hard | Pre-open IEV/IEP price imbalance ratio & open-session scoreboard | IEV movers + pre-open screen |
+| 19 | **Pipeline riset ujung-ke-ujung** — ingest → model → report | Complex | Feature engineering (Polars) → stacked metrics + Combinatorial Purged CV | Artifact pack (factor-card style) |
+| 20 | **Sandbox keputusan berurutan** — sequential allocation under costs | Complex | Multi-armed bandit epsilon-greedy vs random + Policy Shannon Entropy ($H(\pi)$) | — |
+| 21 | **Efek musiman & anomali kalender** — seasonality drift | Hard | Kruskal-Wallis ANOVA H-test ($p$-value) + Ridge Calendar Regression | `seasonality_cache` |
+| 22 | **Konsensus analis & revisi target harga** — analyst consensus | Hard | Quantile Regression (Q25/Q50/Q75) + Consensus Buy Ratio & Target Upside % | `analyst_cache` |
+| 23 | **Akumulasi broker top-N & konsentrasi kepemilikan** — broker accumulation | Hard | Ownership Gini Concentration Index + Top-3 Broker Accumulation Ratio | `broker_distribution_cache` |
+| 24 | **Deteksi sindikasi broker (Graph ML)** — coordinated rings | Complex | Node2Vec & Centrality Algorithms pada jaringan transaksi antar broker | `broker_daily_flow` Network |
+| 25 | **Partisipasi pasar & rotasi sektor** — sector breadth | Hard | PCA Primary Sector Breadth Factor & Sector Market Participation (> SMA-20) | `factor_card_sector_breadth.py` |
+| 26 | **Kompresi volatilitas & klasifikasi breakout** — volatility squeeze | Hard | LSTM / GRU Sequence Modeling (default) vs RandomForest (compare) | `strategies/bb-squeeze` |
+| 27 | **Relative strength Mansfield vs IHSG** — relative strength | Hard | Regresi ElasticNet Relative Strength Mansfield vs IHSG Benchmark | `strategies/rs-momentum` |
+| 28 | **Skor kualitas akuntansi Piotroski F-Score** — financial quality | Hard | Matriks 9 Sinyal Akuntansi Piotroski F-Score & Regresi Logistik | `company_financials` |
+| 29 | **Model kebangkrutan Altman Z-Score** — financial distress | Hard | Emerging Market Altman Z'-Score Model & Isolation Forest Anomaly Filter | `company_financials` |
+| 30 | **Klasifikasi breakout awan Kumo Ichimoku** — ichimoku cloud | Hard | RandomForest Kumo Cloud Breakout Classifier pada Tenkan/Kijun/Span A/B | `plugins/indicators/ichimoku.py` |
+| 31 | **Klasifikasi sinyal akumulasi broker bandar** — bandar detector | Hard | RandomForest Multi-Window Bandar Accumulation/Distribution Classifier | `bandar_detector` |
+| 32 | **Valuasi konsensus Forward P/E & rasio PEG** — forward valuation | Hard | Regresi Ridge Konsensus Forward P/E & Model Rasio PEG Growth | `forward_estimates_cache` |
+| 33 | **Notasi khusus bursa, UMA & risiko likuiditas** — special monitoring | Hard | DecisionTree Exchange Notations, UMA Warning & Haircut Tail-Risk Classifier | `ticker_notation_cache` |
+| 34 | **Anomali akrual Sloan & kualitas laba** — earnings quality | Hard | Regresi Huber Robust Anomali Akrual Sloan & Kualitas Arus Kas | `company_financials` |
+| 35 | **Ilikuiditas Amihud & dampak harga mikrostruk** — microstructure impact | Hard | Model SVR Dampak Harga & Rasio Ilikuiditas Amihud | `candles` |
+| 36 | **Super learner ensemble multi-faktor terstack** — meta ensemble | Complex | TabNet / Optuna Blended Level-1 Meta-Learner | Multi-factor stacked pipelines |
 
 **Appendix (not numbered):** kamus bertahap — unlock terms only when the chapter needs them.
 
@@ -136,12 +139,14 @@ ml-saham --db … deepdive broker-flow    # optional
 
 | Area | Prefer | Optional later |
 |---|---|---|
-| Tabular ML | scikit-learn | — |
-| Gradient boosting | LightGBM | XGBoost, CatBoost |
-| Time series stats | statsmodels | — |
-| Optimization | cvxpy / scipy | — |
+| Tabular ML | scikit-learn, LightGBM | XGBoost, CatBoost |
+| DataFrame & Vector | polars (for massive panels) | pandas (fallback) |
+| Feature Importance | shap | — |
+| Time series stats | statsmodels, arch (GARCH) | hmmlearn (HMM) |
+| Optimization | cvxpy / scipy, optuna | — |
 | NLP | TF-IDF (sklearn) | IndoBERT / transformers |
-| Deep learning demos | PyTorch (small) | — |
+| Graph ML | networkx | node2vec, PyTorch Geometric |
+| Deep learning demos | PyTorch (small) | TabNet |
 | Online concepts | river | — |
 | Tracking | JSON/CSV logs | MLflow (late chapters) |
 

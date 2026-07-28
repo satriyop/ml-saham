@@ -20,6 +20,12 @@ dependencies = [
 dev = ["pytest>=8.0"]
 ml = [
     "lightgbm>=4.0",
+    "polars>=0.20",
+    "shap>=0.44",
+    "arch>=6.3",
+    "hmmlearn>=0.3",
+    "networkx>=3.0",
+    "hdbscan>=0.8",
 ]
 
 [project.scripts]

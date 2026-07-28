@@ -25,9 +25,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  Model yang dilatih di data kotor belajar noise, bukan sinyal.",
         "",
         "Opsi pendekatan",
-        "  1) Aturan statistik: z-score / IQR pada return harian & volume",
-        "  2) Isolation Forest / LOF pada fitur return+volume (sklearn)",
-        "  3) Change-point (lanjutan) untuk break struktural",
+        "  1) Aturan statistik: MAD (Median Absolute Deviation) vs z-score",
+        "  2) Local Outlier Factor (LOF) vs Isolation Forest (sklearn)",
         "",
         "Caveat",
         "  • Flag ≠ otomatis hapus bar — review dulu (bisa event nyata)",
@@ -36,44 +35,31 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Bukan saran trading / investasi",
         "",
         f"Lanjut:  ml-saham demo {META.slug}",
+        f"Atau:    ml-saham compare {META.slug} --baseline isolation-forest",
     ]
     if verbose:
         lines.extend(
             [
                 "",
                 "Detail (--verbose)",
-                "  • Demo memakai z-score/IQR + Isolation Forest bila sklearn ada",
-                "  • Deep-dive opsional: higiene corp-action di cache ai-saham",
+                "  • Demo memakai MAD + LOF",
+                "  • Compare membandingkan IF (lama) vs LOF (baru)",
             ]
         )
     return "\n".join(lines)
 
 
-def _iqr_bounds(xs: list[float], k: float = 1.5) -> tuple[float, float]:
+def _mad_bounds(xs: list[float], k: float = 4.0) -> tuple[float, float]:
+    """Robust anomaly detection using Median Absolute Deviation."""
+    if not xs:
+        return 0.0, 0.0
     ys = sorted(xs)
-    n = len(ys)
-    q1 = ys[n // 4]
-    q3 = ys[(3 * n) // 4]
-    iqr = q3 - q1
-    return q1 - k * iqr, q3 + k * iqr
-
-
-def _cusum_change_points(rets: list[float], threshold: float = 4.0) -> set[int]:
-    """Detect structural shift points using CUSUM drift detection."""
-    if len(rets) < 10:
-        return set()
-    mean = sum(rets) / len(rets)
-    std = math.sqrt(sum((r - mean) ** 2 for r in rets) / len(rets)) or 1e-8
-    s_pos, s_neg = 0.0, 0.0
-    cp_indices = set()
-    for i, r in enumerate(rets):
-        z = (r - mean) / std
-        s_pos = max(0.0, s_pos + z - 0.5)
-        s_neg = min(0.0, s_neg + z + 0.5)
-        if s_pos > threshold or s_neg < -threshold:
-            cp_indices.add(i)
-            s_pos, s_neg = 0.0, 0.0
-    return cp_indices
+    median = ys[len(ys) // 2]
+    deviations = sorted([abs(x - median) for x in xs])
+    mad = deviations[len(deviations) // 2]
+    if mad == 0:
+        mad = 1e-8
+    return median - k * mad, median + k * mad
 
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
@@ -88,7 +74,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         by_t[row["ticker"]].append(row)
 
     flagged: list[dict] = []
-    cusum_count = 0
     for t, rows in by_t.items():
         rows = sorted(rows, key=lambda r: r["date"])
         rets: list[float] = []
@@ -100,38 +85,25 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
                 continue
             rets.append((c1 / c0) - 1.0)
             dates_r.append(rows[i]["date"])
+        
         if len(rets) < 30:
             continue
-        mean = sum(rets) / len(rets)
-        var = sum((r - mean) ** 2 for r in rets) / len(rets)
-        std = math.sqrt(var) if var > 0 else 0.0
-        lo, hi = _iqr_bounds(rets)
-        cp_set = _cusum_change_points(rets)
-        cusum_count += len(cp_set)
-        for idx, (d, r) in enumerate(zip(dates_r, rets, strict=True)):
-            z = (r - mean) / std if std > 0 else 0.0
-            reasons = []
-            if abs(z) >= 4.0:
-                reasons.append(f"z={z:.1f}")
+            
+        lo, hi = _mad_bounds(rets, k=4.0)
+        
+        for d, r in zip(dates_r, rets):
             if r < lo or r > hi:
-                reasons.append("IQR")
-            if idx in cp_set:
-                reasons.append("CUSUM")
-            if reasons:
-                flagged.append(
-                    {
-                        "ticker": t,
-                        "date": d,
-                        "return": r,
-                        "reason": "+".join(reasons),
-                    }
-                )
+                flagged.append({
+                    "ticker": t,
+                    "date": d,
+                    "return": r,
+                    "reason": "MAD"
+                })
 
-    # Isolation Forest on return features if sklearn available
-    if_method = "none"
+    model_used = "MAD"
     try:
         import numpy as np
-        from sklearn.ensemble import IsolationForest
+        from sklearn.neighbors import LocalOutlierFactor
 
         X = []
         meta = []
@@ -145,61 +117,56 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
                     continue
                 X.append([(c1 / c0) - 1.0, math.log1p(vol)])
                 meta.append((t, rows[i]["date"]))
+                
         if len(X) >= 50:
-            clf = IsolationForest(
-                n_estimators=100, contamination=0.01, random_state=42
-            )
+            clf = LocalOutlierFactor(n_neighbors=20, contamination=0.01)
             pred = clf.fit_predict(np.array(X))
-            if_method = "isolation_forest"
+            model_used += " + LOF"
             seen = {(f["ticker"], f["date"]) for f in flagged}
-            for (t, d), p, feat in zip(meta, pred, X, strict=True):
+            for (t, d), p, feat in zip(meta, pred, X):
                 if p == -1 and (t, d) not in seen:
-                    flagged.append(
-                        {
-                            "ticker": t,
-                            "date": d,
-                            "return": feat[0],
-                            "reason": "IF",
-                        }
-                    )
+                    flagged.append({
+                        "ticker": t,
+                        "date": d,
+                        "return": feat[0],
+                        "reason": "LOF"
+                    })
     except ImportError:
-        if_method = "sklearn_missing"
+        pass
 
     flagged.sort(key=lambda x: abs(x["return"]), reverse=True)
     top = flagged[:25]
+    
     lines = [
         f"Universe sample: {len(by_t)} tickers",
-        f"Flagged bars: {len(flagged)} (menampilkan {len(top)})  CUSUM shifts: {cusum_count}",
-        f"Methods: z-score|IQR|CUSUM + {if_method}",
+        f"Flagged bars: {len(flagged)} (menampilkan {len(top)})",
+        f"Methods: {model_used}",
         "",
     ]
     for f in top[:15]:
-        lines.append(
-            f"  {f['ticker']:<6} {f['date']}  ret={f['return']:+.3%}  {f['reason']}"
-        )
+        lines.append(f"  {f['ticker']:<6} {f['date']}  ret={f['return']:+.3%}  {f['reason']}")
     if not flagged:
         lines.append("  (tidak ada flag ekstrem di sample — coba universe lebih besar)")
 
     metrics = {
         "n_tickers": len(by_t),
         "n_flagged": len(flagged),
-        "methods": ["zscore", "iqr", if_method],
-        "top_flagged": top[:20],
+        "methods": model_used,
     }
+    
     csv_lines = ["ticker,date,return,reason"]
     for f in top:
         csv_lines.append(f"{f['ticker']},{f['date']},{f['return']:.6f},{f['reason']}")
 
     return DemoResult(
-        title="Clean prices · anomaly flags",
+        title="Clean prices · SOTA anomaly flags (MAD/LOF)",
         lines=lines,
         metrics=metrics,
-        model=if_method,
+        model=model_used,
         summary_md=(
             "# Clean prices\n\n"
-            "Flag return ekstrem (z-score/IQR ± Isolation Forest).\n"
-            "Flag bukan sinyal jual-beli — review event nyata.\n\n"
-            "## Caveat\n\n- Bukan saran trading / investasi.\n"
+            f"Model: {model_used}\n"
+            "Flag bukan sinyal jual-beli — review event nyata.\n"
         ),
         scoreboard=True,
         top_names=top[:20],
@@ -207,9 +174,81 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     )
 
 
+def run_compare(ctx: ChapterContext) -> DemoResult:
+    """Compare IsolationForest (old) vs LOF (new)."""
+    with connect(ctx.db_path) as conn:
+        uni = ctx.universe or resolve_universe(conn, limit=25)
+        candles = load_candles(conn, uni)
+
+    by_t: dict[str, list[dict]] = defaultdict(list)
+    for row in candles:
+        by_t[row["ticker"]].append(row)
+
+    X = []
+    meta = []
+    for t, rows in by_t.items():
+        rows = sorted(rows, key=lambda r: r["date"])
+        for i in range(1, len(rows)):
+            c0 = float(rows[i - 1]["close"] or 0)
+            c1 = float(rows[i]["close"] or 0)
+            vol = float(rows[i]["volume"] or 0)
+            if c0 <= 0:
+                continue
+            X.append([(c1 / c0) - 1.0, math.log1p(vol)])
+            meta.append((t, rows[i]["date"]))
+
+    lines = ["Comparing IsolationForest vs LocalOutlierFactor (LOF)", ""]
+    
+    try:
+        import numpy as np
+        from sklearn.ensemble import IsolationForest
+        from sklearn.neighbors import LocalOutlierFactor
+        
+        X_arr = np.array(X)
+        if len(X_arr) < 50:
+            return DemoResult("Compare", lines=["Data tidak cukup."], metrics={})
+
+        clf_if = IsolationForest(n_estimators=100, contamination=0.01, random_state=42)
+        pred_if = clf_if.fit_predict(X_arr)
+        
+        clf_lof = LocalOutlierFactor(n_neighbors=20, contamination=0.01)
+        pred_lof = clf_lof.fit_predict(X_arr)
+
+        if_flags = set(i for i, p in enumerate(pred_if) if p == -1)
+        lof_flags = set(i for i, p in enumerate(pred_lof) if p == -1)
+        
+        both = if_flags & lof_flags
+        only_if = if_flags - lof_flags
+        only_lof = lof_flags - if_flags
+        
+        lines.append(f"IF Anomalies : {len(if_flags)}")
+        lines.append(f"LOF Anomalies: {len(lof_flags)}")
+        lines.append(f"Overlap      : {len(both)}")
+        lines.append(f"Only IF      : {len(only_if)} (cenderung false positive global)")
+        lines.append(f"Only LOF     : {len(only_lof)} (cenderung true local anomaly)")
+        
+        metrics = {
+            "if_count": len(if_flags),
+            "lof_count": len(lof_flags),
+            "overlap": len(both),
+        }
+    except ImportError:
+        lines.append("Sklearn tidak tersedia.")
+        metrics = {}
+
+    return DemoResult(
+        title="Comparison: IF vs LOF",
+        lines=lines,
+        metrics=metrics,
+        model="IF vs LOF",
+        summary_md="# Compare",
+        scoreboard=False,
+    )
+
+
 def deepdive_text() -> str:
     return deepdive_stub(
         topic=META.slug,
         related="corp-action break hygiene di cache candles ai-saham",
-        bring_back="habit flag z-score/IQR/IF sebelum train model harga",
+        bring_back="habit flag MAD/LOF sebelum train model harga",
     )
