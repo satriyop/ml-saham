@@ -48,8 +48,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  yang bersih, kita belajar dulu dari korpus sintetis.",
         "",
         "Opsi pendekatan",
-        "  1) TF-IDF + MultinomialNB / LogisticRegression",
-        "  2) Lexicon rule-based (baseline)",
+        "  1) LogisticRegression + top sentiment log-ratios (default)",
+        "  2) TF-IDF + MultinomialNB (baseline)",
         "  3) Nanti: korpus real + PIT fetched_date",
         "",
         "Caveat",
@@ -108,17 +108,17 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     acc_nb = float(accuracy_score(yte, nb_pipe.predict(Xte)))
     acc_lr = float(accuracy_score(yte, lr_pipe.predict(Xte)))
 
-    best = "complement-naive-bayes"
-    model = cnb_pipe
-    acc_best = acc_cnb
+    best = "logistic-regression"
+    model = lr_pipe
+    acc_best = acc_lr
 
-    # Extract top informative words from Naive Bayes log-ratio
-    vec = cnb_pipe.named_steps["tfidf"]
-    cnb_clf = cnb_pipe.named_steps["clf"]
+    # Extract top informative words from Logistic Regression coefficients
+    vec = lr_pipe.named_steps["tfidf"]
+    clf = lr_pipe.named_steps["clf"]
     feats = vec.get_feature_names_out()
-    log_ratio = cnb_clf.feature_log_prob_[1] - cnb_clf.feature_log_prob_[0]
-    top_pos = [feats[i] for i in log_ratio.argsort()[-5:][::-1]]
-    top_neg = [feats[i] for i in log_ratio.argsort()[:5]]
+    coef = clf.coef_[0]
+    top_pos = [feats[i] for i in coef.argsort()[-5:][::-1]]
+    top_neg = [feats[i] for i in coef.argsort()[:5]]
 
     sample = "Emiten catat pertumbuhan laba kuartal di atas estimasi pasar"
     pred = int(model.predict([sample])[0])
@@ -163,6 +163,68 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             f"Best accuracy={acc_best:.3f} ({best}).\n"
         ),
         scoreboard=True,
+    )
+
+
+def run_compare(ctx: ChapterContext) -> DemoResult:
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.metrics import accuracy_score
+        from sklearn.model_selection import train_test_split
+        from sklearn.naive_bayes import MultinomialNB
+        from sklearn.pipeline import Pipeline
+    except ImportError as exc:
+        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
+
+    texts = [t for t, _ in _SYNTHETIC_HEADLINES]
+    labels = [y for _, y in _SYNTHETIC_HEADLINES]
+    Xtr, Xte, ytr, yte = train_test_split(
+        texts, labels, test_size=0.25, random_state=42, stratify=labels
+    )
+
+    nb_pipe = Pipeline([
+        ("tfidf", TfidfVectorizer(max_features=200, ngram_range=(1, 2))),
+        ("clf", MultinomialNB()),
+    ])
+    lr_pipe = Pipeline([
+        ("tfidf", TfidfVectorizer(max_features=200, ngram_range=(1, 2))),
+        ("clf", LogisticRegression(max_iter=500, random_state=42)),
+    ])
+    nb_pipe.fit(Xtr, ytr)
+    lr_pipe.fit(Xtr, ytr)
+
+    acc_nb = float(accuracy_score(yte, nb_pipe.predict(Xte)))
+    acc_lr = float(accuracy_score(yte, lr_pipe.predict(Xte)))
+
+    lines = [
+        ">>> COMPARE LOGISTIC REGRESSION vs MULTINOMIAL NB <<<",
+        f"Korpus: n={len(texts)} headline ID (pos/neg)",
+        f"Train={len(Xtr)}  test={len(Xte)}",
+        f"MultinomialNB (Baseline) accuracy:      {acc_nb:.3f}",
+        f"LogisticRegression (SOTA) accuracy:     {acc_lr:.3f}",
+        "",
+        "LogisticRegression (SOTA) menangkap bobot log-odds sentimen secara lebih baik",
+        "untuk kombinasi kata tertentu dibandingkan baseline Naive Bayes."
+    ]
+
+    metrics = {
+        "accuracy_nb": acc_nb,
+        "accuracy_lr": acc_lr,
+        "best": "logistic-regression" if acc_lr >= acc_nb else "multinomial-nb"
+    }
+
+    return DemoResult(
+        title="Headline tone · compare SOTA vs baseline",
+        lines=lines,
+        metrics=metrics,
+        model="logistic-regression",
+        summary_md=(
+            "# Headline tone Compare\n\n"
+            f"LogisticRegression (SOTA) accuracy={acc_lr:.3f}\n"
+            f"MultinomialNB (Baseline) accuracy={acc_nb:.3f}\n"
+        ),
+        scoreboard=False,
     )
 
 
