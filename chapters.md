@@ -108,7 +108,7 @@ Roadmap: [roadmap.md](./roadmap.md)
 | 32 | **Valuasi konsensus Forward P/E & rasio PEG** — forward valuation | Hard | Regresi Ridge Konsensus Forward P/E & Model Rasio PEG Growth | `forward_estimates_cache` |
 | 33 | **Notasi khusus bursa, UMA & risiko likuiditas** — special monitoring | Hard | DecisionTree Exchange Notations, UMA Warning & Haircut Tail-Risk Classifier | `ticker_notation_cache` |
 | 34 | **Anomali akrual Sloan & kualitas laba** — earnings quality | Hard | Regresi Huber Robust Anomali Akrual Sloan & Kualitas Arus Kas | `company_financials` |
-| 35 | **Ilikuiditas Amihud & dampak harga mikrostruk** — microstructure impact | Hard | Model SVR Dampak Harga & Rasio Ilikuiditas Amihud | `candles` |
+| 35 | **Ilikuiditas & dampak harga mikrostruk** — microstructure impact | Hard | Order Flow Imbalance ML / Hawkes Process (SOTA) vs Bid-Ask Spread (Baseline) | `candles` |
 | 36 | **Super learner ensemble multi-faktor terstack** — meta ensemble | Complex | TabNet / Optuna Blended Level-1 Meta-Learner | Multi-factor stacked pipelines |
 
 **Appendix (not numbered):** kamus bertahap — unlock terms only when the chapter needs them.
