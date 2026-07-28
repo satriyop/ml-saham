@@ -648,6 +648,21 @@ def challenge_cmd(
         "--export-md",
         help="Tulis hasil challenge ke file Markdown report",
     ),
+    scenario: Optional[str] = typer.Option(
+        None,
+        "--scenario",
+        help="Skenario spesifik (contoh: pre-open, accum)",
+    ),
+    category: Optional[str] = typer.Option(
+        None,
+        "--category",
+        help="Kategori engine (contoh: risk, signal)",
+    ),
+    eval_type: Optional[str] = typer.Option(
+        None,
+        "--type",
+        help="Tipe evaluasi (contoh: gating, sizing)",
+    ),
 ) -> None:
     """Audit sensitivitas & tantang faktor/parameter engine ai-saham."""
     from ml_saham.eval.challenge import (
@@ -660,6 +675,8 @@ def challenge_cmd(
     db_path: Path = ctx.obj["db"]
     target_clean = target.lower().strip()
     chapter_ctx = _build_ctx(ctx, with_costs=False, as_of=as_of)
+    chapter_ctx.scenario = scenario
+    chapter_ctx.eval_type = eval_type
 
     console.print("[bold cyan]=== AI-SAHAM ENGINE CHALLENGE & PARAMETER AUDIT ===[/bold cyan]")
     console.print(f"Database: {db_path}\n")
@@ -667,9 +684,9 @@ def challenge_cmd(
     results: dict = {}
 
     if target_clean in ("screener", "screen"):
-        results = {"screener": challenge_screener(chapter_ctx)}
+        results = {"screener": challenge_screener(chapter_ctx, scenario)}
     elif target_clean == "engine":
-        results = {"engine": challenge_engine(chapter_ctx)}
+        results = {"engine": challenge_engine(chapter_ctx, category, eval_type)}
     elif target_clean in ("other", "other_aspects"):
         results = {"other_aspects": challenge_other(chapter_ctx)}
     else:

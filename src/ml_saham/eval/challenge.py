@@ -78,27 +78,55 @@ def _run_factor_challenge(chapter_ctx: ChapterContext, slugs: list[str]) -> dict
             baseline_metrics = compare_dict.get("baseline_metrics", {}) if compare_dict else {}
             
             results[slug] = {
+                "title": res.title,
                 "model": res.model,
                 "sota_metrics": sota_metrics,
                 "baseline_metrics": baseline_metrics,
+                "summary": res.summary_md,
             }
         except Exception as e:
             results[slug] = {"error": str(e)}
     return results
 
 
-def challenge_screener(chapter_ctx: ChapterContext) -> dict[str, Any]:
+def challenge_screener(chapter_ctx: ChapterContext, scenario: str | None = None) -> dict[str, Any]:
     """Challenge the pre-open and accum screener factors."""
-    return _run_factor_challenge(chapter_ctx, ENGINE_FACTORS["screener"])
+    factors = ENGINE_FACTORS["screener"]
+    if scenario == "pre-open":
+        factors = ["pre-open-heuristic"]
+    elif scenario == "accum":
+        factors = ["accum-policy"]
+    return _run_factor_challenge(chapter_ctx, factors)
 
 
-def challenge_engine(chapter_ctx: ChapterContext) -> dict[str, Any]:
+def challenge_engine(chapter_ctx: ChapterContext, category: str | None = None, eval_type: str | None = None) -> dict[str, Any]:
     """Challenge the core engines: signal, risk, market context."""
-    return {
-        "signal_engine": _run_factor_challenge(chapter_ctx, ENGINE_FACTORS["signal_engine"]),
-        "risk_engine": _run_factor_challenge(chapter_ctx, ENGINE_FACTORS["risk_engine"]),
-        "market_context": _run_factor_challenge(chapter_ctx, ENGINE_FACTORS["market_context"]),
-    }
+    results = {}
+    
+    # Run Signal Engine
+    if category is None or category == "signal":
+        factors = ENGINE_FACTORS["signal_engine"]
+        results.update(_run_factor_challenge(chapter_ctx, factors))
+        
+    # Run Risk Engine
+    if category is None or category == "risk":
+        factors = ENGINE_FACTORS["risk_engine"]
+        if eval_type == "gating":
+            factors = ["special-monitoring"]
+        elif eval_type == "sizing":
+            factors = ["volatility-sizing"]
+        results.update(_run_factor_challenge(chapter_ctx, factors))
+        
+    # Run Market Context
+    if category is None or category == "market":
+        factors = ENGINE_FACTORS["market_context"]
+        if eval_type == "regime":
+            factors = ["market-regime"]
+        elif eval_type == "breadth":
+            factors = ["sector-breadth"]
+        results.update(_run_factor_challenge(chapter_ctx, factors))
+
+    return results
 
 
 def challenge_other(chapter_ctx: ChapterContext) -> dict[str, Any]:

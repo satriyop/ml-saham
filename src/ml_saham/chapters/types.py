@@ -14,6 +14,8 @@ class ChapterContext:
     as_of: str | None = None
     with_costs: bool = False
     verbose: bool = False
+    scenario: str | None = None
+    eval_type: str | None = None
 
 
 @dataclass
