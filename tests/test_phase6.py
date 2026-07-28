@@ -37,6 +37,7 @@ PHASE2_SLUGS = [
     "bandar-detector",
     "forward-valuation",
     "special-monitoring",
+    "earnings-quality",
 ]
 OPTIONAL_SLUGS = ["rl-sandbox"]
 

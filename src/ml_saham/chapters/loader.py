@@ -37,6 +37,7 @@ _SLUG_TO_MOD = {
     "bandar-detector": "ml_saham.chapters.bandar_detector",
     "forward-valuation": "ml_saham.chapters.forward_valuation",
     "special-monitoring": "ml_saham.chapters.special_monitoring",
+    "earnings-quality": "ml_saham.chapters.earnings_quality",
 }
 
 
