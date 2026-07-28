@@ -241,10 +241,34 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                 observation_date TEXT, regime TEXT, regime_score REAL,
                 regime_confidence REAL, forward_ihsg_return_5d REAL
             );
+            CREATE TABLE seasonality_cache (
+                ticker TEXT, year INT, month INT, avg_return_pct REAL, win_rate_pct REAL,
+                positive_years INT, total_years INT, fetched_month TEXT
+            );
+            CREATE TABLE analyst_cache (
+                ticker TEXT, buy_count INT, hold_count INT, sell_count INT,
+                avg_price_target REAL, current_price REAL, fetched_date TEXT
+            );
+            CREATE TABLE broker_distribution_cache (
+                ticker TEXT, trading_date TEXT, top_buyers_json TEXT, top_sellers_json TEXT, fetched_date TEXT
+            );
             """
         )
         as_of_fix = (start + timedelta(days=min_bars - 8)).isoformat()
         iev_date = as_of_fix
+        for si, t in enumerate(_STOCKS):
+            conn.execute(
+                "INSERT INTO seasonality_cache VALUES (?,?,?,?,?,?,?,?)",
+                (t, 2024, (si % 12) + 1, 2.5 + si, 60.0 + si, 6, 10, "2024-06"),
+            )
+            conn.execute(
+                "INSERT INTO analyst_cache VALUES (?,?,?,?,?,?,?)",
+                (t, 10 + si, 5, 1, 150.0 + si * 10, 100.0 + si * 5, "2024-06-01"),
+            )
+            conn.execute(
+                "INSERT INTO broker_distribution_cache VALUES (?,?,?,?,?)",
+                (t, iev_date, '[{"vol":1000}]', '[{"vol":500}]', "2024-06-01"),
+            )
         for si, t in enumerate(_STOCKS):
             conn.execute(
                 "INSERT INTO earnings_cache VALUES (?,?,?,?,?,?,?,?)",

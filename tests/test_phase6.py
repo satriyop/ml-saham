@@ -25,6 +25,9 @@ PHASE2_SLUGS = [
     "earnings-surprise",
     "pre-open-rank",
     "research-pipeline",
+    "seasonality-drift",
+    "analyst-consensus",
+    "broker-accumulation",
 ]
 OPTIONAL_SLUGS = ["rl-sandbox"]
 
@@ -66,21 +69,7 @@ def test_phase2_explore_cli(fixture_db: Path, slug: str):
     assert r.exit_code == 0, r.stdout
 
 
-@pytest.mark.parametrize(
-    "slug",
-    [
-        "headline-tone",
-        "volatility-sizing",
-        "market-regime",
-        "walk-forward",
-        "portfolio-small",
-        "corp-events",
-        "earnings-surprise",
-        "pre-open-rank",
-        "research-pipeline",
-        "rl-sandbox",
-    ],
-)
+@pytest.mark.parametrize("slug", PHASE2_SLUGS + OPTIONAL_SLUGS)
 def test_phase2_demo_fixture(fixture_db: Path, slug: str, tmp_path: Path):
     r = runner.invoke(
         app,

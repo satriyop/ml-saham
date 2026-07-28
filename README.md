@@ -91,6 +91,9 @@ Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir`.
   - **Ch.16 pre-open-rank**: Prediksi ketidakseimbangan order book pre-open (IEV vs IEP).
   - **Ch.17 research-pipeline**: Combinatorial Purged CV & Probability of Overfitting ($P_{\text{CSCV}}$).
   - **Ch.18 rl-sandbox**: Policy Shannon Entropy ($H(\pi)$) & tracking distribusi aksi bandit.
+  - **Ch.19 seasonality-drift**: Uji ANOVA Kruskal-Wallis (p-value) & Regresi Ridge Anomali Musiman Kalender.
+  - **Ch.20 analyst-consensus**: Regresi Kuantil Target Upside Analis & Consensus Buy Ratio.
+  - **Ch.21 broker-accumulation**: Indeks Gini Konsentrasi Kepemilikan & Top-3 Broker Accumulation Ratio.
 
 ## Catatan
 

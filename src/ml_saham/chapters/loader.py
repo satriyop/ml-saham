@@ -25,6 +25,9 @@ _SLUG_TO_MOD = {
     "pre-open-rank": "ml_saham.chapters.pre_open_rank",
     "research-pipeline": "ml_saham.chapters.research_pipeline",
     "rl-sandbox": "ml_saham.chapters.rl_sandbox",
+    "seasonality-drift": "ml_saham.chapters.seasonality_drift",
+    "analyst-consensus": "ml_saham.chapters.analyst_consensus",
+    "broker-accumulation": "ml_saham.chapters.broker_accumulation",
 }
 
 

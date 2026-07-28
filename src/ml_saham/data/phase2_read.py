@@ -197,3 +197,88 @@ def headline_table_name(conn: sqlite3.Connection) -> str | None:
         if table_exists(conn, name):
             return name
     return None
+
+
+def load_seasonality(
+    conn: sqlite3.Connection,
+    tickers: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    if not table_exists(conn, "seasonality_cache"):
+        return []
+    cols = table_columns(conn, "seasonality_cache")
+    if not {"ticker", "month"} <= cols:
+        return []
+    select = [
+        c for c in ("ticker", "year", "month", "avg_return_pct", "win_rate_pct", "positive_years", "total_years") if c in cols
+    ]
+    sql = f"SELECT {', '.join(select)} FROM seasonality_cache WHERE 1=1"
+    params: list[Any] = []
+    if tickers:
+        sql += f" AND ticker IN ({_placeholders(len(tickers))})"
+        params.extend(tickers)
+    sql += " ORDER BY ticker, month"
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+def load_analysts(
+    conn: sqlite3.Connection,
+    tickers: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    if not table_exists(conn, "analyst_cache"):
+        return []
+    cols = table_columns(conn, "analyst_cache")
+    if "ticker" not in cols:
+        return []
+    select = [
+        c for c in ("ticker", "buy_count", "hold_count", "sell_count", "avg_price_target", "current_price", "fetched_date") if c in cols
+    ]
+    sql = f"SELECT {', '.join(select)} FROM analyst_cache WHERE 1=1"
+    params: list[Any] = []
+    if tickers:
+        sql += f" AND ticker IN ({_placeholders(len(tickers))})"
+        params.extend(tickers)
+    sql += " ORDER BY ticker"
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+def load_broker_distribution(
+    conn: sqlite3.Connection,
+    tickers: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    if not table_exists(conn, "broker_distribution_cache"):
+        return []
+    cols = table_columns(conn, "broker_distribution_cache")
+    if not {"ticker", "trading_date"} <= cols:
+        return []
+    select = [
+        c for c in ("ticker", "trading_date", "top_buyers_json", "top_sellers_json", "fetched_date") if c in cols
+    ]
+    sql = f"SELECT {', '.join(select)} FROM broker_distribution_cache WHERE 1=1"
+    params: list[Any] = []
+    if tickers:
+        sql += f" AND ticker IN ({_placeholders(len(tickers))})"
+        params.extend(tickers)
+    sql += " ORDER BY trading_date DESC, ticker"
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+def load_shareholding(
+    conn: sqlite3.Connection,
+    tickers: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    if not table_exists(conn, "shareholding_composition"):
+        return []
+    cols = table_columns(conn, "shareholding_composition")
+    if "ticker" not in cols:
+        return []
+    select = [
+        c for c in ("ticker", "fetched_date", "report_date", "institution_pct", "individual_pct", "top_holder_name", "top_holder_pct") if c in cols
+    ]
+    sql = f"SELECT {', '.join(select)} FROM shareholding_composition WHERE 1=1"
+    params: list[Any] = []
+    if tickers:
+        sql += f" AND ticker IN ({_placeholders(len(tickers))})"
+        params.extend(tickers)
+    sql += " ORDER BY ticker"
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+

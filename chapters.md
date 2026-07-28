@@ -92,6 +92,9 @@ Roadmap: [roadmap.md](./roadmap.md)
 | 16 | **Peringkat menjelang pembukaan** — opening-session ranking | Hard | Pre-open IEV/IEP price imbalance ratio & open-session scoreboard | IEV movers + pre-open screen |
 | 17 | **Pipeline riset ujung-ke-ujung** — ingest → model → report | Complex | Feature engineering → stacked metrics + Combinatorial Purged CV ($P_{\text{CSCV}}$) | Artifact pack (factor-card style; human-applied) |
 | 18 | **Sandbox keputusan berurutan** — sequential allocation under costs | Complex | Multi-armed bandit epsilon-greedy vs random + Policy Shannon Entropy ($H(\pi)$) | — |
+| 19 | **Efek musiman & anomali kalender** — seasonality drift | Hard | Kruskal-Wallis ANOVA H-test ($p$-value) + Ridge Calendar Regression | `seasonality_cache` |
+| 20 | **Konsensus analis & revisi target harga** — analyst consensus | Hard | Quantile Regression (Q25/Q50/Q75) + Consensus Buy Ratio & Target Upside % | `analyst_cache` |
+| 21 | **Akumulasi broker top-N & konsentrasi kepemilikan** — broker accumulation | Hard | Ownership Gini Concentration Index + Top-3 Broker Accumulation Ratio | `broker_distribution_cache` & `shareholding_composition` |
 
 **Appendix (not numbered):** kamus bertahap — unlock terms only when the chapter needs them.
 
