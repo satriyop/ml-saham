@@ -1,24 +1,16 @@
-"""Ch.33 Special monitoring — exchange notation, UMA & liquidity risk classifier."""
+"""Ch.33 Special monitoring — Gating Audit for Risk Engine."""
 
 from __future__ import annotations
 
-from collections import defaultdict
 import json
+import sqlite3
+import numpy as np
 
 from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
-from ml_saham.chapters.panel import (
-    forward_returns_by_ticker,
-    ihsg_forward_return,
-    maybe_haircut,
-    pick_as_of,
-    resolve_universe,
-)
 from ml_saham.chapters.registry import get as get_meta
-from ml_saham.chapters.types import ChapterContext, DemoResult, CompareResult
+from ml_saham.chapters.types import ChapterContext, DemoResult
 from ml_saham.data.aisaham_read import connect
-from ml_saham.data.phase2_read import load_ticker_notations
-from ml_saham.eval.metrics import rank_ic
 
 META = get_meta("special-monitoring")
 
@@ -29,208 +21,201 @@ def explore_text(*, verbose: bool = False) -> str:
         f"topic={META.slug}  phase={META.phase}  data={META.required_data}",
         "",
         "Masalah",
-        "  Mengidentifikasi saham berisiko tinggi terkena notasi khusus bursa (Papan Pemantauan Khusus),",
-        "  peringatan UMA (Unusual Market Activity), dan potongan Haircut Margin 100%.",
+        "  Apakah blokir mutlak (Hard Gates) seperti BandarGate dan FundamentalGate",
+        "  benar-benar menyelematkan dari crash, atau hanya paranoid yang menghilangkan profit?",
         "",
-        "Opsi pendekatan",
-        "  1) SOTA: Isolation Forest / One-Class SVM (default) - Deteksi anomali fitur risiko",
-        "  2) Baseline: Hardcoded Threshold (compare) - Aturan sederhana untuk filter risiko",
+        "Pendekatan",
+        "  • Baseline: Blokir statis / mutlak oleh ai-saham Risk Engine.",
+        "  • SOTA: Logistic Regression/XGBoost Classifier memprediksi Probabilitas Crash",
+        "    menggunakan status gate secara adaptif.",
         "",
-        "Caveat",
-        "  • Notasi khusus bursa diterbitkan secara berkala oleh BEI/IDX",
-        "  • Saham UMA kadang mengalami lonjakan spekulatif sangat tinggi sebelum suspensi",
-        "  • Bukan saran trading / investasi",
-        "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"         ml-saham compare {META.slug}",
+        f"Lanjut:  ml-saham challenge engine --category risk --scenario accum --type gating",
     ]
     if verbose:
-        lines.append("\nDetail: ticker_notation_cache di ai-saham.")
+        lines.append("\nDetail: Evaluasi Gating Risk Engine.")
     return "\n".join(lines)
 
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
-    try:
-        import numpy as np
-        from sklearn.ensemble import IsolationForest
-    except ImportError as exc:
-        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
+    raise NotImplementedError("Gunakan mode challenge (run_compare) untuk evaluasi Risk Engine.")
+
+
+def run_compare(ctx: ChapterContext) -> DemoResult:
+    # 1. Tentukan purpose berdasarkan scenario (default: ACCUMULATION_DISCOVERY)
+    purpose = "ACCUMULATION_DISCOVERY"
+    if ctx.scenario == "pre-open":
+        purpose = "PRE_OPEN_AUCTION_DIRECTION"
 
     with connect(ctx.db_path) as conn:
-        uni = ctx.universe or resolve_universe(conn, limit=50)
-        as_of = ctx.as_of or pick_as_of(conn, uni, min_forward=5)
-        if not as_of:
-            raise ChapterDataError("Tidak cukup history untuk as_of.")
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(
+            "SELECT decision_payload_json FROM learning_observations WHERE purpose=? ORDER BY captured_at DESC LIMIT 1000",
+            (purpose,)
+        )
+        rows = cursor.fetchall()
 
-        notation_rows = load_ticker_notations(conn, uni)
-        fwd = forward_returns_by_ticker(conn, uni, as_of=as_of, horizon=5)
-        bench = ihsg_forward_return(conn, as_of=as_of, horizon=5)
-
-    if not notation_rows:
+    if not rows:
         raise ChapterDataError(
-            "ticker_notation_cache kosong.",
-            hint="ml-saham doctor",
+            f"learning_observations untuk {purpose} kosong.",
+            hint="Sistem AI-Saham belum mencatat observasi ini.",
         )
 
-    by_t = {r["ticker"]: r for r in notation_rows if r["ticker"] in fwd}
-    tickers = sorted(by_t.keys())
-
-    if len(tickers) < 8:
-        raise ChapterDataError(f"Panel ticker_notation_cache terlalu kecil (n={len(tickers)}).")
-
+    # 2. Siapkan dataset
     X_list = []
-    
-    for t in tickers:
-        r = by_t[t]
-        has_uma = 1.0 if int(r.get("has_uma") or 0) == 1 else 0.0
-        tradeable = 1.0 if int(r.get("tradeable") or 1) == 1 else 0.0
-        corp_active = 1.0 if int(r.get("corp_action_active") or 0) == 1 else 0.0
+    y_list = []
+    meta = []
+    baseline_blocked = []
 
-        raw_haircut = str(r.get("haircut_percentage") or "0").replace("%", "").strip()
+    feature_names = [
+        "is_bandar_blocked",
+        "is_liquidity_blocked",
+        "is_fundamental_blocked",
+        "is_freefloat_blocked",
+        "raw_signal_score"
+    ]
+
+    for row in rows:
         try:
-            haircut_pct = float(raw_haircut)
-        except ValueError:
-            haircut_pct = 50.0
+            payload = json.loads(row["decision_payload_json"])
+            trade_setup = payload.get("trade_setup", {})
+            signal = payload.get("signal", {})
+            
+            action = trade_setup.get("action", "")
+            blocking_gates = trade_setup.get("blocking_gates", [])
+            
+            # Ekstraksi fitur blokir
+            feats = [
+                1.0 if "BandarGate" in blocking_gates else 0.0,
+                1.0 if "LiquidityGate" in blocking_gates else 0.0,
+                1.0 if "FundamentalGate" in blocking_gates else 0.0,
+                1.0 if "FreeFloatGate" in blocking_gates else 0.0,
+                float(signal.get("raw_exact_score", signal.get("raw_score", 0.0)))
+            ]
+            
+            # Baseline: Apakah diblokir oleh sistem aslinya?
+            is_blocked = 1.0 if "BLOCKED" in action else 0.0
+            
+            # Ekstrak Target Y (forward return)
+            # Jika pre-open, mungkin pakai proxy. Jika accum, pakai benchmark_excess_return
+            fingerprint = payload.get("sub_signal_fingerprint", {})
+            excess_5d = fingerprint.get("benchmark_excess_return_5_session", {})
+            if isinstance(excess_5d, dict) and excess_5d.get("excess_return_pct") is not None:
+                fwd_ret = float(excess_5d["excess_return_pct"])
+            else:
+                fwd_ret = float(signal.get("score", 0.0)) / 100.0  # mock proxy
 
-        X_list.append([has_uma, tradeable, corp_active, haircut_pct])
+            # Kita asumsikan 'Crash' (y=1) jika return negatif
+            is_crash = 1 if fwd_ret < 0.0 else 0
+            
+            X_list.append(feats)
+            y_list.append(is_crash)
+            baseline_blocked.append(is_blocked)
+            
+            meta.append({
+                "ticker": payload.get("ticker", "UNKNOWN"),
+                "date": payload.get("snapshot_date", "UNKNOWN"),
+                "fwd_ret": fwd_ret
+            })
+            
+        except Exception:
+            continue
+
+    if not X_list:
+        raise ChapterDataError("Gagal mem-parsing JSON payload.")
 
     X_arr = np.array(X_list)
+    y_arr = np.array(y_list)
     
-    # SOTA: Isolation Forest
-    iso = IsolationForest(contamination=0.2, random_state=42)
-    iso.fit(X_arr)
-    # score_samples returns anomaly score (-1 to 0.5), lower is more anomalous
-    # We want risk score where higher is safer
-    iso_scores = iso.score_samples(X_arr)
+    # Hitung baseline akurasi blokir
+    # True Positive = Sistem blokir (1) dan memang crash (1)
+    # False Positive = Sistem blokir (1) padahal aman (0) - ini membunuh profit
+    baseline_tp = sum(1 for b, y in zip(baseline_blocked, y_arr) if b == 1 and y == 1)
+    baseline_fp = sum(1 for b, y in zip(baseline_blocked, y_arr) if b == 1 and y == 0)
+    baseline_tn = sum(1 for b, y in zip(baseline_blocked, y_arr) if b == 0 and y == 0)
+    baseline_fn = sum(1 for b, y in zip(baseline_blocked, y_arr) if b == 0 and y == 1)
+    
+    baseline_acc = (baseline_tp + baseline_tn) / len(y_arr) if len(y_arr) > 0 else 0
+    baseline_precision = baseline_tp / (baseline_tp + baseline_fp) if (baseline_tp + baseline_fp) > 0 else 0
 
-    rets = maybe_haircut([fwd[t] for t in tickers], with_costs=ctx.with_costs)
-    ic = rank_ic(iso_scores.tolist(), rets)
+    # 3. Train SOTA (Logistic Regression)
+    try:
+        from sklearn.linear_model import LogisticRegression
+        clf = LogisticRegression(random_state=42, class_weight='balanced')
+        
+        if len(set(y_arr)) > 1:
+            clf.fit(X_arr, y_arr)
+            sota_preds = clf.predict(X_arr)
+            # Feature Importance / Koefisien
+            importances = np.abs(clf.coef_[0])
+            importances = (importances / importances.sum()) * 100
+            imp_source = "LogReg Coef"
+        else:
+            sota_preds = np.zeros_like(y_arr)
+            importances = np.zeros(len(feature_names))
+            imp_source = "None"
+            
+    except ImportError:
+        sota_preds = np.zeros_like(y_arr)
+        importances = np.zeros(len(feature_names))
+        imp_source = "None"
 
-    uma_count = sum(1 for t in tickers if int(by_t[t].get("has_uma") or 0) == 1)
-    high_haircut_count = sum(1 for t in tickers if "100" in str(by_t[t].get("haircut_percentage") or ""))
-
-    order = sorted(range(len(tickers)), key=lambda i: iso_scores[i], reverse=True)
-    top = [
-        {"ticker": tickers[i], "safety_score": float(iso_scores[i]), "fwd": rets[i]}
-        for i in order[:10]
-    ]
+    sota_tp = sum(1 for s, y in zip(sota_preds, y_arr) if s == 1 and y == 1)
+    sota_fp = sum(1 for s, y in zip(sota_preds, y_arr) if s == 1 and y == 0)
+    sota_tn = sum(1 for s, y in zip(sota_preds, y_arr) if s == 0 and y == 0)
+    sota_fn = sum(1 for s, y in zip(sota_preds, y_arr) if s == 0 and y == 1)
+    
+    sota_acc = (sota_tp + sota_tn) / len(y_arr) if len(y_arr) > 0 else 0
+    sota_precision = sota_tp / (sota_tp + sota_fp) if (sota_tp + sota_fp) > 0 else 0
 
     lines = [
-        f"as_of={as_of}  n_tickers={len(tickers)}  source=ticker_notation_cache",
-        f"Isolation Forest Safety Rank IC:         {ic:+.3f}",
-        f"Exchange Flags Breakdown: UMA={uma_count}  100%Haircut={high_haircut_count}",
+        f"date={meta[0]['date']}  n_samples={len(meta)}  purpose={purpose}",
+        "Perbandingan Gating SOTA (LogReg) vs Baseline (AI-Saham Hard Gates)",
         "",
-        "Top Clean & High Safety Rated Stocks (SOTA):",
+        "=== Baseline (AI-Saham ASLI) ===",
+        f"Accuracy : {baseline_acc:.1%}",
+        f"Precision: {baseline_precision:.1%} (Kemampuan blokir yang benar-benar hindari crash)",
+        f"False Positives: {baseline_fp} peluang profit terbuang sia-sia",
+        "",
+        "=== SOTA (Machine Learning Soft Gates) ===",
+        f"Accuracy : {sota_acc:.1%}",
+        f"Precision: {sota_precision:.1%}",
+        f"False Positives: {sota_fp} peluang profit terbuang sia-sia",
+        "",
+        f"=== Analisis Kontribusi Gate ({imp_source}) ==="
+    ]
+    
+    md_lines = [
+        f"# Risk Engine Gating Compare ({purpose})\n",
+        "SOTA ML Soft Gates vs Baseline Hard Gates.\n",
+        f"- **Baseline Precision (Keakuratan Blokir):** {baseline_precision:.1%}",
+        f"- **SOTA Precision (Keakuratan Blokir):** {sota_precision:.1%}\n",
+        f"### Analisis Kontribusi Gate ({imp_source})",
     ]
 
-    for t in top[:8]:
-        uma_flag = "UMA" if int(by_t[t['ticker']].get("has_uma") or 0) == 1 else "Clean"
-        lines.append(
-            f"  {t['ticker']:<6} SafetyScore={t['safety_score']:5.2f}  Status={uma_flag:<5}  fwd={t['fwd']:+.2%}"
-        )
+    if imp_source != "None":
+        feat_imp = sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True)
+        for name, imp in feat_imp:
+            lines.append(f"  {name:<24} : {imp:5.1f}%")
+            md_lines.append(f"- **{name}**: {imp:5.1f}%")
 
     metrics = {
-        "as_of": as_of,
-        "n_tickers": len(tickers),
-        "rank_ic_safety_score": ic,
-        "uma_count": uma_count,
-        "high_haircut_count": high_haircut_count,
+        "n_samples": len(meta),
+        "baseline_accuracy": float(baseline_acc),
+        "sota_accuracy": float(sota_acc),
     }
+
     return DemoResult(
-        title="Special monitoring · Isolation Forest SOTA",
+        title="Risk Gating · Compare Asli",
         lines=lines,
         metrics=metrics,
-        model="if_special_monitoring",
-        summary_md=f"# Special monitoring\n\nRank IC={ic:+.3f}.\n",
-        scoreboard=True,
-        scoreboard_kind="long_only",
-        top_names=top,
+        model="logreg_vs_ai_saham",
+        summary_md="\n".join(md_lines) + "\n",
+        scoreboard=False,
     )
-
-
-def run_compare(ctx: ChapterContext) -> CompareResult:
-    try:
-        import numpy as np
-        from sklearn.ensemble import IsolationForest
-    except ImportError as exc:
-        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
-
-    with connect(ctx.db_path) as conn:
-        uni = ctx.universe or resolve_universe(conn, limit=50)
-        as_of = ctx.as_of or pick_as_of(conn, uni, min_forward=5)
-        if not as_of:
-            raise ChapterDataError("Tidak cukup history untuk as_of.")
-
-        notation_rows = load_ticker_notations(conn, uni)
-        fwd = forward_returns_by_ticker(conn, uni, as_of=as_of, horizon=5)
-
-    if not notation_rows:
-        raise ChapterDataError("ticker_notation_cache kosong.")
-
-    by_t = {r["ticker"]: r for r in notation_rows if r["ticker"] in fwd}
-    tickers = sorted(by_t.keys())
-
-    if len(tickers) < 8:
-        raise ChapterDataError(f"Panel ticker_notation_cache terlalu kecil (n={len(tickers)}).")
-
-    X_list = []
-    base_scores = []
-    
-    for t in tickers:
-        r = by_t[t]
-        has_uma = 1.0 if int(r.get("has_uma") or 0) == 1 else 0.0
-        tradeable = 1.0 if int(r.get("tradeable") or 1) == 1 else 0.0
-        corp_active = 1.0 if int(r.get("corp_action_active") or 0) == 1 else 0.0
-
-        raw_haircut = str(r.get("haircut_percentage") or "0").replace("%", "").strip()
-        try:
-            haircut_pct = float(raw_haircut)
-        except ValueError:
-            haircut_pct = 50.0
-
-        X_list.append([has_uma, tradeable, corp_active, haircut_pct])
-        
-        # Baseline: Hardcoded Threshold Safety Score
-        # (100 - haircut) + tradeable*20 - UMA*40
-        b_score = (100.0 - haircut_pct) + (tradeable * 20.0) - (has_uma * 40.0)
-        base_scores.append(b_score)
-
-    X_arr = np.array(X_list)
-    
-    # SOTA: Isolation Forest
-    iso = IsolationForest(contamination=0.2, random_state=42)
-    iso.fit(X_arr)
-    sota_scores = iso.score_samples(X_arr).tolist()
-
-    rets = maybe_haircut([fwd[t] for t in tickers], with_costs=ctx.with_costs)
-    
-    sota_ic = rank_ic(sota_scores, rets)
-    base_ic = rank_ic(base_scores, rets)
-
-    lines = [
-        f"Perbandingan SOTA (Isolation Forest) vs Baseline (Hardcoded Threshold)",
-        f"as_of={as_of} | n={len(tickers)}",
-        "",
-        f"SOTA Rank IC:     {sota_ic:+.3f}",
-        f"Baseline Rank IC: {base_ic:+.3f}",
-        "",
-        "SOTA Isolation Forest mendeteksi anomali profil risiko multi-dimensi secara otomatis,",
-        "sedangkan Baseline menggunakan bobot manual yang statis.",
-    ]
-
-    return CompareResult(
-        title="Compare: SOTA vs Baseline (Special Monitoring)",
-        lines=lines,
-        metrics={
-            "sota_ic": sota_ic,
-            "base_ic": base_ic,
-        }
-    )
-
 
 def deepdive_text() -> str:
     return deepdive_stub(
         topic=META.slug,
-        related="ticker_notation_cache di ai-saham",
-        bring_back="exchange UMA notation + margin haircut risk habit",
+        related="risk engine / gating",
+        bring_back="Gating vs ML",
     )

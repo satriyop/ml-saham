@@ -1,15 +1,17 @@
-"""Ch.10 Volatility sizing — realized vol + position scale demo."""
+"""Ch.11 Volatility sizing — Sizing Audit for Risk Engine."""
 
 from __future__ import annotations
 
-import math
+import json
+import sqlite3
+import numpy as np
 
 from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
-from ml_saham.chapters.panel import resolve_universe
 from ml_saham.chapters.registry import get as get_meta
-from ml_saham.chapters.types import ChapterContext, DemoResult, CompareResult
-from ml_saham.data.aisaham_read import connect, load_candles
+from ml_saham.chapters.types import ChapterContext, DemoResult
+from ml_saham.data.aisaham_read import connect
+from ml_saham.eval.metrics import rank_ic
 
 META = get_meta("volatility-sizing")
 
@@ -20,195 +22,193 @@ def explore_text(*, verbose: bool = False) -> str:
         f"topic={META.slug}  phase={META.phase}  data={META.required_data}",
         "",
         "Masalah",
-        "  Volatilitas historis membantu skala ukuran posisi — bukan prediksi arah.",
+        "  Apakah memotong ukuran posisi (sizing) berdasarkan volatilitas statis",
+        "  menghasilkan Sharpe Ratio yang lebih baik, atau malah suboptimal?",
         "",
-        "Opsi algoritma",
-        "  1) GARCH(1,1) Volatility Forecasting (default, SOTA)",
-        "  2) EWMA (compare, baseline)",
+        "Pendekatan",
+        "  • Baseline: Multiplier statis dari ai-saham (volatility_size_multiplier_at_signal).",
+        "  • SOTA: Multiplier dinamis yang dioptimasi oleh Ridge Regression / Kelly",
+        "    menggunakan fitur ATR dan volatilitas.",
         "",
-        "Caveat",
-        "  • Vol clustering — model sederhana mudah overfit",
-        "  • Skorboard: long-only vs IHSG · belum termasuk biaya",
-        "  • Bukan saran trading / investasi",
-        "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"         ml-saham compare {META.slug}",
+        f"Lanjut:  ml-saham challenge engine --category risk --scenario accum --type sizing",
     ]
     if verbose:
-        lines.append("\nDetail: gunakan IHSG atau ticker likuid dari universe.")
+        lines.append("\nDetail: Evaluasi Sizing Risk Engine.")
     return "\n".join(lines)
 
 
-def _realized_vol(closes: list[float], window: int = 20) -> list[float | None]:
-    rets = [0.0] + [math.log(closes[i] / closes[i - 1]) for i in range(1, len(closes))]
-    out: list[float | None] = [None] * len(closes)
-    for i in range(window, len(closes)):
-        chunk = rets[i - window + 1 : i + 1]
-        mean = sum(chunk) / len(chunk)
-        var = sum((x - mean) ** 2 for x in chunk) / len(chunk)
-        out[i] = math.sqrt(var) if var > 0 else 0.0
-    return out
-
-
-def _ewma_vol(closes: list[float], lambda_param: float = 0.94) -> list[float | None]:
-    """Compute Exponentially Weighted Moving Average (EWMA) volatility (RiskMetrics style)."""
-    rets = [0.0] + [math.log(closes[i] / closes[i - 1]) for i in range(1, len(closes))]
-    out: list[float | None] = [None] * len(closes)
-    if len(closes) < 5:
-        return out
-    variance = rets[1] ** 2
-    out[1] = math.sqrt(variance)
-    for i in range(2, len(closes)):
-        variance = lambda_param * variance + (1.0 - lambda_param) * (rets[i] ** 2)
-        out[i] = math.sqrt(variance)
-    return out
-
-
-def _build_series(conn, ticker: str) -> tuple[list[str], list[float], list[float | None], list[float | None]]:
-    rows = sorted(load_candles(conn, [ticker]), key=lambda r: r["date"])
-    if len(rows) < 60:
-        raise ChapterDataError(f"History {ticker} terlalu pendek (n={len(rows)}).")
-    dates = [r["date"] for r in rows]
-    closes = [float(r["close"]) for r in rows]
-    vols = _realized_vol(closes, window=20)
-    ewma_vols = _ewma_vol(closes, lambda_param=0.94)
-    return dates, closes, vols, ewma_vols
-
-
 def run_demo(ctx: ChapterContext) -> DemoResult:
-    try:
-        from arch import arch_model
-        import numpy as np
-        from sklearn.metrics import mean_absolute_error
-    except ImportError as exc:
-        raise ChapterError("Butuh arch dan scikit-learn: pip install arch scikit-learn") from exc
+    raise NotImplementedError("Gunakan mode challenge (run_compare) untuk evaluasi Risk Engine.")
+
+
+def run_compare(ctx: ChapterContext) -> DemoResult:
+    # 1. Tentukan purpose berdasarkan scenario (default: ACCUMULATION_DISCOVERY)
+    purpose = "ACCUMULATION_DISCOVERY"
+    if ctx.scenario == "pre-open":
+        purpose = "PRE_OPEN_AUCTION_DIRECTION"
 
     with connect(ctx.db_path) as conn:
-        uni = ctx.universe or resolve_universe(conn, limit=5)
-        ticker = "IHSG" if "IHSG" in uni or not uni else uni[0]
-        if ticker != "IHSG":
-            ihsg_rows = load_candles(conn, ["IHSG"])
-            if ihsg_rows:
-                ticker = "IHSG"
-        dates, closes, vols, ewma_vols = _build_series(conn, ticker)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(
+            "SELECT decision_payload_json FROM learning_observations WHERE purpose=? ORDER BY captured_at DESC LIMIT 1000",
+            (purpose,)
+        )
+        rows = cursor.fetchall()
 
-    rets = [math.log(closes[i] / closes[i - 1]) * 100.0 for i in range(1, len(closes))]
+    if not rows:
+        raise ChapterDataError(
+            f"learning_observations untuk {purpose} kosong.",
+            hint="Sistem AI-Saham belum mencatat observasi ini.",
+        )
+
+    # 2. Siapkan dataset
+    X_list = []
+    y_list = []
+    meta = []
+    baseline_sizing = []
+
+    feature_names = [
+        "atr_pct_at_signal",
+        "bb_width_pctile_at_signal",
+        "rsi_at_signal",
+        "raw_signal_score"
+    ]
+
+    for row in rows:
+        try:
+            payload = json.loads(row["decision_payload_json"])
+            fingerprint = payload.get("sub_signal_fingerprint", {})
+            signal = payload.get("signal", {})
+            
+            # Ekstraksi fitur
+            feats = [
+                float(fingerprint.get("atr_pct_at_signal", 0.0)),
+                float(fingerprint.get("bb_width_pctile_at_signal", 0.0)),
+                float(fingerprint.get("rsi_at_signal", 50.0)),
+                float(signal.get("raw_exact_score", signal.get("raw_score", 0.0)))
+            ]
+            
+            # Baseline sizing (fallback ke 1.0 jika tidak ada)
+            base_size = float(fingerprint.get("volatility_size_multiplier_at_signal", 1.0))
+            
+            # Ekstrak Target Y (forward return)
+            excess_5d = fingerprint.get("benchmark_excess_return_5_session", {})
+            if isinstance(excess_5d, dict) and excess_5d.get("excess_return_pct") is not None:
+                fwd_ret = float(excess_5d["excess_return_pct"])
+            else:
+                fwd_ret = float(signal.get("score", 0.0)) / 100.0  # mock proxy
+
+            X_list.append(feats)
+            y_list.append(fwd_ret)
+            baseline_sizing.append(base_size)
+            
+            meta.append({
+                "ticker": payload.get("ticker", "UNKNOWN"),
+                "date": payload.get("snapshot_date", "UNKNOWN"),
+            })
+            
+        except Exception:
+            continue
+
+    if not X_list:
+        raise ChapterDataError("Gagal mem-parsing JSON payload.")
+
+    X_arr = np.array(X_list)
+    y_arr = np.array(y_list)
     
-    if len(rets) < 60:
-        raise ChapterDataError(f"Sample vol terlalu kecil (n={len(rets)}).")
+    # 3. Baseline Simulation
+    # Hitung mean return & stdev untuk Sharpe proksi
+    baseline_returns = y_arr * np.array(baseline_sizing)
+    mean_ret_base = np.mean(baseline_returns)
+    std_ret_base = np.std(baseline_returns)
+    if std_ret_base == 0:
+        std_ret_base = 1e-9
+    sharpe_base = mean_ret_base / std_ret_base
+
+    # 4. Train SOTA (Ridge Regression)
+    try:
+        from sklearn.linear_model import Ridge
+        clf = Ridge(alpha=1.0, random_state=42)
         
-    split = int(len(rets) * 0.7)
-    
-    am = arch_model(rets, vol='Garch', p=1, q=1, rescale=False)
-    res = am.fit(last_obs=split, disp="off")
-    cond_vol = res.conditional_volatility[split:]
-    
-    test_r_abs = np.abs(rets[split:])
-    
-    mae_garch = float(mean_absolute_error(test_r_abs, cond_vol))
-    
-    forecasts = res.forecast(horizon=1)
-    next_vol_pct = float(math.sqrt(forecasts.variance.iloc[-1, 0]))
-    next_vol_dec = next_vol_pct / 100.0
-    
-    raw_w = 1.0 / max(next_vol_dec, 1e-6)
-    cap_w = min(raw_w, 0.25)  # demo cap 25%
+        if len(set(y_arr)) > 1:
+            clf.fit(X_arr, y_arr)
+            # SOTA Sizing (normalisasi ke 0.0 - 1.0)
+            raw_sota = clf.predict(X_arr)
+            # Simple MinMax scaling ke 0.0 - 1.0 sebagai multiplier
+            min_val = np.min(raw_sota)
+            max_val = np.max(raw_sota)
+            if max_val > min_val:
+                sota_sizing = (raw_sota - min_val) / (max_val - min_val)
+            else:
+                sota_sizing = np.ones_like(y_arr)
+            
+            importances = np.abs(clf.coef_)
+            importances = (importances / importances.sum()) * 100
+            imp_source = "Ridge Coef"
+        else:
+            sota_sizing = np.ones_like(y_arr)
+            importances = np.zeros(len(feature_names))
+            imp_source = "None"
+            
+    except ImportError:
+        sota_sizing = np.ones_like(y_arr)
+        importances = np.zeros(len(feature_names))
+        imp_source = "None"
+
+    sota_returns = y_arr * sota_sizing
+    mean_ret_sota = np.mean(sota_returns)
+    std_ret_sota = np.std(sota_returns)
+    if std_ret_sota == 0:
+        std_ret_sota = 1e-9
+    sharpe_sota = mean_ret_sota / std_ret_sota
 
     lines = [
-        f"ticker={ticker}  n={len(rets)}  train={split} test={len(rets)-split}",
-        f"MAE |return| besok — GARCH(1,1): {mae_garch:.5f}",
+        f"date={meta[0]['date']}  n_samples={len(meta)}  purpose={purpose}",
+        "Perbandingan Sizing SOTA (Ridge) vs Baseline (AI-Saham Statis)",
         "",
-        "Contoh sizing (target risk kasar, bukan live):",
-        f"  GARCH(1,1)_vol={next_vol_dec:.4f}  (1/vol weight={raw_w:.2f}, capped={cap_w:.2f})",
+        "=== Baseline (AI-Saham ASLI) ===",
+        f"Rata-rata Multiplier: {np.mean(baseline_sizing):.2f}",
+        f"Sharpe Ratio Proksi : {sharpe_base:.3f}",
         "",
-        "Catatan: vol-scaling mengurangi exposure saat vol tinggi —",
-        "bukan jaminan Sharpe lebih baik tanpa backtest penuh.",
+        "=== SOTA (Machine Learning Dynamic Sizing) ===",
+        f"Rata-rata Multiplier: {np.mean(sota_sizing):.2f}",
+        f"Sharpe Ratio Proksi : {sharpe_sota:.3f}",
+        "",
+        f"=== Analisis Kontribusi Fitur Sizing ({imp_source}) ==="
     ]
+    
+    md_lines = [
+        f"# Risk Engine Sizing Compare ({purpose})\n",
+        "SOTA ML Dynamic Sizing vs Baseline Static Multiplier.\n",
+        f"- **Baseline Sharpe Proksi:** {sharpe_base:.3f}",
+        f"- **SOTA Sharpe Proksi:** {sharpe_sota:.3f}\n",
+        f"### Analisis Kontribusi Sizing ({imp_source})",
+    ]
+
+    if imp_source != "None":
+        feat_imp = sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True)
+        for name, imp in feat_imp:
+            lines.append(f"  {name:<24} : {imp:5.1f}%")
+            md_lines.append(f"- **{name}**: {imp:5.1f}%")
 
     metrics = {
-        "ticker": ticker,
-        "n": len(rets),
-        "mae_garch": mae_garch,
-        "garch_vol": next_vol_dec,
-        "weight_raw": raw_w,
-        "weight_capped": cap_w,
+        "n_samples": len(meta),
+        "baseline_sharpe": float(sharpe_base),
+        "sota_sharpe": float(sharpe_sota),
     }
+
     return DemoResult(
-        title="Volatility sizing · GARCH(1,1) + 1/vol demo",
+        title="Risk Sizing · Compare Asli",
         lines=lines,
         metrics=metrics,
-        model="garch_1_1",
-        summary_md=(
-            f"# Volatility sizing\n\n{ticker}: GARCH(1,1) MAE={mae_garch:.5f}. "
-            f"1/vol weight demo.\n"
-        ),
-        scoreboard=True,
+        model="ridge_vs_ai_saham",
+        summary_md="\n".join(md_lines) + "\n",
+        scoreboard=False,
     )
-
-
-def run_compare(ctx: ChapterContext) -> CompareResult:
-    try:
-        from arch import arch_model
-        import numpy as np
-        from sklearn.metrics import mean_absolute_error
-    except ImportError as exc:
-        raise ChapterError("Butuh arch dan scikit-learn: pip install arch scikit-learn") from exc
-
-    with connect(ctx.db_path) as conn:
-        uni = ctx.universe or resolve_universe(conn, limit=5)
-        ticker = "IHSG" if "IHSG" in uni or not uni else uni[0]
-        if ticker != "IHSG":
-            ihsg_rows = load_candles(conn, ["IHSG"])
-            if ihsg_rows:
-                ticker = "IHSG"
-        dates, closes, vols, ewma_vols = _build_series(conn, ticker)
-
-    rets = [math.log(closes[i] / closes[i - 1]) * 100.0 for i in range(1, len(closes))]
-    
-    if len(rets) < 60:
-        raise ChapterDataError(f"Sample vol terlalu kecil (n={len(rets)}).")
-        
-    split = int(len(rets) * 0.7)
-    
-    # GARCH(1,1)
-    am = arch_model(rets, vol='Garch', p=1, q=1, rescale=False)
-    res = am.fit(last_obs=split, disp="off")
-    cond_vol = res.conditional_volatility[split:]
-    
-    test_r_abs = np.abs(rets[split:])
-    
-    # EWMA
-    test_ewma = np.array(ewma_vols[:-1])[split:]
-    test_ewma_pct = np.array([float(x or 0.0) for x in test_ewma]) * 100.0
-    
-    mae_garch = float(mean_absolute_error(test_r_abs, cond_vol))
-    mae_ewma = float(mean_absolute_error(test_r_abs, test_ewma_pct))
-
-    winner = "GARCH(1,1)" if mae_garch < mae_ewma else "EWMA"
-    diff = abs(mae_garch - mae_ewma)
-    
-    lines = [
-        f"Bandingkan MAE prediktor volatilitas untuk {ticker} (n={len(rets)})",
-        f"1) GARCH(1,1) (SOTA): {mae_garch:.5f}",
-        f"2) EWMA (Baseline):   {mae_ewma:.5f}",
-        "",
-        f"Pemenang MAE: {winner} (selisih {diff:.5f})",
-    ]
-    
-    return CompareResult(
-        title="Bandingkan Volatility Sizing (GARCH vs EWMA)",
-        lines=lines,
-        metrics={"mae_garch": mae_garch, "mae_ewma": mae_ewma},
-        compare={"winner": winner, "diff": diff},
-        model="garch_vs_ewma",
-        summary_md=f"# Bandingkan GARCH vs EWMA\n\nPemenang: {winner} untuk {ticker}.",
-        scoreboard=True,
-    )
-
 
 def deepdive_text() -> str:
     return deepdive_stub(
         topic=META.slug,
-        related="risk / position sizing hooks di ai-saham (manual)",
-        bring_back="realized vol + 1/vol sizing habit sebelum live sizing",
+        related="risk engine / sizing",
+        bring_back="Sizing vs ML",
     )
