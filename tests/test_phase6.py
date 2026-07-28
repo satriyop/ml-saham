@@ -36,6 +36,7 @@ PHASE2_SLUGS = [
     "ichimoku-cloud",
     "bandar-detector",
     "forward-valuation",
+    "special-monitoring",
 ]
 OPTIONAL_SLUGS = ["rl-sandbox"]
 

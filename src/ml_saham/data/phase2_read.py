@@ -356,4 +356,30 @@ def load_forward_estimates(
     return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
 
+def load_ticker_notations(
+    conn: sqlite3.Connection,
+    tickers: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    if not table_exists(conn, "ticker_notation_cache"):
+        return []
+    cols = table_columns(conn, "ticker_notation_cache")
+    if "ticker" not in cols:
+        return []
+    select = [
+        c for c in (
+            "ticker", "status", "tradeable", "listing_board", "sector", "sub_sector",
+            "haircut_percentage", "notations_json", "market_status", "suspend_info",
+            "corp_action_active", "has_uma", "fetched_date"
+        ) if c in cols
+    ]
+    sql = f"SELECT {', '.join(select)} FROM ticker_notation_cache WHERE 1=1"
+    params: list[Any] = []
+    if tickers:
+        sql += f" AND ticker IN ({_placeholders(len(tickers))})"
+        params.extend(tickers)
+    sql += " ORDER BY ticker"
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+
 

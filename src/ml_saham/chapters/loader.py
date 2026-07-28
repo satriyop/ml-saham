@@ -36,6 +36,7 @@ _SLUG_TO_MOD = {
     "ichimoku-cloud": "ml_saham.chapters.ichimoku_cloud",
     "bandar-detector": "ml_saham.chapters.bandar_detector",
     "forward-valuation": "ml_saham.chapters.forward_valuation",
+    "special-monitoring": "ml_saham.chapters.special_monitoring",
 }
 
 

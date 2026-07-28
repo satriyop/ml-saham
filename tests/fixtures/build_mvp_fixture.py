@@ -267,6 +267,11 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
             CREATE TABLE forward_estimates_cache (
                 ticker TEXT, fetched_date TEXT, forward_eps_1y REAL, revenue_forward_1y REAL, current_price REAL, forward_pe REAL
             );
+            CREATE TABLE ticker_notation_cache (
+                ticker TEXT, status TEXT, tradeable INT, listing_board TEXT, sector TEXT, sub_sector TEXT,
+                haircut_percentage TEXT, notations_json TEXT, market_status TEXT, suspend_info TEXT,
+                corp_action_active INT, has_uma INT, fetched_date TEXT
+            );
             """
         )
         as_of_fix = (start + timedelta(days=min_bars - 8)).isoformat()
@@ -283,6 +288,10 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
             conn.execute(
                 "INSERT INTO forward_estimates_cache VALUES (?,?,?,?,?,?)",
                 (t, "2024-06-01", 15.0 + si, 1e12, 100.0 + si * 5, 8.0 + si * 0.5),
+            )
+            conn.execute(
+                "INSERT INTO ticker_notation_cache VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (t, "STATUS_ACTIVE", 1, "Papan Utama", "Finance", "Banking", "30%", "[]", "close", "", 0, 0 if si > 0 else 1, "2024-06-01"),
             )
         for si, t in enumerate(_STOCKS):
             conn.execute(

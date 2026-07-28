@@ -103,6 +103,7 @@ Roadmap: [roadmap.md](./roadmap.md)
 | 27 | **Klasifikasi breakout awan Kumo Ichimoku** — ichimoku cloud | Hard | RandomForest Kumo Cloud Breakout Classifier pada Tenkan/Kijun/Span A/B | `plugins/indicators/ichimoku.py` |
 | 28 | **Klasifikasi sinyal akumulasi broker bandar** — bandar detector | Hard | RandomForest Multi-Window Bandar Accumulation/Distribution Classifier | `bandar_detector` |
 | 29 | **Valuasi konsensus Forward P/E & rasio PEG** — forward valuation | Hard | Regresi Ridge Konsensus Forward P/E & Model Rasio PEG Growth | `forward_estimates_cache` |
+| 30 | **Notasi khusus bursa, UMA & risiko likuiditas** — special monitoring | Hard | DecisionTree Exchange Notations, UMA Warning & Haircut Tail-Risk Classifier | `ticker_notation_cache` |
 
 **Appendix (not numbered):** kamus bertahap — unlock terms only when the chapter needs them.
 
