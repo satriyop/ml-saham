@@ -1,16 +1,18 @@
-"""Ch.11 Market regime — phase2 observations + GMM on IHSG."""
+"""Ch.12 Market Regime — Regime Audit for Market Context Engine."""
 
 from __future__ import annotations
 
-import math
-from collections import Counter
+import json
+import sqlite3
+import numpy as np
+from datetime import datetime
 
 from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
-from ml_saham.data.aisaham_read import connect, load_candles
-from ml_saham.data.phase2_read import load_regime_observations
+from ml_saham.data.aisaham_read import connect
+from ml_saham.eval.metrics import rank_ic
 
 META = get_meta("market-regime")
 
@@ -21,214 +23,190 @@ def explore_text(*, verbose: bool = False) -> str:
         f"topic={META.slug}  phase={META.phase}  data={META.required_data}",
         "",
         "Masalah",
-        "  Rezim pasar (risk-on/off, vol tinggi/rendah) mengubah efektivitas sinyal.",
+        "  Apakah label Market Regime ai-saham (STRESSED, BULL, NEUTRAL)",
+        "  benar-benar memprediksi kejatuhan (crash) IHSG di minggu berikutnya?",
         "",
-        "Opsi pendekatan",
-        "  1) Baca regime_observations dari ai-saham (jika ada)",
-        "  2) HMM (Hidden Markov Models) pada return+vol IHSG (SOTA/default)",
-        "  3) GMM (Gaussian Mixture Model) unsupervised (Baseline/compare)",
+        "Pendekatan",
+        "  • Baseline: Klasifikasi rezim kaku dari ai-saham (market_context_snapshots).",
+        "  • SOTA: Machine Learning (Random Forest) mengolah data mentah VIX, EIDO, USD/IDR, dll.",
         "",
-        "Caveat",
-        "  • Label rezim unsupervised ≠ ground truth",
-        "  • Regime shift — parameter lama bisa basi",
-        "  • Skorboard: long-only vs IHSG · belum termasuk biaya",
-        "  • Bukan saran trading / investasi",
-        "",
-        f"Lanjut:  ml-saham demo {META.slug}",
+        f"Lanjut:  ml-saham challenge engine --category market --type regime",
     ]
     if verbose:
-        lines.append("\nDetail: prefer load_regime_observations bila tabel ada.")
+        lines.append("\nDetail: Evaluasi Market Regime.")
     return "\n".join(lines)
 
 
-def _ihsg_features(conn) -> tuple[list[str], list[list[float]], list[float]]:
-    rows = sorted(load_candles(conn, ["IHSG"]), key=lambda r: r["date"])
-    if len(rows) < 60:
-        raise ChapterDataError(f"IHSG history terlalu pendek (n={len(rows)}).")
-    dates, feats, fwd5 = [], [], []
-    closes = [float(r["close"]) for r in rows]
-    for i in range(21, len(closes) - 5):
-        rets = [math.log(closes[j] / closes[j - 1]) for j in range(i - 19, i + 1)]
-        mean = sum(rets) / len(rets)
-        vol = math.sqrt(sum((x - mean) ** 2 for x in rets) / len(rets))
-        ret20 = closes[i] / closes[i - 20] - 1.0
-        fwd = closes[i + 5] / closes[i] - 1.0
-        dates.append(rows[i]["date"])
-        feats.append([ret20, vol])
-        fwd5.append(fwd)
-    return dates, feats, fwd5
-
-
 def run_demo(ctx: ChapterContext) -> DemoResult:
-    try:
-        import numpy as np
-        from hmmlearn.hmm import GaussianHMM
-    except ImportError as exc:
-        raise ChapterError("Butuh hmmlearn & numpy: pip install hmmlearn numpy") from exc
-
-    lines: list[str] = []
-    metrics: dict = {}
-
-    with connect(ctx.db_path) as conn:
-        obs = load_regime_observations(conn, limit=60)
-        if obs:
-            regimes = [str(r.get("regime", "?")) for r in obs]
-            counts = Counter(regimes)
-            lines.append("regime_observations (phase2):")
-            for reg, cnt in counts.most_common():
-                lines.append(f"  {reg}: {cnt}")
-            recent = obs[:5]
-            lines.append("")
-            lines.append("Recent observations:")
-            for r in recent:
-                d = r.get("observation_date", "?")
-                reg = r.get("regime", "?")
-                f5 = r.get("forward_ihsg_return_5d")
-                ftxt = f"  fwd5d={float(f5):+.2%}" if f5 is not None else ""
-                lines.append(f"  {d}  regime={reg}{ftxt}")
-            metrics["obs_n"] = len(obs)
-            metrics["obs_regimes"] = dict(counts)
-
-        dates, feats, fwd5 = _ihsg_features(conn)
-
-    X = np.array(feats)
-    hmm = GaussianHMM(n_components=3, random_state=42, n_iter=100)
-    hmm.fit(X)
-    raw_labels = hmm.predict(X)
-
-    # Sort clusters by mean ret20 to give consistent semantic labels:
-    # 0 = Bearish, 1 = Neutral/Sideways, 2 = Bullish
-    cluster_means = {}
-    for k in range(3):
-        idx = [i for i, l in enumerate(raw_labels) if l == k]
-        cluster_means[k] = np.mean([feats[i][0] for i in idx]) if idx else 0.0
-    sorted_clusters = sorted(cluster_means, key=lambda k: cluster_means[k])
-    label_map = {old_k: new_k for new_k, old_k in enumerate(sorted_clusters)}
-    labels = [label_map[l] for l in raw_labels]
-    state_names = {0: "Bearish", 1: "Neutral", 2: "Bullish"}
-
-    hmm_counts = Counter(labels)
-
-    lines.append("")
-    lines.append("Gaussian HMM on IHSG (return20 + vol20):")
-    for k in sorted(hmm_counts):
-        idx = [i for i, l in enumerate(labels) if l == k]
-        avg_fwd = sum(fwd5[i] for i in idx) / len(idx)
-        avg_ret = sum(feats[i][0] for i in idx) / len(idx)
-        avg_vol = sum(feats[i][1] for i in idx) / len(idx)
-        lines.append(
-            f"  state={k} ({state_names[k]:<7})  n={len(idx)}  "
-            f"mean_ret20={avg_ret:+.2%}  vol={avg_vol:.4f}  "
-            f"fwd_5d={avg_fwd:+.2%}"
-        )
-
-    last_label = labels[-1]
-    raw_probs = hmm.predict_proba(X[-1:])[0]
-    sorted_probs = [float(raw_probs[old_k]) for old_k in sorted_clusters]
-    prob_str = ", ".join(f"{state_names[i]}:{p:.1%}" for i, p in enumerate(sorted_probs))
-
-    lines.append("")
-    lines.append(
-        f"Latest HMM state={last_label} ({state_names[last_label]})  date={dates[-1]}  "
-        f"fwd5d={fwd5[-1]:+.2%}"
-    )
-    lines.append(f"Latest regime probabilities: {prob_str}")
-    lines.append("Catatan: cluster unsupervised — interpretasi manual.")
-
-    metrics.update(
-        {
-            "hmm_n": len(labels),
-            "hmm_clusters": dict(hmm_counts),
-            "latest_cluster": last_label,
-            "latest_state_name": state_names[last_label],
-            "latest_date": dates[-1],
-            "latest_probabilities": dict(zip(["Bearish", "Neutral", "Bullish"], sorted_probs, strict=True)),
-        }
-    )
-    return DemoResult(
-        title="Market regime · observations + Gaussian HMM",
-        lines=lines,
-        metrics=metrics,
-        model="hmm_ihsg_3",
-        summary_md=f"# Market regime\n\nLatest state={state_names[last_label]} ({sorted_probs[last_label]:.1%}).\n",
-        scoreboard=True,
-        scoreboard_kind="long_only",
-    )
+    raise NotImplementedError("Gunakan mode challenge (run_compare) untuk evaluasi Market Regime.")
 
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
-    try:
-        import numpy as np
-        from hmmlearn.hmm import GaussianHMM
-        from sklearn.mixture import GaussianMixture
-    except ImportError as exc:
-        raise ChapterError("Butuh hmmlearn, scikit-learn & numpy") from exc
-
-    lines: list[str] = []
-    metrics: dict = {}
-
     with connect(ctx.db_path) as conn:
-        dates, feats, fwd5 = _ihsg_features(conn)
+        conn.row_factory = sqlite3.Row
+        
+        # Ambil data market context
+        cursor = conn.execute(
+            "SELECT as_of_date, regime, factors_json FROM market_context_snapshots ORDER BY as_of_date DESC LIMIT 2000"
+        )
+        rows = cursor.fetchall()
 
-    X = np.array(feats)
+        # Ambil IHSG close price untuk melabeli actual market crash
+        ihsg_cursor = conn.execute(
+            "SELECT date, close FROM candles WHERE ticker='IHSG' ORDER BY date ASC"
+        )
+        ihsg_rows = ihsg_cursor.fetchall()
+
+    if not rows:
+        raise ChapterDataError("Tabel market_context_snapshots kosong.")
+    if not ihsg_rows:
+        raise ChapterDataError("Tidak ada data IHSG di tabel candles.")
+
+    # 1. Map IHSG data
+    ihsg_dates = [r["date"] for r in ihsg_rows]
+    ihsg_closes = [float(r["close"]) for r in ihsg_rows]
     
-    # Train SOTA (HMM)
-    hmm = GaussianHMM(n_components=3, random_state=42, n_iter=100)
-    hmm.fit(X)
-    hmm_raw = hmm.predict(X)
-    
-    # Train Baseline (GMM)
-    gmm = GaussianMixture(n_components=3, random_state=42, n_init=5)
-    gmm_raw = gmm.fit_predict(X)
-    
-    def map_labels(raw_labels):
-        c_means = {}
-        for k in range(3):
-            idx = [i for i, l in enumerate(raw_labels) if l == k]
-            c_means[k] = np.mean([feats[i][0] for i in idx]) if idx else 0.0
-        s_clusters = sorted(c_means, key=lambda k: c_means[k])
-        l_map = {old_k: new_k for new_k, old_k in enumerate(s_clusters)}
-        return [l_map[l] for l in raw_labels]
+    # 2. Siapkan dataset
+    X_list = []
+    y_list = []
+    meta = []
+    baseline_is_stressed = []
+
+    feature_names = ["vix", "eido", "usd_idr", "idx_trend", "idx_breadth", "foreign_flow"]
+
+    for row in rows:
+        as_of = row["as_of_date"]
+        regime = row["regime"]
         
-    hmm_labels = map_labels(hmm_raw)
-    gmm_labels = map_labels(gmm_raw)
-    
-    state_names = {0: "Bearish", 1: "Neutral", 2: "Bullish"}
-    
-    lines.append("Perbandingan Market Regime: HMM (SOTA) vs GMM (Baseline)")
-    lines.append("")
-    
-    for name, labels in [("HMM", hmm_labels), ("GMM", gmm_labels)]:
-        lines.append(f"Model: {name}")
-        counts = Counter(labels)
-        for k in sorted(counts):
-            idx = [i for i, l in enumerate(labels) if l == k]
-            avg_fwd = sum(fwd5[i] for i in idx) / len(idx)
-            avg_ret = sum(feats[i][0] for i in idx) / len(idx)
-            avg_vol = sum(feats[i][1] for i in idx) / len(idx)
-            lines.append(
-                f"  state={k} ({state_names[k]:<7})  n={len(idx)}  "
-                f"mean_ret20={avg_ret:+.2%}  vol={avg_vol:.4f}  "
-                f"fwd_5d={avg_fwd:+.2%}"
-            )
-        lines.append("")
+        try:
+            factors = json.loads(row["factors_json"])
+            # Ubah array of dict menjadi dict key-value
+            feat_dict = {f["name"]: float(f["value"]) if f.get("value") is not None else 0.0 for f in factors}
+        except Exception:
+            feat_dict = {}
+            
+        feats = [feat_dict.get(fname, 0.0) for fname in feature_names]
         
-    metrics["hmm_counts"] = dict(Counter(hmm_labels))
-    metrics["gmm_counts"] = dict(Counter(gmm_labels))
+        # Baseline: ai-saham mendeteksi market STRESSED atau CRASH
+        is_stressed = 1.0 if regime in ["STRESSED", "CRASH"] else 0.0
+        
+        # Hitung Actual Forward Return 5 Hari
+        try:
+            i0 = ihsg_dates.index(as_of)
+            i1 = i0 + 5
+            if i1 < len(ihsg_dates) and ihsg_closes[i0] > 0:
+                fwd_ret = (ihsg_closes[i1] / ihsg_closes[i0]) - 1.0
+            else:
+                continue # data masa depan belum ada
+        except ValueError:
+            continue
+            
+        # Target: Apakah IHSG beneran crash? (turun > 1.0% dalam 5 hari)
+        actual_crash = 1 if fwd_ret < -0.01 else 0
+
+        X_list.append(feats)
+        y_list.append(actual_crash)
+        baseline_is_stressed.append(is_stressed)
+        
+        meta.append({
+            "date": as_of,
+            "fwd_ret": fwd_ret
+        })
+
+    if not X_list:
+        raise ChapterDataError("Data tidak cukup untuk komparasi (mungkin history forward return belum terjadi).")
+
+    X_arr = np.array(X_list)
+    y_arr = np.array(y_list)
+    
+    # Hitung baseline akurasi
+    baseline_tp = sum(1 for b, y in zip(baseline_is_stressed, y_arr) if b == 1 and y == 1)
+    baseline_fp = sum(1 for b, y in zip(baseline_is_stressed, y_arr) if b == 1 and y == 0)
+    baseline_tn = sum(1 for b, y in zip(baseline_is_stressed, y_arr) if b == 0 and y == 0)
+    baseline_fn = sum(1 for b, y in zip(baseline_is_stressed, y_arr) if b == 0 and y == 1)
+    
+    baseline_acc = (baseline_tp + baseline_tn) / len(y_arr) if len(y_arr) > 0 else 0
+    baseline_precision = baseline_tp / (baseline_tp + baseline_fp) if (baseline_tp + baseline_fp) > 0 else 0
+    baseline_recall = baseline_tp / (baseline_tp + baseline_fn) if (baseline_tp + baseline_fn) > 0 else 0
+
+    # 3. Train SOTA (Random Forest)
+    try:
+        from sklearn.ensemble import RandomForestClassifier
+        clf = RandomForestClassifier(n_estimators=100, max_depth=3, random_state=42, class_weight='balanced')
+        
+        if len(set(y_arr)) > 1:
+            clf.fit(X_arr, y_arr)
+            sota_preds = clf.predict(X_arr)
+            importances = clf.feature_importances_ * 100
+            imp_source = "RF Imp"
+        else:
+            sota_preds = np.zeros_like(y_arr)
+            importances = np.zeros(len(feature_names))
+            imp_source = "None"
+            
+    except ImportError:
+        sota_preds = np.zeros_like(y_arr)
+        importances = np.zeros(len(feature_names))
+        imp_source = "None"
+
+    sota_tp = sum(1 for s, y in zip(sota_preds, y_arr) if s == 1 and y == 1)
+    sota_fp = sum(1 for s, y in zip(sota_preds, y_arr) if s == 1 and y == 0)
+    sota_tn = sum(1 for s, y in zip(sota_preds, y_arr) if s == 0 and y == 0)
+    sota_fn = sum(1 for s, y in zip(sota_preds, y_arr) if s == 0 and y == 1)
+    
+    sota_acc = (sota_tp + sota_tn) / len(y_arr) if len(y_arr) > 0 else 0
+    sota_precision = sota_tp / (sota_tp + sota_fp) if (sota_tp + sota_fp) > 0 else 0
+    sota_recall = sota_tp / (sota_tp + sota_fn) if (sota_tp + sota_fn) > 0 else 0
+
+    lines = [
+        f"n_samples={len(meta)}",
+        "Perbandingan Rezim SOTA (Random Forest) vs Baseline (AI-Saham Rule)",
+        "",
+        "=== Baseline (AI-Saham ASLI) ===",
+        f"Accuracy  : {baseline_acc:.1%}",
+        f"Precision : {baseline_precision:.1%} (Kemampuan menebak crash tanpa meleset)",
+        f"Recall    : {baseline_recall:.1%} (Kemampuan menangkap SEMUA crash)",
+        "",
+        "=== SOTA (Machine Learning Dynamic Regime) ===",
+        f"Accuracy  : {sota_acc:.1%}",
+        f"Precision : {sota_precision:.1%}",
+        f"Recall    : {sota_recall:.1%}",
+        "",
+        f"=== Analisis Kontribusi Indikator Makro ({imp_source}) ==="
+    ]
+    
+    md_lines = [
+        f"# Market Regime Compare\n",
+        "SOTA ML Dynamic Regime vs Baseline Static Rule.\n",
+        f"- **Baseline Precision/Recall:** {baseline_precision:.1%} / {baseline_recall:.1%}",
+        f"- **SOTA Precision/Recall:** {sota_precision:.1%} / {sota_recall:.1%}\n",
+        f"### Analisis Kontribusi Indikator Makro ({imp_source})",
+    ]
+
+    if imp_source != "None":
+        feat_imp = sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True)
+        for name, imp in feat_imp:
+            lines.append(f"  {name:<24} : {imp:5.1f}%")
+            md_lines.append(f"- **{name}**: {imp:5.1f}%")
+
+    metrics = {
+        "n_samples": len(meta),
+        "baseline_accuracy": float(baseline_acc),
+        "sota_accuracy": float(sota_acc),
+    }
 
     return DemoResult(
-        title="Market regime · HMM vs GMM",
+        title="Market Regime · Compare Asli",
         lines=lines,
         metrics=metrics,
-        model="hmm_vs_gmm",
-        summary_md="# Market regime Comparison\n\nComparing HMM vs GMM.",
+        model="randomforest_vs_ai_saham",
+        summary_md="\n".join(md_lines) + "\n",
         scoreboard=False,
     )
-
 
 def deepdive_text() -> str:
     return deepdive_stub(
         topic=META.slug,
-        related="regime_observations / regime engine di ai-saham",
-        bring_back="rezim label + forward IHSG sanity check habit",
+        related="market engine / regime",
+        bring_back="Regime vs ML",
     )
