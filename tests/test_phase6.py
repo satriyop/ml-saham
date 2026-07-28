@@ -28,6 +28,9 @@ PHASE2_SLUGS = [
     "seasonality-drift",
     "analyst-consensus",
     "broker-accumulation",
+    "sector-breadth",
+    "volatility-squeeze",
+    "relative-strength",
 ]
 OPTIONAL_SLUGS = ["rl-sandbox"]
 

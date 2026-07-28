@@ -95,6 +95,9 @@ Roadmap: [roadmap.md](./roadmap.md)
 | 19 | **Efek musiman & anomali kalender** — seasonality drift | Hard | Kruskal-Wallis ANOVA H-test ($p$-value) + Ridge Calendar Regression | `seasonality_cache` |
 | 20 | **Konsensus analis & revisi target harga** — analyst consensus | Hard | Quantile Regression (Q25/Q50/Q75) + Consensus Buy Ratio & Target Upside % | `analyst_cache` |
 | 21 | **Akumulasi broker top-N & konsentrasi kepemilikan** — broker accumulation | Hard | Ownership Gini Concentration Index + Top-3 Broker Accumulation Ratio | `broker_distribution_cache` & `shareholding_composition` |
+| 22 | **Partisipasi pasar & rotasi sektor** — sector breadth | Hard | PCA Primary Sector Breadth Factor & Sector Market Participation (> SMA-20) | `factor_card_sector_breadth.py` |
+| 23 | **Kompresi volatilitas & klasifikasi breakout** — volatility squeeze | Hard | RandomForest Breakout Classifier pada Bollinger Bandwidth Squeeze & Surge Volume Ratio | `strategies/bb-squeeze` |
+| 24 | **Relative strength Mansfield vs IHSG** — relative strength | Hard | Regresi ElasticNet Relative Strength Mansfield vs IHSG Benchmark | `strategies/rs-momentum` |
 
 **Appendix (not numbered):** kamus bertahap — unlock terms only when the chapter needs them.
 

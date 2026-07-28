@@ -94,6 +94,9 @@ Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir`.
   - **Ch.19 seasonality-drift**: Uji ANOVA Kruskal-Wallis (p-value) & Regresi Ridge Anomali Musiman Kalender.
   - **Ch.20 analyst-consensus**: Regresi Kuantil Target Upside Analis & Consensus Buy Ratio.
   - **Ch.21 broker-accumulation**: Indeks Gini Konsentrasi Kepemilikan & Top-3 Broker Accumulation Ratio.
+  - **Ch.22 sector-breadth**: PCA Primary Sector Breadth Factor & Partisipasi Sektor (> SMA-20).
+  - **Ch.23 volatility-squeeze**: RandomForest Breakout Classifier pada Bollinger Bandwidth Squeeze & Surge Volume Ratio.
+  - **Ch.24 relative-strength**: Regresi ElasticNet Relative Strength Mansfield vs IHSG Benchmark.
 
 ## Catatan
 

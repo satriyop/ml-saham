@@ -28,6 +28,9 @@ _SLUG_TO_MOD = {
     "seasonality-drift": "ml_saham.chapters.seasonality_drift",
     "analyst-consensus": "ml_saham.chapters.analyst_consensus",
     "broker-accumulation": "ml_saham.chapters.broker_accumulation",
+    "sector-breadth": "ml_saham.chapters.sector_breadth",
+    "volatility-squeeze": "ml_saham.chapters.volatility_squeeze",
+    "relative-strength": "ml_saham.chapters.relative_strength",
 }
 
 
