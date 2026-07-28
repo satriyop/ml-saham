@@ -8,6 +8,8 @@ from typing import Optional
 
 import typer
 from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
 from rich.table import Table
 
 from ml_saham import __version__
@@ -674,14 +676,31 @@ def challenge_cmd(
         results = run_full_challenge(chapter_ctx)
 
     for category, res in results.items():
-        console.print(f"[bold yellow]Category: {category.upper()}[/bold yellow]")
+        console.print(f"\n[bold yellow]=== Category: {category.upper()} ===[/bold yellow]")
         for k, v in res.items():
-            if isinstance(v, (dict, list)):
-                console.print(f"  {k}:")
-                console.print(f"    {json.dumps(v, indent=4)}")
+            if "error" in v:
+                console.print(f"[bold red]❌ {k}[/bold red]")
+                console.print(f"  [red]Error: {v['error']}[/red]")
             else:
-                console.print(f"  {k:<30}: [bold white]{v}[/bold white]")
-        console.print("─" * 50)
+                title = v.get("title", k)
+                console.print(f"\n[bold green]✅ {title}[/bold green] ([cyan]{k}[/cyan])")
+                if "model" in v:
+                    console.print(f"   [dim]Model:[/dim] {v['model']}")
+                
+                # Format metrics side by side or simply
+                sota = v.get("sota_metrics", {})
+                baseline = v.get("baseline_metrics", {})
+                if sota or baseline:
+                    console.print("   [dim]Metrics:[/dim]")
+                    if sota:
+                        console.print(f"     [bold blue]SOTA:[/bold blue] {sota}")
+                    if baseline:
+                        console.print(f"     [bold blue]Baseline:[/bold blue] {baseline}")
+                
+                summary = v.get("summary")
+                if summary:
+                    console.print(Panel(Markdown(summary), title="Penjelasan Audit", border_style="dim"))
+        console.print("─" * 60)
 
     if export_json:
         export_json.parent.mkdir(parents=True, exist_ok=True)
