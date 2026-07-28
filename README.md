@@ -103,6 +103,9 @@ Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir`.
   - **Ch.28 bandar-detector**: RandomForest Multi-Window Bandar Accumulation/Distribution Classifier.
   - **Ch.29 forward-valuation**: Regresi Ridge Konsensus Forward P/E & Model Rasio PEG Growth.
   - **Ch.30 special-monitoring**: DecisionTree Exchange Notations, UMA Warning & Haircut Tail-Risk Classifier.
+  - **Ch.31 earnings-quality**: Regresi Huber Robust Anomali Akrual Sloan & Kualitas Arus Kas.
+  - **Ch.32 microstructure-impact**: Model SVR Dampak Harga & Rasio Ilikuiditas Amihud.
+  - **Ch.33 meta-ensemble**: Stacked Super Learner Multi-Faktor (Level-1 Ridge Ensemble).
 
 ## Catatan
 

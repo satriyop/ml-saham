@@ -39,6 +39,7 @@ _SLUG_TO_MOD = {
     "special-monitoring": "ml_saham.chapters.special_monitoring",
     "earnings-quality": "ml_saham.chapters.earnings_quality",
     "microstructure-impact": "ml_saham.chapters.microstructure_impact",
+    "meta-ensemble": "ml_saham.chapters.meta_ensemble",
 }
 
 

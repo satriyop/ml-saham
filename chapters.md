@@ -104,6 +104,9 @@ Roadmap: [roadmap.md](./roadmap.md)
 | 28 | **Klasifikasi sinyal akumulasi broker bandar** — bandar detector | Hard | RandomForest Multi-Window Bandar Accumulation/Distribution Classifier | `bandar_detector` |
 | 29 | **Valuasi konsensus Forward P/E & rasio PEG** — forward valuation | Hard | Regresi Ridge Konsensus Forward P/E & Model Rasio PEG Growth | `forward_estimates_cache` |
 | 30 | **Notasi khusus bursa, UMA & risiko likuiditas** — special monitoring | Hard | DecisionTree Exchange Notations, UMA Warning & Haircut Tail-Risk Classifier | `ticker_notation_cache` |
+| 31 | **Anomali akrual Sloan & kualitas laba** — earnings quality | Hard | Regresi Huber Robust Anomali Akrual Sloan & Kualitas Arus Kas | `company_financials` |
+| 32 | **Ilikuiditas Amihud & dampak harga mikrostruk** — microstructure impact | Hard | Model SVR Dampak Harga & Rasio Ilikuiditas Amihud | `candles` |
+| 33 | **Super learner ensemble multi-faktor terstack** — meta ensemble | Complex | Stacked Generalization Level-1 Meta-Learner (RF + Ridge) | Multi-factor stacked pipelines |
 
 **Appendix (not numbered):** kamus bertahap — unlock terms only when the chapter needs them.
 

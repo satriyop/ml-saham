@@ -39,6 +39,7 @@ PHASE2_SLUGS = [
     "special-monitoring",
     "earnings-quality",
     "microstructure-impact",
+    "meta-ensemble",
 ]
 OPTIONAL_SLUGS = ["rl-sandbox"]
 
