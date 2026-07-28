@@ -1,4 +1,4 @@
-"""Ch.8 Volume anomaly — how much (price/volume only)."""
+"""Ch.9 Volume anomaly — how much (price/volume only)."""
 
 from __future__ import annotations
 
@@ -25,9 +25,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  dan Ch.1 (spike harga kotor). Di sini: anomali price–volume saja.",
         "",
         "Opsi pendekatan",
-        "  1) Isolation Forest pada |return|, volume z, volume/avg",
-        "  2) One-Class SVM (satu kelas 'normal')",
-        "  3) Bandingkan overlap flag kedua metode",
+        "  1) Autoencoders (Reconstruction Loss) [SOTA/default]",
+        "  2) Multivariate IsolationForest [baseline/compare]",
         "",
         "Caveat",
         "  • Flag ≠ sinyal trading; bisa event korporasi / berita",
@@ -36,26 +35,14 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Bukan saran trading / investasi",
         "",
         f"Lanjut:  ml-saham demo {META.slug}",
+        f"Atau:    ml-saham compare {META.slug} --baseline isolation-forest",
     ]
     if verbose:
         lines.append("\nDetail: tidak ada deepdive engine khusus — fokus hygiene volume.")
     return "\n".join(lines)
 
 
-def run_demo(ctx: ChapterContext) -> DemoResult:
-    try:
-        import numpy as np
-        from sklearn.ensemble import IsolationForest
-        from sklearn.svm import OneClassSVM
-    except ImportError as exc:
-        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
-
-    with connect(ctx.db_path) as conn:
-        uni = ctx.universe or resolve_universe(conn, limit=30)
-        if not uni:
-            raise ChapterDataError("Universe kosong.")
-        candles = load_candles(conn, uni)
-
+def _extract_features(candles: list[dict], uni: list[str]) -> tuple[dict, list, list]:
     by_t: dict[str, list] = defaultdict(list)
     for row in candles:
         by_t[row["ticker"]].append(row)
@@ -83,52 +70,70 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             vratio = v / mean_v if mean_v > 0 else 0.0
             feats.append([ret, vz, vratio])
             meta.append((t, rows[i]["date"], ret, vratio))
+    return by_t, feats, meta
+
+
+def run_demo(ctx: ChapterContext) -> DemoResult:
+    try:
+        import numpy as np
+        from sklearn.neural_network import MLPRegressor
+        from sklearn.preprocessing import StandardScaler
+    except ImportError as exc:
+        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
+
+    with connect(ctx.db_path) as conn:
+        uni = ctx.universe or resolve_universe(conn, limit=30)
+        if not uni:
+            raise ChapterDataError("Universe kosong.")
+        candles = load_candles(conn, uni)
+
+    by_t, feats, meta = _extract_features(candles, uni)
 
     if len(feats) < 100:
         raise ChapterDataError(f"Sample volume features terlalu kecil (n={len(feats)}).")
 
     X = np.array(feats, dtype=float)
-    iforest = IsolationForest(
-        n_estimators=120, contamination=0.02, random_state=42
-    )
-    pred_if = iforest.fit_predict(X)
-    ocsvm = OneClassSVM(kernel="rbf", gamma="scale", nu=0.02)
-    pred_oc = ocsvm.fit_predict(X)
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
 
+    autoencoder = MLPRegressor(
+        hidden_layer_sizes=(8, 4, 8),
+        activation="relu",
+        max_iter=200,
+        random_state=42,
+    )
+    autoencoder.fit(X_scaled, X_scaled)
+    reconstruction_err = np.mean((X_scaled - autoencoder.predict(X_scaled)) ** 2, axis=1)
+    
+    threshold = float(np.percentile(reconstruction_err, 98))
+    
     flagged = []
-    both = 0
-    for (t, d, ret, vr), p_if, p_oc in zip(meta, pred_if, pred_oc, strict=True):
-        if p_if == -1 or p_oc == -1:
-            methods = []
-            if p_if == -1:
-                methods.append("IF")
-            if p_oc == -1:
-                methods.append("OCSVM")
-            if p_if == -1 and p_oc == -1:
-                both += 1
+    for (t, d, ret, vr), err in zip(meta, reconstruction_err, strict=True):
+        if err > threshold:
             flagged.append(
                 {
                     "ticker": t,
                     "date": d,
                     "abs_ret": ret,
                     "vol_ratio": vr,
-                    "reason": "+".join(methods),
+                    "err": float(err),
+                    "reason": "Autoencoder",
                 }
             )
 
-    flagged.sort(key=lambda x: x["vol_ratio"], reverse=True)
+    flagged.sort(key=lambda x: x["err"], reverse=True)
     top = flagged[:25]
     lines = [
         f"Universe sample: {len(by_t)}  feature rows: {len(feats)}",
-        f"Flagged: {len(flagged)}  overlap IF∩OCSVM: {both}",
-        "Methods: IsolationForest + OneClassSVM (price/volume only)",
+        f"Flagged: {len(flagged)} (Top 2% reconstruction error)",
+        "Methods: Autoencoders (Reconstruction Loss)",
         "",
-        "Top by volume/avg20:",
+        "Top anomalies by reconstruction error:",
     ]
     for f in top[:12]:
         lines.append(
             f"  {f['ticker']:<6} {f['date']}  "
-            f"|ret|={f['abs_ret']:.2%}  vol/avg={f['vol_ratio']:.1f}x  {f['reason']}"
+            f"|ret|={f['abs_ret']:.2%}  vol/avg={f['vol_ratio']:.1f}x  err={f['err']:.2f}"
         )
 
     unique_t = set(f["ticker"] for f in flagged)
@@ -136,23 +141,21 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "n_tickers": len(by_t),
         "n_samples": len(feats),
         "n_flagged": len(flagged),
-        "n_both_flagged": both,
         "flagged_tickers_count": len(unique_t),
         "top_anomalies": top[:10],
     }
-    csv = ["ticker,date,abs_ret,vol_ratio,reason"] + [
-        f"{f['ticker']},{f['date']},{f['abs_ret']:.6f},{f['vol_ratio']:.6f},{f['reason']}"
+    csv = ["ticker,date,abs_ret,vol_ratio,err,reason"] + [
+        f"{f['ticker']},{f['date']},{f['abs_ret']:.6f},{f['vol_ratio']:.6f},{f['err']:.6f},{f['reason']}"
         for f in top
     ]
     return DemoResult(
-        title="Volume anomaly · Isolation Forest vs One-Class SVM",
+        title="Volume anomaly · Autoencoders",
         lines=lines,
         metrics=metrics,
-        model="oc_svm_rbf",
+        model="autoencoder",
         summary_md=(
             "# Volume anomaly\n\n"
             f"Flagged {len(flagged)} price-volume anomalies across {len(unique_t)} tickers.\n"
-            f"Both methods agreed on {both} anomalies.\n"
         ),
         scoreboard=True,
         scoreboard_kind="long_only",
@@ -161,9 +164,79 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     )
 
 
+def run_compare(ctx: ChapterContext) -> DemoResult:
+    try:
+        import numpy as np
+        from sklearn.ensemble import IsolationForest
+        from sklearn.neural_network import MLPRegressor
+        from sklearn.preprocessing import StandardScaler
+    except ImportError as exc:
+        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
+
+    with connect(ctx.db_path) as conn:
+        uni = ctx.universe or resolve_universe(conn, limit=30)
+        if not uni:
+            raise ChapterDataError("Universe kosong.")
+        candles = load_candles(conn, uni)
+
+    by_t, feats, meta = _extract_features(candles, uni)
+
+    if len(feats) < 100:
+        raise ChapterDataError(f"Sample volume features terlalu kecil (n={len(feats)}).")
+
+    X = np.array(feats, dtype=float)
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    iforest = IsolationForest(n_estimators=100, contamination=0.02, random_state=42)
+    pred_if = iforest.fit_predict(X_scaled)
+    if_flags = set(i for i, p in enumerate(pred_if) if p == -1)
+
+    autoencoder = MLPRegressor(
+        hidden_layer_sizes=(8, 4, 8),
+        activation="relu",
+        max_iter=200,
+        random_state=42,
+    )
+    autoencoder.fit(X_scaled, X_scaled)
+    reconstruction_err = np.mean((X_scaled - autoencoder.predict(X_scaled)) ** 2, axis=1)
+    threshold = float(np.percentile(reconstruction_err, 98))
+    ae_flags = set(i for i, err in enumerate(reconstruction_err) if err > threshold)
+
+    both = ae_flags & if_flags
+    only_ae = ae_flags - if_flags
+    only_if = if_flags - ae_flags
+    
+    lines = [
+        "Comparing Autoencoder (SOTA) vs IsolationForest (Baseline)",
+        f"Universe sample: {len(by_t)}  feature rows: {len(feats)}",
+        "",
+        f"Autoencoder Anomalies : {len(ae_flags)}",
+        f"IF Anomalies          : {len(if_flags)}",
+        f"Overlap               : {len(both)}",
+        f"Only Autoencoder      : {len(only_ae)}",
+        f"Only IsolationForest  : {len(only_if)}",
+    ]
+    
+    metrics = {
+        "ae_count": len(ae_flags),
+        "if_count": len(if_flags),
+        "overlap": len(both),
+    }
+
+    return DemoResult(
+        title="Comparison: Autoencoder vs IsolationForest",
+        lines=lines,
+        metrics=metrics,
+        model="AE vs IF",
+        summary_md="# Compare\nAutoencoder vs IsolationForest",
+        scoreboard=False,
+    )
+
+
 def deepdive_text() -> str:
     return deepdive_stub(
         topic=META.slug,
         related="— (volume–price hygiene; pisahkan dari broker-flow)",
-        bring_back="IF/OCSVM habit pada fitur volume tanpa klaim who/flow",
+        bring_back="Autoencoder anomaly flag pada fitur volume tanpa klaim who/flow",
     )
