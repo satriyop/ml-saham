@@ -24,9 +24,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  dan cek apakah model hanya menghafal satu sektor.",
         "",
         "Opsi pendekatan",
-        "  1) k-means pada vektor return harian singkat",
-        "  2) Hierarchical clustering (agglomerative)",
-        "  3) PCA 2D untuk visualisasi ringkas (terminal: print loadings)",
+        "  1) HDBSCAN + UMAP (SOTA, default)",
+        "  2) k-means pada vektor return harian singkat (baseline, compare)",
         "",
         "Caveat",
         "  • Cluster ≠ rekomendasi beli; hanya kemiripan historis",
@@ -34,23 +33,14 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Skorboard: long-only vs IHSG · belum termasuk biaya",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
+        f"Lanjut:  ml-saham demo {META.slug}  |  ml-saham compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: deepdive boleh menyinggung sector diagnostics ai-saham.")
     return "\n".join(lines)
 
 
-def run_demo(ctx: ChapterContext) -> DemoResult:
-    try:
-        import numpy as np
-        from sklearn.cluster import AgglomerativeClustering, KMeans
-        from sklearn.decomposition import PCA
-        from sklearn.metrics import davies_bouldin_score, silhouette_score
-        from sklearn.preprocessing import StandardScaler
-    except ImportError as exc:
-        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
-
+def _load_data_aligned(ctx: ChapterContext, window: int = 40):
     with connect(ctx.db_path) as conn:
         uni = ctx.universe or resolve_universe(conn, limit=40)
         if len(uni) < 8:
@@ -62,8 +52,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     for row in candles:
         by_t[row["ticker"]].append((row["date"], float(row["close"])))
 
-    # Align last N returns on common calendar
-    window = 40
     series: dict[str, dict[str, float]] = {}
     all_dates: set[str] = set()
     for t, rows in by_t.items():
@@ -92,75 +80,140 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         raise ChapterDataError(
             f"Panel return teralign terlalu kecil (n={len(keep)}). Perlu lebih banyak history."
         )
+    return keep, X_rows, sectors, window
 
+
+def run_demo(ctx: ChapterContext) -> DemoResult:
+    try:
+        import numpy as np
+        from sklearn.cluster import HDBSCAN
+        import umap
+        from sklearn.preprocessing import StandardScaler
+    except ImportError as exc:
+        raise ChapterError("Butuh scikit-learn>=1.3 dan umap-learn: pip install scikit-learn umap-learn") from exc
+
+    keep, X_rows, sectors, window = _load_data_aligned(ctx)
     X = StandardScaler().fit_transform(np.array(X_rows, dtype=float))
-    n_clusters = min(5, max(2, len(keep) // 5))
-    km = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-    labels_km = km.fit_predict(X)
-    agg = AgglomerativeClustering(n_clusters=n_clusters)
-    labels_agg = agg.fit_predict(X)
-    pca = PCA(n_components=2, random_state=42)
-    coords = pca.fit_transform(X)
-
-    sil_score = float(silhouette_score(X, labels_km)) if len(set(labels_km)) > 1 else 0.0
-    db_score = float(davies_bouldin_score(X, labels_km)) if len(set(labels_km)) > 1 else 0.0
-
-    # agreement: same pair co-clustered?
-    agree = 0
-    total_pairs = 0
-    for i in range(len(keep)):
-        for j in range(i + 1, len(keep)):
-            total_pairs += 1
-            same_km = labels_km[i] == labels_km[j]
-            same_agg = labels_agg[i] == labels_agg[j]
-            if same_km == same_agg:
-                agree += 1
-    agree_rate = agree / total_pairs if total_pairs else 0.0
+    
+    reducer = umap.UMAP(n_components=2, random_state=42)
+    coords = reducer.fit_transform(X)
+    
+    hdb = HDBSCAN(min_cluster_size=2)
+    labels = hdb.fit_predict(coords)
+    n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
 
     lines = [
-        f"n={len(keep)} tickers  window={window}d  k={n_clusters}",
-        f"PCA var explained: {pca.explained_variance_ratio_[0]:.2%} / "
-        f"{pca.explained_variance_ratio_[1]:.2%}",
-        f"k-means vs hierarchical pair-agreement: {agree_rate:.1%}",
-        f"Cluster diagnostics: Silhouette={sil_score:+.3f}  Davies-Bouldin={db_score:.3f}",
+        f"n={len(keep)} tickers  window={window}d  k={n_clusters} (HDBSCAN)",
         "",
-        "Clusters (k-means) · contoh anggota + sector:",
+        "Clusters (HDBSCAN) · contoh anggota + sector:",
     ]
     by_c: dict[int, list[str]] = defaultdict(list)
-    for t, lab in zip(keep, labels_km, strict=True):
+    for t, lab in zip(keep, labels, strict=True):
         by_c[int(lab)].append(t)
-    for c in sorted(by_c):
+    
+    for c in sorted(by_c, key=lambda x: x if x != -1 else 999):
         members = by_c[c][:6]
         sec_bits = [f"{t}:{sectors.get(t, '?')[:16]}" for t in members]
-        lines.append(f"  C{c} ({len(by_c[c])}): " + "; ".join(sec_bits))
+        c_name = f"C{c}" if c != -1 else "Noise"
+        lines.append(f"  {c_name} ({len(by_c[c])}): " + "; ".join(sec_bits))
 
     metrics = {
         "n_tickers": len(keep),
         "n_clusters": n_clusters,
         "window": window,
-        "pair_agreement": agree_rate,
-        "silhouette_score": sil_score,
-        "davies_bouldin_score": db_score,
-        "pca_var": pca.explained_variance_ratio_.tolist(),
         "clusters": {str(c): by_c[c] for c in by_c},
     }
-    csv = ["ticker,cluster_kmeans,cluster_agg,pca1,pca2,sector"]
+    csv = ["ticker,cluster,umap1,umap2,sector"]
     for i, t in enumerate(keep):
         csv.append(
-            f"{t},{int(labels_km[i])},{int(labels_agg[i])},"
-            f"{coords[i, 0]:.6f},{coords[i, 1]:.6f},{sectors.get(t, '')}"
+            f"{t},{int(labels[i])},{coords[i, 0]:.6f},{coords[i, 1]:.6f},{sectors.get(t, '')}"
         )
     return DemoResult(
-        title="Cluster peers · k-means + hierarchical + PCA",
+        title="Cluster peers · HDBSCAN + UMAP",
         lines=lines,
         metrics=metrics,
-        model=f"kmeans_k{n_clusters}",
+        model=f"hdbscan_umap_k{n_clusters}",
         summary_md=(
-            f"# Cluster peers\n\nk={n_clusters}, window={window}. "
-            f"Pair agreement k-means vs agglomerative: {agree_rate:.1%}.\n"
+            f"# Cluster peers (SOTA)\n\nk={n_clusters} (HDBSCAN on UMAP), window={window}.\n"
         ),
         scoreboard=True,
         extra_files={"top_names.csv": "\n".join(csv) + "\n"},
+    )
+
+
+def run_compare(ctx: ChapterContext) -> DemoResult:
+    try:
+        import numpy as np
+        from sklearn.cluster import HDBSCAN, KMeans
+        import umap
+        from sklearn.metrics import silhouette_score
+        from sklearn.preprocessing import StandardScaler
+    except ImportError as exc:
+        raise ChapterError("Butuh scikit-learn>=1.3 dan umap-learn: pip install scikit-learn umap-learn") from exc
+
+    keep, X_rows, sectors, window = _load_data_aligned(ctx)
+    X = StandardScaler().fit_transform(np.array(X_rows, dtype=float))
+    
+    # Baseline: KMeans
+    n_clusters_km = min(5, max(2, len(keep) // 5))
+    km = KMeans(n_clusters=n_clusters_km, random_state=42, n_init=10)
+    labels_km = km.fit_predict(X)
+    sil_km = float(silhouette_score(X, labels_km)) if len(set(labels_km)) > 1 else 0.0
+    
+    # SOTA: UMAP + HDBSCAN
+    reducer = umap.UMAP(n_components=2, random_state=42)
+    coords = reducer.fit_transform(X)
+    hdb = HDBSCAN(min_cluster_size=2)
+    labels_hdb = hdb.fit_predict(coords)
+    n_clusters_hdb = len(set(labels_hdb)) - (1 if -1 in labels_hdb else 0)
+    
+    mask_hdb = labels_hdb != -1
+    if len(set(labels_hdb[mask_hdb])) > 1:
+        sil_hdb = float(silhouette_score(X[mask_hdb], labels_hdb[mask_hdb]))
+    else:
+        sil_hdb = 0.0
+
+    lines = [
+        f"n={len(keep)} tickers  window={window}d",
+        "",
+        "--- Baseline (k-means) ---",
+        f"k={n_clusters_km}, Silhouette={sil_km:+.3f}",
+        "",
+        "--- SOTA (HDBSCAN + UMAP) ---",
+        f"k={n_clusters_hdb} (tanpa noise), Silhouette={sil_hdb:+.3f}",
+    ]
+    
+    metrics = {
+        "n_tickers": len(keep),
+        "window": window,
+        "kmeans": {
+            "n_clusters": n_clusters_km,
+            "silhouette": sil_km,
+        },
+        "hdbscan": {
+            "n_clusters": n_clusters_hdb,
+            "silhouette": sil_hdb,
+            "n_noise": int((~mask_hdb).sum()),
+        }
+    }
+    
+    csv = ["ticker,cluster_kmeans,cluster_hdbscan,umap1,umap2,sector"]
+    for i, t in enumerate(keep):
+        csv.append(
+            f"{t},{int(labels_km[i])},{int(labels_hdb[i])},"
+            f"{coords[i, 0]:.6f},{coords[i, 1]:.6f},{sectors.get(t, '')}"
+        )
+        
+    return DemoResult(
+        title="Cluster peers · HDBSCAN vs KMeans",
+        lines=lines,
+        metrics=metrics,
+        model="hdbscan_vs_kmeans",
+        summary_md=(
+            f"# Cluster peers (Compare)\n\nK-means Silhouette: {sil_km:.3f}. HDBSCAN Silhouette: {sil_hdb:.3f}.\n"
+        ),
+        scoreboard=True,
+        extra_files={"compare.csv": "\n".join(csv) + "\n"},
     )
 
 
