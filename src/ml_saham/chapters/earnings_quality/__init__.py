@@ -29,13 +29,12 @@ def explore_text(*, verbose: bool = False) -> str:
         f"topic={META.slug}  phase={META.phase}  data={META.required_data}",
         "",
         "Masalah",
-        "  Menilai kualitas laba menggunakan Sloan Accrual Ratio = (Net Income - Operating Cash Flow) / Total Assets.",
-        "  Di IDX, emiten dengan laba berbasis arus kas riil (low accruals) secara konsisten outperform emiten ber-akrual kertas tinggi.",
+        "  Menilai kualitas laba menggunakan akrual dan arus kas.",
+        "  Di IDX, laba berbasis arus kas riil lebih sustain daripada akrual.",
         "",
-        "Opsi pendekatan",
-        "  1) Sloan Accrual Ratio = (Net Income - OCF) / Total Assets",
-        "  2) Huber Robust Regression (tahan outlier laporan keuangan)",
-        "  3) Rank IC Sloan Accruals vs Forward Return 20 Hari",
+        "Opsi algoritma",
+        "  1) LightGBM classification pada accruals dan cash flow (SOTA / default)",
+        "  2) Simple accrual ratio rank (Baseline / compare)",
         "",
         "Caveat",
         "  • Laporan keuangan dipublikasikan kuartalan (butuh PIT lag handling)",
@@ -52,9 +51,9 @@ def explore_text(*, verbose: bool = False) -> str:
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
         import numpy as np
-        from sklearn.linear_model import HuberRegressor
+        from lightgbm import LGBMClassifier
     except ImportError as exc:
-        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
+        raise ChapterError("Butuh lightgbm: pip install -e .") from exc
 
     with connect(ctx.db_path) as conn:
         uni = ctx.universe or resolve_universe(conn, limit=50)
@@ -76,9 +75,8 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     for f in financials:
         by_t[f["ticker"]].append(f)
 
-    accrual_scores: dict[str, float] = {}
     details: dict[str, dict] = {}
-
+    
     for t, rows in by_t.items():
         if not rows or t not in fwd:
             continue
@@ -87,68 +85,163 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         net_inc = float(cur.get("net_income") or 0.0)
         ocf = float(cur.get("operating_cash_flow") or 0.0)
 
-        # Sloan Accrual Ratio: (Net Income - OCF) / Assets
-        accrual_ratio = (net_inc - ocf) / (assets or 1.0)
+        accruals = net_inc - ocf
+        accrual_ratio = accruals / (assets or 1.0)
+        ocf_ratio = ocf / (assets or 1.0)
         
-        # Lower accruals = higher earnings quality = higher score
-        quality_score = -accrual_ratio
-        accrual_scores[t] = quality_score
         details[t] = {
             "accrual_ratio": accrual_ratio,
-            "quality_score": quality_score,
+            "ocf_ratio": ocf_ratio,
             "net_income": net_inc,
             "ocf": ocf,
         }
 
-    tickers = sorted(accrual_scores.keys())
+    tickers = sorted(details.keys())
     if len(tickers) < 8:
         raise ChapterDataError(f"Panel financials terlalu kecil (n={len(tickers)}).")
 
-    scores = [accrual_scores[t] for t in tickers]
+    X = np.array([[details[t]["accrual_ratio"], details[t]["ocf_ratio"]] for t in tickers])
     rets = maybe_haircut([fwd[t] for t in tickers], with_costs=ctx.with_costs)
-    ic = rank_ic(scores, rets)
+    
+    # Classification: up (1) or down (0)
+    y = (np.array(rets) > 0).astype(int)
 
-    # Huber Robust Regression
-    X = np.array([[details[t]["accrual_ratio"]] for t in tickers])
-    y = np.array(rets)
-    huber = HuberRegressor(max_iter=200)
-    huber.fit(X, y)
-    coef = float(huber.coef_[0])
+    # Note: Using small number of samples in demo, LightGBM might need specific params
+    lgbm = LGBMClassifier(n_estimators=10, max_depth=3, random_state=42, verbose=-1, min_child_samples=2)
+    lgbm.fit(X, y)
+    
+    # Predict probability of being positive
+    probs = lgbm.predict_proba(X)[:, 1]
+    
+    ic = rank_ic(probs.tolist(), rets)
 
-    order = sorted(range(len(tickers)), key=lambda i: scores[i], reverse=True)
+    order = sorted(range(len(tickers)), key=lambda i: probs[i], reverse=True)
     top = [
-        {"ticker": tickers[i], "accrual_ratio": details[tickers[i]]["accrual_ratio"], "fwd": rets[i]}
+        {"ticker": tickers[i], "prob": probs[i], "fwd": rets[i]}
         for i in order[:10]
     ]
 
     lines = [
         f"as_of={as_of}  n_tickers={len(tickers)}  source=company_financials",
-        f"Sloan Accrual Quality Rank IC vs 5d fwd return: {ic:+.3f}",
-        f"Huber Robust Regression Sloan Slope Coef:        {coef:+.4f}",
+        f"LightGBM Classification Rank IC vs 5d fwd return: {ic:+.3f}",
         "",
-        "Top High Earnings Quality Names (Low Accruals, Cash-Backed):",
+        "Top SOTA Predictions (High Probability of positive return):",
     ]
 
     for t in top[:8]:
         lines.append(
-            f"  {t['ticker']:<6} AccrualRatio={t['accrual_ratio']:+6.2%}  fwd={t['fwd']:+.2%}"
+            f"  {t['ticker']:<6} Prob={t['prob']:+6.2%}  fwd={t['fwd']:+.2%}"
         )
 
     metrics = {
         "as_of": as_of,
         "n_tickers": len(tickers),
-        "rank_ic_sloan_accruals": ic,
-        "huber_sloan_coef": coef,
+        "rank_ic_lgbm": ic,
     }
     return DemoResult(
-        title="Earnings quality · Sloan accruals & Huber regression",
+        title="Earnings quality · LightGBM (SOTA)",
         lines=lines,
         metrics=metrics,
-        model="huber_sloan_accrual",
-        summary_md=f"# Earnings quality\n\nRank IC={ic:+.3f}. Huber Slope={coef:+.4f}.\n",
+        model="lightgbm_classification",
+        summary_md=f"# Earnings quality\n\nRank IC={ic:+.3f}.\n",
         scoreboard=True,
         scoreboard_kind="long_only",
         top_names=top,
+    )
+
+
+def run_compare(ctx: ChapterContext) -> DemoResult:
+    try:
+        import numpy as np
+        from lightgbm import LGBMClassifier
+    except ImportError as exc:
+        raise ChapterError("Butuh lightgbm: pip install -e .") from exc
+
+    with connect(ctx.db_path) as conn:
+        uni = ctx.universe or resolve_universe(conn, limit=50)
+        as_of = ctx.as_of or pick_as_of(conn, uni, min_forward=5)
+        if not as_of:
+            raise ChapterDataError("Tidak cukup history untuk as_of.")
+
+        financials = load_company_financials(conn, uni)
+        fwd = forward_returns_by_ticker(conn, uni, as_of=as_of, horizon=5)
+        bench = ihsg_forward_return(conn, as_of=as_of, horizon=5)
+
+    if not financials:
+        raise ChapterDataError(
+            "company_financials kosong.",
+            hint="ml-saham doctor",
+        )
+
+    by_t = defaultdict(list)
+    for f in financials:
+        by_t[f["ticker"]].append(f)
+
+    details: dict[str, dict] = {}
+    
+    for t, rows in by_t.items():
+        if not rows or t not in fwd:
+            continue
+        cur = rows[0]
+        assets = float(cur.get("total_assets") or 1.0)
+        net_inc = float(cur.get("net_income") or 0.0)
+        ocf = float(cur.get("operating_cash_flow") or 0.0)
+
+        accruals = net_inc - ocf
+        accrual_ratio = accruals / (assets or 1.0)
+        ocf_ratio = ocf / (assets or 1.0)
+        
+        details[t] = {
+            "accrual_ratio": accrual_ratio,
+            "ocf_ratio": ocf_ratio,
+        }
+
+    tickers = sorted(details.keys())
+    if len(tickers) < 8:
+        raise ChapterDataError(f"Panel financials terlalu kecil (n={len(tickers)}).")
+
+    X = np.array([[details[t]["accrual_ratio"], details[t]["ocf_ratio"]] for t in tickers])
+    rets = maybe_haircut([fwd[t] for t in tickers], with_costs=ctx.with_costs)
+    y = (np.array(rets) > 0).astype(int)
+
+    # Baseline: negative of simple accrual ratio
+    baseline_scores = [-details[t]["accrual_ratio"] for t in tickers]
+    baseline_ic = rank_ic(baseline_scores, rets)
+
+    # SOTA: LightGBM classification
+    lgbm = LGBMClassifier(n_estimators=10, max_depth=3, random_state=42, verbose=-1, min_child_samples=2)
+    lgbm.fit(X, y)
+    sota_scores = lgbm.predict_proba(X)[:, 1].tolist()
+    sota_ic = rank_ic(sota_scores, rets)
+
+    lines = [
+        f"as_of={as_of}  n_tickers={len(tickers)}",
+        "Perbandingan Model Earnings Quality:",
+        f"  SOTA (LightGBM):           IC = {sota_ic:+.3f}",
+        f"  Baseline (Accrual Ratio):  IC = {baseline_ic:+.3f}",
+        "",
+        "Kesimpulan:",
+    ]
+    
+    if sota_ic > baseline_ic:
+        lines.append("  Model SOTA (LightGBM) memberikan ranking yang lebih akurat.")
+    else:
+        lines.append("  Baseline (Accrual Ratio) menang pada batch ini.")
+
+    metrics = {
+        "as_of": as_of,
+        "n_tickers": len(tickers),
+        "rank_ic_sota": sota_ic,
+        "rank_ic_baseline": baseline_ic,
+    }
+
+    return DemoResult(
+        title="Earnings quality · SOTA vs Baseline",
+        lines=lines,
+        metrics=metrics,
+        model="compare_lightgbm_accrual",
+        summary_md=f"# Compare\n\nSOTA IC: {sota_ic:+.3f}, Baseline IC: {baseline_ic:+.3f}\n",
+        scoreboard=False,
     )
 
 
@@ -156,5 +249,5 @@ def deepdive_text() -> str:
     return deepdive_stub(
         topic=META.slug,
         related="company_financials di ai-saham",
-        bring_back="Sloan Accruals formula + Huber robust regression habit",
+        bring_back="Sloan Accruals formula + LightGBM architecture",
     )
