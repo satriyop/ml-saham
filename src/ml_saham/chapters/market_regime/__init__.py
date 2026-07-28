@@ -25,8 +25,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "",
         "Opsi pendekatan",
         "  1) Baca regime_observations dari ai-saham (jika ada)",
-        "  2) GMM unsupervised pada return+vol IHSG",
-        "  3) Bandingkan forward IHSG per rezim",
+        "  2) HMM (Hidden Markov Models) pada return+vol IHSG (SOTA/default)",
+        "  3) GMM (Gaussian Mixture Model) unsupervised (Baseline/compare)",
         "",
         "Caveat",
         "  • Label rezim unsupervised ≠ ground truth",
@@ -62,9 +62,9 @@ def _ihsg_features(conn) -> tuple[list[str], list[list[float]], list[float]]:
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
         import numpy as np
-        from sklearn.mixture import GaussianMixture
+        from hmmlearn.hmm import GaussianHMM
     except ImportError as exc:
-        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
+        raise ChapterError("Butuh hmmlearn & numpy: pip install hmmlearn numpy") from exc
 
     lines: list[str] = []
     metrics: dict = {}
@@ -92,15 +92,9 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         dates, feats, fwd5 = _ihsg_features(conn)
 
     X = np.array(feats)
-    gmm = GaussianMixture(n_components=3, random_state=42, n_init=5)
-    raw_labels = gmm.fit_predict(X)
-
-    # Estimate HMM Transition Matrix P(S_t | S_{t-1})
-    trans = np.zeros((3, 3))
-    for i in range(1, len(raw_labels)):
-        trans[raw_labels[i - 1], raw_labels[i]] += 1.0
-    row_sums = trans.sum(axis=1, keepdims=True)
-    trans_matrix = np.divide(trans, row_sums, out=np.zeros_like(trans), where=row_sums != 0)
+    hmm = GaussianHMM(n_components=3, random_state=42, n_iter=100)
+    hmm.fit(X)
+    raw_labels = hmm.predict(X)
 
     # Sort clusters by mean ret20 to give consistent semantic labels:
     # 0 = Bearish, 1 = Neutral/Sideways, 2 = Bullish
@@ -113,11 +107,11 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     labels = [label_map[l] for l in raw_labels]
     state_names = {0: "Bearish", 1: "Neutral", 2: "Bullish"}
 
-    gmm_counts = Counter(labels)
+    hmm_counts = Counter(labels)
 
     lines.append("")
     lines.append("Gaussian HMM on IHSG (return20 + vol20):")
-    for k in sorted(gmm_counts):
+    for k in sorted(hmm_counts):
         idx = [i for i, l in enumerate(labels) if l == k]
         avg_fwd = sum(fwd5[i] for i in idx) / len(idx)
         avg_ret = sum(feats[i][0] for i in idx) / len(idx)
@@ -129,13 +123,13 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         )
 
     last_label = labels[-1]
-    raw_probs = gmm.predict_proba(X[-1:])[0]
+    raw_probs = hmm.predict_proba(X[-1:])[0]
     sorted_probs = [float(raw_probs[old_k]) for old_k in sorted_clusters]
     prob_str = ", ".join(f"{state_names[i]}:{p:.1%}" for i, p in enumerate(sorted_probs))
 
     lines.append("")
     lines.append(
-        f"Latest GMM state={last_label} ({state_names[last_label]})  date={dates[-1]}  "
+        f"Latest HMM state={last_label} ({state_names[last_label]})  date={dates[-1]}  "
         f"fwd5d={fwd5[-1]:+.2%}"
     )
     lines.append(f"Latest regime probabilities: {prob_str}")
@@ -143,8 +137,8 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     metrics.update(
         {
-            "gmm_n": len(labels),
-            "gmm_clusters": dict(gmm_counts),
+            "hmm_n": len(labels),
+            "hmm_clusters": dict(hmm_counts),
             "latest_cluster": last_label,
             "latest_state_name": state_names[last_label],
             "latest_date": dates[-1],
@@ -159,6 +153,76 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         summary_md=f"# Market regime\n\nLatest state={state_names[last_label]} ({sorted_probs[last_label]:.1%}).\n",
         scoreboard=True,
         scoreboard_kind="long_only",
+    )
+
+
+def run_compare(ctx: ChapterContext) -> DemoResult:
+    try:
+        import numpy as np
+        from hmmlearn.hmm import GaussianHMM
+        from sklearn.mixture import GaussianMixture
+    except ImportError as exc:
+        raise ChapterError("Butuh hmmlearn, scikit-learn & numpy") from exc
+
+    lines: list[str] = []
+    metrics: dict = {}
+
+    with connect(ctx.db_path) as conn:
+        dates, feats, fwd5 = _ihsg_features(conn)
+
+    X = np.array(feats)
+    
+    # Train SOTA (HMM)
+    hmm = GaussianHMM(n_components=3, random_state=42, n_iter=100)
+    hmm.fit(X)
+    hmm_raw = hmm.predict(X)
+    
+    # Train Baseline (GMM)
+    gmm = GaussianMixture(n_components=3, random_state=42, n_init=5)
+    gmm_raw = gmm.fit_predict(X)
+    
+    def map_labels(raw_labels):
+        c_means = {}
+        for k in range(3):
+            idx = [i for i, l in enumerate(raw_labels) if l == k]
+            c_means[k] = np.mean([feats[i][0] for i in idx]) if idx else 0.0
+        s_clusters = sorted(c_means, key=lambda k: c_means[k])
+        l_map = {old_k: new_k for new_k, old_k in enumerate(s_clusters)}
+        return [l_map[l] for l in raw_labels]
+        
+    hmm_labels = map_labels(hmm_raw)
+    gmm_labels = map_labels(gmm_raw)
+    
+    state_names = {0: "Bearish", 1: "Neutral", 2: "Bullish"}
+    
+    lines.append("Perbandingan Market Regime: HMM (SOTA) vs GMM (Baseline)")
+    lines.append("")
+    
+    for name, labels in [("HMM", hmm_labels), ("GMM", gmm_labels)]:
+        lines.append(f"Model: {name}")
+        counts = Counter(labels)
+        for k in sorted(counts):
+            idx = [i for i, l in enumerate(labels) if l == k]
+            avg_fwd = sum(fwd5[i] for i in idx) / len(idx)
+            avg_ret = sum(feats[i][0] for i in idx) / len(idx)
+            avg_vol = sum(feats[i][1] for i in idx) / len(idx)
+            lines.append(
+                f"  state={k} ({state_names[k]:<7})  n={len(idx)}  "
+                f"mean_ret20={avg_ret:+.2%}  vol={avg_vol:.4f}  "
+                f"fwd_5d={avg_fwd:+.2%}"
+            )
+        lines.append("")
+        
+    metrics["hmm_counts"] = dict(Counter(hmm_labels))
+    metrics["gmm_counts"] = dict(Counter(gmm_labels))
+
+    return DemoResult(
+        title="Market regime · HMM vs GMM",
+        lines=lines,
+        metrics=metrics,
+        model="hmm_vs_gmm",
+        summary_md="# Market regime Comparison\n\nComparing HMM vs GMM.",
+        scoreboard=False,
     )
 
 
