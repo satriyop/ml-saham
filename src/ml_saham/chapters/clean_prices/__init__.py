@@ -58,6 +58,24 @@ def _iqr_bounds(xs: list[float], k: float = 1.5) -> tuple[float, float]:
     return q1 - k * iqr, q3 + k * iqr
 
 
+def _cusum_change_points(rets: list[float], threshold: float = 4.0) -> set[int]:
+    """Detect structural shift points using CUSUM drift detection."""
+    if len(rets) < 10:
+        return set()
+    mean = sum(rets) / len(rets)
+    std = math.sqrt(sum((r - mean) ** 2 for r in rets) / len(rets)) or 1e-8
+    s_pos, s_neg = 0.0, 0.0
+    cp_indices = set()
+    for i, r in enumerate(rets):
+        z = (r - mean) / std
+        s_pos = max(0.0, s_pos + z - 0.5)
+        s_neg = min(0.0, s_neg + z + 0.5)
+        if s_pos > threshold or s_neg < -threshold:
+            cp_indices.add(i)
+            s_pos, s_neg = 0.0, 0.0
+    return cp_indices
+
+
 def run_demo(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
         uni = ctx.universe or resolve_universe(conn, limit=25)
@@ -70,6 +88,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         by_t[row["ticker"]].append(row)
 
     flagged: list[dict] = []
+    cusum_count = 0
     for t, rows in by_t.items():
         rows = sorted(rows, key=lambda r: r["date"])
         rets: list[float] = []
@@ -87,13 +106,17 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         var = sum((r - mean) ** 2 for r in rets) / len(rets)
         std = math.sqrt(var) if var > 0 else 0.0
         lo, hi = _iqr_bounds(rets)
-        for d, r in zip(dates_r, rets, strict=True):
+        cp_set = _cusum_change_points(rets)
+        cusum_count += len(cp_set)
+        for idx, (d, r) in enumerate(zip(dates_r, rets, strict=True)):
             z = (r - mean) / std if std > 0 else 0.0
             reasons = []
             if abs(z) >= 4.0:
                 reasons.append(f"z={z:.1f}")
             if r < lo or r > hi:
                 reasons.append("IQR")
+            if idx in cp_set:
+                reasons.append("CUSUM")
             if reasons:
                 flagged.append(
                     {
@@ -146,8 +169,8 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     top = flagged[:25]
     lines = [
         f"Universe sample: {len(by_t)} tickers",
-        f"Flagged bars: {len(flagged)} (menampilkan {len(top)})",
-        f"Methods: z-score|IQR + {if_method}",
+        f"Flagged bars: {len(flagged)} (menampilkan {len(top)})  CUSUM shifts: {cusum_count}",
+        f"Methods: z-score|IQR|CUSUM + {if_method}",
         "",
     ]
     for f in top[:15]:

@@ -123,6 +123,8 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         y_ret = rets
         med = sorted(y_ret)[len(y_ret) // 2]
         y = np.array([1 if r >= med else 0 for r in y_ret])
+        feat_names = ["net_shares", "buys", "sells", "total_events"]
+        coef_dict = {}
         if len(set(y.tolist())) >= 2:
             clf = LogisticRegression(max_iter=500)
             clf.fit(X, y)
@@ -130,6 +132,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             ic_model = rank_ic(proba, rets)
             model_name = "logistic"
             scores_model = proba
+            coef_dict = dict(zip(feat_names, clf.coef_[0].tolist(), strict=True))
         else:
             scores_model = scores
     except ImportError as exc:
@@ -153,9 +156,15 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         f"absurd_scrubbed≈{stats['absurd']}",
         f"Rule net-shares rank IC: {ic_rule:+.3f}",
         f"Model ({model_name}) rank IC: {ic_model:+.3f}  (in-sample)",
+    ]
+    if coef_dict:
+        coef_str = ", ".join(f"{k}:{v:+.3f}" for k, v in coef_dict.items())
+        lines.append(f"Model feature weights:   {coef_str}")
+
+    lines.extend([
         "",
         "Top scored names:",
-    ]
+    ])
     for t in top[:8]:
         lines.append(
             f"  {t['ticker']:<6} score={t['score']:.3f}  net={t['net_shares']:.3g}  "
@@ -167,6 +176,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "n": len(tickers),
         "rank_ic_rule": ic_rule,
         "rank_ic_model": ic_model,
+        "feature_coefs": coef_dict,
         "insider_stats": stats,
         "n_tickers": len(tickers),
     }

@@ -91,7 +91,7 @@ def _hand_score(row: dict) -> float:
     return (-row["pe"]) + 10.0 * row["roe"]
 
 
-def _learned_scores(rows: list[dict]) -> tuple[list[float], str]:
+def _learned_scores(rows: list[dict]) -> tuple[list[float], str, dict[str, float]]:
     try:
         import numpy as np
         from sklearn.linear_model import LogisticRegression
@@ -116,20 +116,22 @@ def _learned_scores(rows: list[dict]) -> tuple[list[float], str]:
     med = sorted(y_ret)[len(y_ret) // 2]
     y = np.array([1 if r >= med else 0 for r in y_ret])
     if len(set(y.tolist())) < 2:
-        # fallback: tree on regression ranks via PE/ROE only
         scores = [float(-r["pe"] + 5 * r["roe"]) for r in rows]
-        return scores, "hand-fallback"
+        return scores, "hand-fallback", {"pe_z": 0.5, "roe_z": 0.5}
 
     tree = DecisionTreeClassifier(max_depth=3, random_state=42)
     tree.fit(X, y)
-    # probability of positive class as score
     if hasattr(tree, "predict_proba"):
         scores = tree.predict_proba(X)[:, 1].tolist()
     else:
         scores = tree.predict(X).astype(float).tolist()
-    # also fit logistic for compare path
     _ = LogisticRegression(max_iter=200)
-    return scores, "decision_tree"
+
+    importances = {
+        "pe_z": float(tree.feature_importances_[0]),
+        "roe_z": float(tree.feature_importances_[1]),
+    }
+    return scores, "decision_tree", importances
 
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
@@ -139,7 +141,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             f"Panel terlalu kecil (n={len(rows)}). Cek fundamentals + candles."
         )
     hand = [_hand_score(r) for r in rows]
-    learned, model = _learned_scores(rows)
+    learned, model, importances = _learned_scores(rows)
     rets = maybe_haircut([r["fwd"] for r in rows], with_costs=ctx.with_costs)
     ic_hand = rank_ic(hand, rets)
     ic_learned = rank_ic(learned, rets)
@@ -162,10 +164,13 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     model_hits = {t["ticker"] for t in top}
     overlap = sorted(hand_hits & model_hits)
 
+    imp_str = f"PE_z:{importances.get('pe_z', 0.0):.1%}  ROE_z:{importances.get('roe_z', 0.0):.1%}"
+
     lines = [
         f"as_of={as_of}  n={len(rows)}  horizon=5d",
         f"Hand rank IC:    {ic_hand:+.3f}",
         f"Tree rank IC:    {ic_learned:+.3f}  ({model})",
+        f"Tree feature importance: {imp_str}",
         f"Top-10 overlap hand∩tree: {len(overlap)}  {', '.join(overlap) or '—'}",
         "Catatan: IC tree di sini in-sample — Ch.12 untuk walk-forward jujur.",
         "",
@@ -209,7 +214,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareResult:
     as_of, rows = _panel(ctx)
     hand = [_hand_score(r) for r in rows]
-    learned, model = _learned_scores(rows)
+    learned, model, _ = _learned_scores(rows)
     rets = maybe_haircut([r["fwd"] for r in rows], with_costs=ctx.with_costs)
     base_scores = hand if baseline.startswith("hand") else learned
     ag_scores = learned if "tree" in against or against == "logistic" else hand

@@ -50,14 +50,29 @@ def _realized_vol(closes: list[float], window: int = 20) -> list[float | None]:
     return out
 
 
-def _build_series(conn, ticker: str) -> tuple[list[str], list[float], list[float | None]]:
+def _ewma_vol(closes: list[float], lambda_param: float = 0.94) -> list[float | None]:
+    """Compute Exponentially Weighted Moving Average (EWMA) volatility (RiskMetrics style)."""
+    rets = [0.0] + [math.log(closes[i] / closes[i - 1]) for i in range(1, len(closes))]
+    out: list[float | None] = [None] * len(closes)
+    if len(closes) < 5:
+        return out
+    variance = rets[1] ** 2
+    out[1] = math.sqrt(variance)
+    for i in range(2, len(closes)):
+        variance = lambda_param * variance + (1.0 - lambda_param) * (rets[i] ** 2)
+        out[i] = math.sqrt(variance)
+    return out
+
+
+def _build_series(conn, ticker: str) -> tuple[list[str], list[float], list[float | None], list[float | None]]:
     rows = sorted(load_candles(conn, [ticker]), key=lambda r: r["date"])
     if len(rows) < 60:
         raise ChapterDataError(f"History {ticker} terlalu pendek (n={len(rows)}).")
     dates = [r["date"] for r in rows]
     closes = [float(r["close"]) for r in rows]
     vols = _realized_vol(closes, window=20)
-    return dates, closes, vols
+    ewma_vols = _ewma_vol(closes, lambda_param=0.94)
+    return dates, closes, vols, ewma_vols
 
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
@@ -75,7 +90,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             ihsg_rows = load_candles(conn, ["IHSG"])
             if ihsg_rows:
                 ticker = "IHSG"
-        dates, closes, vols = _build_series(conn, ticker)
+        dates, closes, vols, ewma_vols = _build_series(conn, ticker)
 
     X, y, vol_lag = [], [], []
     for i in range(21, len(closes) - 1):
@@ -100,7 +115,9 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     mae_naive = float(mean_absolute_error(yte, naive_te))
 
     last_vol = float(vols[-2] or 1e-6)
+    last_ewma = float(ewma_vols[-2] or 1e-6)
     raw_w = 1.0 / max(last_vol, 1e-6)
+    ewma_w = 1.0 / max(last_ewma, 1e-6)
     cap_w = min(raw_w, 0.25)  # demo cap 25%
 
     lines = [
@@ -109,8 +126,8 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         f"MAE |return| besok — naive lag-vol: {mae_naive:.5f}",
         "",
         "Contoh sizing (target risk kasar, bukan live):",
-        f"  realized_vol_20d={last_vol:.4f}",
-        f"  weight_raw=1/vol={raw_w:.2f}  capped={cap_w:.2f}",
+        f"  realized_vol_20d={last_vol:.4f}  (1/vol weight={raw_w:.2f}, capped={cap_w:.2f})",
+        f"  EWMA_vol(λ=0.94)={last_ewma:.4f}  (1/EWMA weight={ewma_w:.2f})",
         "",
         "Catatan: vol-scaling mengurangi exposure saat vol tinggi —",
         "bukan jaminan Sharpe lebih baik tanpa backtest penuh.",
@@ -122,7 +139,9 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "mae_rf": mae_rf,
         "mae_naive": mae_naive,
         "realized_vol": last_vol,
+        "ewma_vol": last_ewma,
         "weight_raw": raw_w,
+        "weight_ewma": ewma_w,
         "weight_capped": cap_w,
     }
     return DemoResult(

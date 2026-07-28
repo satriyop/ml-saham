@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import resolve_universe
@@ -94,15 +96,20 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     majority = float(max(yte.mean(), 1 - yte.mean()))
     coin = 0.5
 
+    # Binomial Z-test for proportion vs coin-flip baseline (0.5)
+    n_te = len(yte)
+    z_stat = (acc - 0.5) / (math.sqrt(0.25 / n_te) or 1e-8)
+    p_value = 2.0 * (1.0 - 0.5 * (1.0 + math.erf(abs(z_stat) / math.sqrt(2.0))))
+
     lines = [
-        f"Samples: {len(X_list)}  train={len(Xtr)} test={len(Xte)}",
+        f"Samples: {len(X_list)}  train={len(Xtr)} test={n_te}",
         f"Tree accuracy (shuffled split): {acc:.3f}",
         f"Majority-class baseline:         {majority:.3f}",
-        f"Coin-flip baseline:              {coin:.3f}",
+        f"Coin-flip baseline:              {coin:.3f}  (z={z_stat:+.2f}, p-val={p_value:.4f})",
         "",
         "Kesimpulan (baca ini):",
         "  Pertanyaan 'naik/turun besok dari pola harga singkat' mudah overfit",
-        "  dan sering TIDAK lebih baik dari baseline bodoh secara bermakna.",
+        "  dan secara statistik TIDAK signifikan lebih baik dari coin-flip.",
         "  Ini failure lab — bukan edge ketemu.",
         "",
         "Lanjut framing yang lebih sehat:",
@@ -112,9 +119,13 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     ]
     metrics = {
         "n": len(X_list),
+        "n_test": n_te,
         "accuracy_tree": acc,
         "accuracy_majority": majority,
         "accuracy_coinflip": coin,
+        "z_stat_vs_coinflip": z_stat,
+        "p_value_vs_coinflip": p_value,
+        "is_statistically_significant": bool(p_value < 0.05),
         "conclusion": "wrong_question_easy_overfit",
         "n_tickers": len(by_t),
     }
