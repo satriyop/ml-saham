@@ -8,7 +8,7 @@ from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import resolve_universe
 from ml_saham.chapters.registry import get as get_meta
-from ml_saham.chapters.types import ChapterContext, DemoResult
+from ml_saham.chapters.types import ChapterContext, DemoResult, CompareResult
 from ml_saham.data.aisaham_read import connect, load_candles
 
 META = get_meta("pattern-fail")
@@ -24,8 +24,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  tapi sering jadi lab kegagalan: mudah overfit, pertanyaan salah.",
         "",
         "Opsi pendekatan (failure lab)",
-        "  1) Fitur return 1–5 hari + volume → tree / k-NN",
-        "  2) Bandingkan akurasi ke coin-flip / majority class",
+        "  1) Fitur return 1–5 hari + volume → LightGBM (SOTA)",
+        "  2) Bandingkan akurasi ke 50% coin-flip baseline (compare)",
         "  3) Sadari framing lebih baik ada di chapter berikutnya",
         "",
         "Caveat",
@@ -34,6 +34,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Bukan saran trading / investasi",
         "",
         f"Lanjut:  ml-saham demo {META.slug}",
+        f"Compare: ml-saham compare {META.slug} --baseline coinflip --against lgbm",
     ]
     if verbose:
         lines.extend(
@@ -48,16 +49,7 @@ def explore_text(*, verbose: bool = False) -> str:
     return "\n".join(lines)
 
 
-def run_demo(ctx: ChapterContext) -> DemoResult:
-    try:
-        import numpy as np
-        from sklearn.model_selection import train_test_split
-        from sklearn.tree import DecisionTreeClassifier
-    except ImportError as exc:
-        raise ChapterError(
-            "Butuh scikit-learn: pip install -e ."
-        ) from exc
-
+def _prepare_data(ctx: ChapterContext) -> tuple[list[list[float]], list[int], int]:
     with connect(ctx.db_path) as conn:
         uni = ctx.universe or resolve_universe(conn, limit=15)
         candles = load_candles(conn, uni)
@@ -83,6 +75,21 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     if len(X_list) < 100:
         raise ChapterDataError(f"Sample terlalu kecil (n={len(X_list)}).")
+    
+    return X_list, y_list, len(by_t)
+
+
+def run_demo(ctx: ChapterContext) -> DemoResult:
+    try:
+        import numpy as np
+        from sklearn.model_selection import train_test_split
+        import lightgbm as lgb
+    except ImportError as exc:
+        raise ChapterError(
+            "Butuh scikit-learn dan lightgbm: pip install -e ."
+        ) from exc
+
+    X_list, y_list, n_tickers = _prepare_data(ctx)
 
     X = np.array(X_list)
     y = np.array(y_list)
@@ -90,7 +97,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         X, y, test_size=0.3, random_state=42, shuffle=True
     )
     # NOTE: shuffle on time series is part of the failure lesson (leakage-ish)
-    clf = DecisionTreeClassifier(max_depth=4, random_state=42)
+    clf = lgb.LGBMClassifier(n_estimators=50, max_depth=3, random_state=42, verbose=-1)
     clf.fit(Xtr, ytr)
     acc = float((clf.predict(Xte) == yte).mean())
     majority = float(max(yte.mean(), 1 - yte.mean()))
@@ -103,7 +110,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     lines = [
         f"Samples: {len(X_list)}  train={len(Xtr)} test={n_te}",
-        f"Tree accuracy (shuffled split): {acc:.3f}",
+        f"LightGBM accuracy (shuffled split): {acc:.3f}",
         f"Majority-class baseline:         {majority:.3f}",
         f"Coin-flip baseline:              {coin:.3f}  (z={z_stat:+.2f}, p-val={p_value:.4f})",
         "",
@@ -120,20 +127,20 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     metrics = {
         "n": len(X_list),
         "n_test": n_te,
-        "accuracy_tree": acc,
+        "accuracy_lgbm": acc,
         "accuracy_majority": majority,
         "accuracy_coinflip": coin,
         "z_stat_vs_coinflip": z_stat,
         "p_value_vs_coinflip": p_value,
         "is_statistically_significant": bool(p_value < 0.05),
         "conclusion": "wrong_question_easy_overfit",
-        "n_tickers": len(by_t),
+        "n_tickers": n_tickers,
     }
     return DemoResult(
         title="Pattern fail · failure lab",
         lines=lines,
         metrics=metrics,
-        model="decision_tree_nextday",
+        model="lightgbm_nextday",
         summary_md=(
             "# Pattern failure lab\n\n"
             "Next-day up/down dari pola harga singkat vs coin-flip/majority.\n"
@@ -141,6 +148,88 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             "Lanjut: factor-score, broker-flow, walk-forward.\n"
         ),
         scoreboard=False,  # accuracy lab, not IHSG scoreboard
+    )
+
+
+def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareResult:
+    try:
+        import numpy as np
+        from sklearn.model_selection import train_test_split
+        import lightgbm as lgb
+        from sklearn.tree import DecisionTreeClassifier
+    except ImportError as exc:
+        raise ChapterError(
+            "Butuh scikit-learn dan lightgbm: pip install -e ."
+        ) from exc
+
+    X_list, y_list, n_tickers = _prepare_data(ctx)
+    X = np.array(X_list)
+    y = np.array(y_list)
+    Xtr, Xte, ytr, yte = train_test_split(
+        X, y, test_size=0.3, random_state=42, shuffle=True
+    )
+    
+    def get_acc(model_name: str) -> float:
+        if model_name == "coinflip":
+            return 0.5
+        elif model_name == "lgbm":
+            clf = lgb.LGBMClassifier(n_estimators=50, max_depth=3, random_state=42, verbose=-1)
+            clf.fit(Xtr, ytr)
+            return float((clf.predict(Xte) == yte).mean())
+        elif model_name == "tree":
+            clf = DecisionTreeClassifier(max_depth=4, random_state=42)
+            clf.fit(Xtr, ytr)
+            return float((clf.predict(Xte) == yte).mean())
+        elif model_name == "majority":
+            return float(max(yte.mean(), 1 - yte.mean()))
+        else:
+            raise ValueError(f"Unknown model: {model_name}")
+
+    acc_b = get_acc(baseline)
+    acc_a = get_acc(against)
+    
+    n_te = len(yte)
+    # Variance of proportion P is P*(1-P)/n_te. 
+    # Usually for coinflip variance is 0.25/n_te. 
+    # For a general model comparison we should technically do McNemar's, 
+    # but to follow the failure lab's existing logic we can just compute a Z-stat vs the baseline as a fixed proportion.
+    var_b = acc_b * (1.0 - acc_b)
+    if baseline == "coinflip":
+        var_b = 0.25
+    elif var_b == 0:
+        var_b = 1e-8
+        
+    z_stat = (acc_a - acc_b) / (math.sqrt(var_b / n_te) or 1e-8)
+    p_value = 2.0 * (1.0 - 0.5 * (1.0 + math.erf(abs(z_stat) / math.sqrt(2.0))))
+
+    lines = [
+        f"Samples: {len(X_list)}  train={len(Xtr)} test={n_te}",
+        f"{baseline} accuracy: {acc_b:.3f}",
+        f"{against} accuracy: {acc_a:.3f}",
+        f"Z-stat ({against} vs {baseline}): {z_stat:+.2f}  (p-val={p_value:.4f})",
+        "",
+        "Kesimpulan (baca ini):",
+        f"  Perbedaan antara {against} dan {baseline} {'TIDAK ' if p_value >= 0.05 else ''}signifikan.",
+        "  Ini menegaskan bahwa pola sederhana tidak cukup untuk memprediksi besok.",
+    ]
+    
+    compare = {
+        "baseline": {"id": baseline, "accuracy": acc_b},
+        "against": {"id": against, "accuracy": acc_a},
+        "n_test": n_te,
+        "z_stat": z_stat,
+        "p_value": p_value,
+    }
+    return CompareResult(
+        title=f"Compare · {baseline} vs {against}",
+        lines=lines,
+        metrics={"acc_baseline": acc_b, "acc_against": acc_a, "n_test": n_te},
+        compare=compare,
+        model=f"{baseline}_vs_{against}",
+        summary_md=(
+            f"# Compare pattern_fail\n\n`{baseline}` vs `{against}`.\n"
+        ),
+        scoreboard=False,
     )
 
 
