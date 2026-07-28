@@ -116,3 +116,26 @@ def test_chapters_lists_phase2(fixture_db: Path):
     assert r.exit_code == 0
     assert "walk-forward" in r.stdout
     assert "pre-open-rank" in r.stdout
+
+
+def test_export_json_and_md(fixture_db: Path, tmp_path: Path):
+    json_path = tmp_path / "out.json"
+    md_path = tmp_path / "out.md"
+    r = runner.invoke(
+        app,
+        [
+            "--db",
+            str(fixture_db),
+            "demo",
+            "clean-prices",
+            "--export-json",
+            str(json_path),
+            "--export-md",
+            str(md_path),
+        ],
+    )
+    assert r.exit_code == 0, r.stdout
+    assert json_path.is_file()
+    assert md_path.is_file()
+    assert "clean-prices" in json_path.read_text()
+    assert "CUSUM" in md_path.read_text()

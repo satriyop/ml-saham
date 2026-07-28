@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -236,6 +237,16 @@ def demo_cmd(
         "--as-of",
         help="Tanggal as_of (YYYY-MM-DD); default dipilih otomatis",
     ),
+    export_json: Optional[Path] = typer.Option(
+        None,
+        "--export-json",
+        help="Tulis hasil demo ke file JSON",
+    ),
+    export_md: Optional[Path] = typer.Option(
+        None,
+        "--export-md",
+        help="Tulis hasil demo ke file Markdown factor card",
+    ),
 ) -> None:
     """Jalankan demo pada data real."""
     try:
@@ -312,6 +323,42 @@ def demo_cmd(
         console.print(f"\nArtifact:  {pack.path}")
 
     mark(topic, "demo")
+
+    if export_json:
+        export_data = {
+            "slug": ch.slug,
+            "chapter": ch.number,
+            "title": result.title,
+            "model": result.model,
+            "metrics": result.metrics,
+            "scoreboard": result.scoreboard,
+            "scoreboard_kind": getattr(result, "scoreboard_kind", "long_only"),
+            "top_names": getattr(result, "top_names", []),
+        }
+        export_json.parent.mkdir(parents=True, exist_ok=True)
+        export_json.write_text(json.dumps(export_data, indent=2, ensure_ascii=False), encoding="utf-8")
+        console.print(f"[green]Saved JSON export to {export_json}[/green]")
+
+    if export_md:
+        md_lines = [
+            f"# {result.title} (Ch.{ch.number} {ch.slug})",
+            "",
+            f"**Model**: `{result.model}`",
+            f"**Database**: `{chapter_ctx.db_path}`",
+            "",
+            "## Metrics",
+            "```json",
+            json.dumps(result.metrics, indent=2, ensure_ascii=False),
+            "```",
+            "",
+            "## Summary",
+            result.summary_md or "",
+        ]
+        if getattr(result, "top_names", None):
+            md_lines.extend(["", "## Top Picks", "```json", json.dumps(result.top_names, indent=2), "```"])
+        export_md.parent.mkdir(parents=True, exist_ok=True)
+        export_md.write_text("\n".join(md_lines), encoding="utf-8")
+        console.print(f"[green]Saved Markdown export to {export_md}[/green]")
 
 
 @app.command("compare")
