@@ -16,6 +16,7 @@ ENGINE_FACTORS = {
         "broker-flow",
         "accum-policy",
         "accum-macro",
+        "accum-deep",
         "pre-open-heuristic",
     ],
     "signal_engine": [
@@ -98,6 +99,8 @@ def challenge_screener(chapter_ctx: ChapterContext, scenario: str | None = None)
     elif scenario == "accum":
         if chapter_ctx.eval_type == "macro":
             factors = ["accum-macro"]
+        elif chapter_ctx.eval_type == "deep":
+            factors = ["accum-deep"]
         else:
             factors = ["accum-policy"]
     return _run_factor_challenge(chapter_ctx, factors)

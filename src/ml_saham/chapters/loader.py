@@ -41,6 +41,8 @@ _SLUG_TO_MOD = {
     "microstructure-impact": "ml_saham.chapters.microstructure_impact",
     "meta-ensemble": "ml_saham.chapters.meta_ensemble",
     "accum-policy": "ml_saham.chapters.accum_policy",
+    "accum-macro": "ml_saham.chapters.accum_macro",
+    "accum-deep": "ml_saham.chapters.accum_deep",
     "pre-open-heuristic": "ml_saham.chapters.pre_open_heuristic",
 }
 
