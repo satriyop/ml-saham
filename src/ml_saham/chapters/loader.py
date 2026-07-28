@@ -34,6 +34,8 @@ _SLUG_TO_MOD = {
     "financial-quality": "ml_saham.chapters.financial_quality",
     "financial-distress": "ml_saham.chapters.financial_distress",
     "ichimoku-cloud": "ml_saham.chapters.ichimoku_cloud",
+    "bandar-detector": "ml_saham.chapters.bandar_detector",
+    "forward-valuation": "ml_saham.chapters.forward_valuation",
 }
 
 

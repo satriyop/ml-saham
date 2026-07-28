@@ -258,6 +258,15 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                 total_liabilities REAL, stockholders_equity REAL, cash_and_equivalents REAL,
                 total_debt REAL, operating_cash_flow REAL, free_cash_flow REAL, fetched_at TEXT
             );
+            CREATE TABLE bandar_detector (
+                ticker TEXT, session_date TEXT, broker_accdist TEXT, today_accdist TEXT,
+                five_day_accdist TEXT, top1_accdist TEXT, top1_percent REAL, today_percent REAL,
+                total_buyer INT, total_seller INT, top3_accdist TEXT, top5_accdist TEXT,
+                top10_accdist TEXT, number_broker_buysell INT, vwap REAL, total_value REAL, total_volume INT
+            );
+            CREATE TABLE forward_estimates_cache (
+                ticker TEXT, fetched_date TEXT, forward_eps_1y REAL, revenue_forward_1y REAL, current_price REAL, forward_pe REAL
+            );
             """
         )
         as_of_fix = (start + timedelta(days=min_bars - 8)).isoformat()
@@ -266,6 +275,14 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
             conn.execute(
                 "INSERT INTO company_financials VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (t, "annual", "2023-12-31", "FY", 1e12 * (si + 1), 1e11 * (si + 1), 1.2e11 * (si + 1), 2e12 * (si + 1), 1e12 * (si + 1), 1e12 * (si + 1), 2e11 * (si + 1), 5e11 * (si + 1), 1.5e11 * (si + 1), 1e11 * (si + 1), "2024-06-01"),
+            )
+            conn.execute(
+                "INSERT INTO bandar_detector VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (t, iev_date, "BIG ACC", "ACC", "BIG ACC", "ACC", 30.0 + si, 20.0, 50, 40, "BIG ACC", "ACC", "ACC", 90, 100.0, 1e9, 1e6),
+            )
+            conn.execute(
+                "INSERT INTO forward_estimates_cache VALUES (?,?,?,?,?,?)",
+                (t, "2024-06-01", 15.0 + si, 1e12, 100.0 + si * 5, 8.0 + si * 0.5),
             )
         for si, t in enumerate(_STOCKS):
             conn.execute(

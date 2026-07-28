@@ -45,6 +45,8 @@ CHAPTERS: tuple[ChapterMeta, ...] = (
     ChapterMeta(25, "financial-quality", "Skor kualitas akuntansi Piotroski F-Score", "Hard", "phase2", "phase2"),
     ChapterMeta(26, "financial-distress", "Model kebangkrutan Altman Z-Score", "Hard", "phase2", "phase2"),
     ChapterMeta(27, "ichimoku-cloud", "Klasifikasi breakout awan Kumo Ichimoku", "Hard", "phase2", "mvp"),
+    ChapterMeta(28, "bandar-detector", "Klasifikasi sinyal akumulasi broker bandar", "Hard", "phase2", "phase2"),
+    ChapterMeta(29, "forward-valuation", "Valuasi konsensus Forward P/E & rasio PEG", "Hard", "phase2", "phase2"),
 )
 
 _BY_SLUG = {c.slug: c for c in CHAPTERS}

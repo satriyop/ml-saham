@@ -100,6 +100,8 @@ Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir`.
   - **Ch.25 financial-quality**: Matriks 9 Sinyal Akuntansi Piotroski F-Score & Regresi Logistik Kualitas Laporan Keuangan.
   - **Ch.26 financial-distress**: Emerging Market Altman Z'-Score Bankruptcy Model & Isolation Forest Anomaly Filter.
   - **Ch.27 ichimoku-cloud**: RandomForest Kumo Cloud Breakout Classifier pada Tenkan/Kijun/Span A/B.
+  - **Ch.28 bandar-detector**: RandomForest Multi-Window Bandar Accumulation/Distribution Classifier.
+  - **Ch.29 forward-valuation**: Regresi Ridge Konsensus Forward P/E & Model Rasio PEG Growth.
 
 ## Catatan
 

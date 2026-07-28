@@ -309,3 +309,51 @@ def load_company_financials(
     return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
 
+def load_bandar_detector(
+    conn: sqlite3.Connection,
+    tickers: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    if not table_exists(conn, "bandar_detector"):
+        return []
+    cols = table_columns(conn, "bandar_detector")
+    if "ticker" not in cols:
+        return []
+    select = [
+        c for c in (
+            "ticker", "session_date", "broker_accdist", "today_accdist", "five_day_accdist",
+            "top1_accdist", "top1_percent", "today_percent", "total_buyer", "total_seller",
+            "top3_accdist", "top5_accdist", "top10_accdist", "number_broker_buysell",
+            "vwap", "total_value", "total_volume"
+        ) if c in cols
+    ]
+    sql = f"SELECT {', '.join(select)} FROM bandar_detector WHERE 1=1"
+    params: list[Any] = []
+    if tickers:
+        sql += f" AND ticker IN ({_placeholders(len(tickers))})"
+        params.extend(tickers)
+    sql += " ORDER BY session_date DESC, ticker"
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+def load_forward_estimates(
+    conn: sqlite3.Connection,
+    tickers: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    if not table_exists(conn, "forward_estimates_cache"):
+        return []
+    cols = table_columns(conn, "forward_estimates_cache")
+    if "ticker" not in cols:
+        return []
+    select = [
+        c for c in ("ticker", "fetched_date", "forward_eps_1y", "revenue_forward_1y", "current_price", "forward_pe") if c in cols
+    ]
+    sql = f"SELECT {', '.join(select)} FROM forward_estimates_cache WHERE 1=1"
+    params: list[Any] = []
+    if tickers:
+        sql += f" AND ticker IN ({_placeholders(len(tickers))})"
+        params.extend(tickers)
+    sql += " ORDER BY ticker"
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+

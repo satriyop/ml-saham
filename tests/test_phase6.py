@@ -34,6 +34,8 @@ PHASE2_SLUGS = [
     "financial-quality",
     "financial-distress",
     "ichimoku-cloud",
+    "bandar-detector",
+    "forward-valuation",
 ]
 OPTIONAL_SLUGS = ["rl-sandbox"]
 

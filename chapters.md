@@ -101,6 +101,8 @@ Roadmap: [roadmap.md](./roadmap.md)
 | 25 | **Skor kualitas akuntansi Piotroski F-Score** — financial quality | Hard | Matriks 9 Sinyal Akuntansi Piotroski F-Score & Regresi Logistik | `company_financials` |
 | 26 | **Model kebangkrutan Altman Z-Score** — financial distress | Hard | Emerging Market Altman Z'-Score Model & Isolation Forest Anomaly Filter | `company_financials` |
 | 27 | **Klasifikasi breakout awan Kumo Ichimoku** — ichimoku cloud | Hard | RandomForest Kumo Cloud Breakout Classifier pada Tenkan/Kijun/Span A/B | `plugins/indicators/ichimoku.py` |
+| 28 | **Klasifikasi sinyal akumulasi broker bandar** — bandar detector | Hard | RandomForest Multi-Window Bandar Accumulation/Distribution Classifier | `bandar_detector` |
+| 29 | **Valuasi konsensus Forward P/E & rasio PEG** — forward valuation | Hard | Regresi Ridge Konsensus Forward P/E & Model Rasio PEG Growth | `forward_estimates_cache` |
 
 **Appendix (not numbered):** kamus bertahap — unlock terms only when the chapter needs them.
 
