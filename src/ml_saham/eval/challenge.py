@@ -14,6 +14,8 @@ ENGINE_FACTORS = {
         "broker-accumulation",
         "bandar-detector",
         "broker-flow",
+        "accum-policy",
+        "pre-open-heuristic",
     ],
     "signal_engine": [
         "meta-ensemble",
@@ -71,8 +73,9 @@ def _run_factor_challenge(chapter_ctx: ChapterContext, slugs: list[str]) -> dict
             res = mod.run_compare(chapter_ctx, **kwargs)
             
             # Safely extract metrics from compare dict or fallback to res.metrics
-            sota_metrics = res.compare.get("sota_metrics", res.metrics) if res.compare else res.metrics
-            baseline_metrics = res.compare.get("baseline_metrics", {}) if res.compare else {}
+            compare_dict = getattr(res, "compare", None)
+            sota_metrics = compare_dict.get("sota_metrics", res.metrics) if compare_dict else res.metrics
+            baseline_metrics = compare_dict.get("baseline_metrics", {}) if compare_dict else {}
             
             results[slug] = {
                 "model": res.model,

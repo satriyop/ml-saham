@@ -40,6 +40,8 @@ _SLUG_TO_MOD = {
     "earnings-quality": "ml_saham.chapters.earnings_quality",
     "microstructure-impact": "ml_saham.chapters.microstructure_impact",
     "meta-ensemble": "ml_saham.chapters.meta_ensemble",
+    "accum-policy": "ml_saham.chapters.accum_policy",
+    "pre-open-heuristic": "ml_saham.chapters.pre_open_heuristic",
 }
 
 

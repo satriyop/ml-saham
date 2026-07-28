@@ -47,7 +47,7 @@ Roadmap: [roadmap.md](./roadmap.md)
 | **MVP (v1)** | 0, 1, 2, 3, 4, 6 |
 | **v1.1** | 5, 7, 9 |
 | **Phase 2** | 8, 10–20 |
-| **Phase 3 (Advanced)** | 21–36 |
+| **Phase 3 (Advanced)** | 21–38 |
 
 **Evaluation spine:** light honesty in Ch.0 + Ch.3 (train/test, no future peek, coin-flip, biaya banner); full walk-forward in Ch.12.
 
@@ -110,6 +110,8 @@ Roadmap: [roadmap.md](./roadmap.md)
 | 34 | **Anomali akrual Sloan & kualitas laba** — earnings quality | Hard | Regresi Huber Robust Anomali Akrual Sloan & Kualitas Arus Kas | `company_financials` |
 | 35 | **Ilikuiditas & dampak harga mikrostruk** — microstructure impact | Hard | Order Flow Imbalance ML / Hawkes Process (SOTA) vs Bid-Ask Spread (Baseline) | `candles` |
 | 36 | **Super learner ensemble multi-faktor terstack** — meta ensemble | Complex | TabNet / Optuna Blended Level-1 Meta-Learner | Multi-factor stacked pipelines |
+| 37 | **Menantang pembobotan statis AccumScorePolicy** — accum policy | Hard | LightGBM/Ridge regresi pada komponen accum vs pembobotan manual 33.3% | `score_accum_use_case` |
+| 38 | **Menantang aturan batas (capping) dan Raw Score Pre-Open** — pre-open heuristic | Hard | XGBoost Classifier dari metrik mentah (IEP, pressure) vs Pohon keputusan manual | `pre_open_directional_baseline` |
 
 **Appendix (not numbered):** kamus bertahap — unlock terms only when the chapter needs them.
 
