@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import random
 from collections import defaultdict
 
@@ -105,10 +106,16 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     )
     cum_rand, _, _, _ = _run_bandit(arms, epsilon=1.0, steps=_N_STEPS, seed=43)
 
+    # Compute policy action entropy: H(pi) = -sum p_i log2 p_i
+    probs = [c / _N_STEPS for c in counts]
+    policy_entropy = -sum(p * math.log2(p) for p in probs if p > 0)
+    max_entropy = math.log2(len(tickers))
+
     lines = [
         ">>> SANDBOX — bukan live RL production <<<",
         f"Arms: {', '.join(tickers)}",
         f"epsilon={_EPSILON}  steps={_N_STEPS}  reward=daily_return replay",
+        f"Policy Entropy: {policy_entropy:.3f} / {max_entropy:.3f} bits (lower = higher policy exploitation)",
         "",
         f"Cumulative reward (epsilon-greedy): {cum:+.2%}",
         f"Cumulative reward (random policy):  {cum_rand:+.2%}",
@@ -116,7 +123,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "Learned arm values (sample avg):",
     ]
     for i, t in enumerate(tickers):
-        lines.append(f"  {t:<6} pulls={counts[i]:3d}  avg_reward={values[i]:+.3%}")
+        lines.append(f"  {t:<6} pulls={counts[i]:3d} ({probs[i]:.1%})  avg_reward={values[i]:+.3%}")
 
     lines.extend(
         [
@@ -132,6 +139,8 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "steps": _N_STEPS,
         "cum_reward_greedy": cum,
         "cum_reward_random": cum_rand,
+        "policy_entropy_bits": policy_entropy,
+        "max_policy_entropy": max_entropy,
         "sandbox": True,
     }
     return DemoResult(

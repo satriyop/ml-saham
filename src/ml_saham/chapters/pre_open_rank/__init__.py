@@ -52,32 +52,46 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     day_rows.sort(key=lambda r: (r.get("rank") is None, r.get("rank") or 9999))
 
     top = []
+    imbalances = []
     for r in day_rows[:15]:
         iev = r.get("iev")
+        iep = r.get("iep")
         try:
             iev_f = float(iev) if iev is not None else None
+            iep_f = float(iep) if iep is not None else None
         except (TypeError, ValueError):
-            iev_f = None
+            iev_f, iep_f = None, None
+
+        imbalance_pct = None
+        if iev_f is not None and iep_f is not None and iep_f > 0:
+            imbalance_pct = (iev_f / iep_f - 1.0)
+            imbalances.append(imbalance_pct)
+
         top.append(
             {
                 "ticker": r["ticker"],
                 "rank": r.get("rank"),
                 "iev": iev_f,
-                "iep": r.get("iep"),
+                "iep": iep_f,
+                "imbalance_pct": imbalance_pct,
                 "date": latest_date,
             }
         )
 
+    avg_imbalance = (sum(imbalances) / len(imbalances)) if imbalances else 0.0
+
     lines = [
         f"date={latest_date}  n={len(day_rows)}  source=iev_snapshots",
         "Scoreboard: open_session (pre-open, bukan EOD long-only).",
+        f"Pre-open order imbalance (IEV vs IEP avg): {avg_imbalance:+.2%}",
         "",
         "Top IEV names:",
     ]
     for t in top[:10]:
         iev_txt = f"{t['iev']:.2f}" if t["iev"] is not None else "?"
         rank_txt = t["rank"] if t["rank"] is not None else "?"
-        lines.append(f"  #{rank_txt:<4} {t['ticker']:<6}  IEV={iev_txt}")
+        imb_txt = f"  imb={t['imbalance_pct']:+.2%}" if t["imbalance_pct"] is not None else ""
+        lines.append(f"  #{rank_txt:<4} {t['ticker']:<6}  IEV={iev_txt}{imb_txt}")
 
     lines.append("")
     lines.append("Catatan: ranking ini untuk konteks sesi pembukaan —")
@@ -86,6 +100,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     metrics = {
         "date": latest_date,
         "n": len(day_rows),
+        "mean_pre_open_imbalance": avg_imbalance,
         "scoreboard_kind": "open_session",
     }
     csv = ["date,rank,ticker,iev"] + [

@@ -102,6 +102,14 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     acc_best = max(acc_nb, acc_lr)
     model = lr_pipe if best == "logistic-regression" else nb_pipe
 
+    # Extract top informative words from Naive Bayes log-ratio
+    vec = nb_pipe.named_steps["tfidf"]
+    nb_clf = nb_pipe.named_steps["clf"]
+    feats = vec.get_feature_names_out()
+    log_ratio = nb_clf.feature_log_prob_[1] - nb_clf.feature_log_prob_[0]
+    top_pos = [feats[i] for i in log_ratio.argsort()[-5:][::-1]]
+    top_neg = [feats[i] for i in log_ratio.argsort()[:5]]
+
     sample = "Emiten catat pertumbuhan laba kuartal di atas estimasi pasar"
     pred = int(model.predict([sample])[0])
     proba = model.predict_proba([sample])[0]
@@ -113,6 +121,8 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         f"MultinomialNB accuracy:        {acc_nb:.3f}",
         f"LogisticRegression accuracy:   {acc_lr:.3f}",
         f"Best model: {best}  accuracy={acc_best:.3f}",
+        f"Top positive words: {', '.join(top_pos)}",
+        f"Top negative words: {', '.join(top_neg)}",
         "",
         f"Contoh inferensi: \"{sample[:50]}...\"",
         f"  pred={'positif' if pred else 'negatif'}  "
@@ -127,6 +137,8 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "accuracy_nb": acc_nb,
         "accuracy_lr": acc_lr,
         "accuracy_best": acc_best,
+        "top_positive_words": top_pos,
+        "top_negative_words": top_neg,
         "model": best,
         "synthetic": True,
     }

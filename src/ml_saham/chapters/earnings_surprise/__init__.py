@@ -141,11 +141,28 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     scores = [r["surprise"] for r in rows]
     rets = maybe_haircut([r["fwd"] for r in rows], with_costs=ctx.with_costs)
     ic = rank_ic(scores, rets)
+
+    pead_slope, pead_r2 = 0.0, 0.0
+    try:
+        import numpy as np
+        from sklearn.linear_model import Ridge
+        from sklearn.metrics import r2_score
+
+        X = np.array(scores, dtype=float).reshape(-1, 1)
+        y = np.array(rets, dtype=float)
+        ridge = Ridge(alpha=1.0)
+        ridge.fit(X, y)
+        pead_slope = float(ridge.coef_[0])
+        pead_r2 = float(r2_score(y, ridge.predict(X)))
+    except Exception:
+        pass
+
     order = sorted(range(len(rows)), key=lambda i: scores[i], reverse=True)
 
     lines = [
         f"as_of={as_of}  n={len(rows)}  horizon=5d  score={score_kind}",
         f"Rank IC ({score_kind} vs fwd): {ic:+.3f}",
+        f"PEAD drift slope (β1):       {pead_slope:+.4f}  (R²={pead_r2:.4f})",
         "PIT note: fetched_date di earnings_cache bisa AFTER announcement —",
         "jangan anggap otomatis point-in-time.",
     ]
@@ -171,6 +188,8 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             "as_of": as_of,
             "n": len(rows),
             "rank_ic_surprise": ic,
+            "pead_drift_slope": pead_slope,
+            "pead_r2": pead_r2,
             "benchmark_return": bench,
             "score_kind": score_kind,
         },

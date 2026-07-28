@@ -82,6 +82,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     type_counts = Counter(str(e.get("event_type", "unknown")) for e in events)
     fwd_by_type: dict[str, list[float]] = defaultdict(list)
+    car_by_type: dict[str, list[float]] = defaultdict(list)
     scored: list[dict] = []
 
     for e in events:
@@ -91,11 +92,14 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         if not t or not ex:
             continue
         fwd = _fwd_around(by_t, t, ex, horizon=5)
+        ihsg_fwd = _fwd_around(by_t, "IHSG", ex, horizon=5)
         if fwd is None:
             continue
         fwd_by_type[etype].append(fwd)
+        car = fwd - (ihsg_fwd if ihsg_fwd is not None else 0.0)
+        car_by_type[etype].append(car)
         rule = 1.0 if "dividend" in etype.lower() else 0.5
-        scored.append({"ticker": t, "event_type": etype, "ex_date": ex, "fwd": fwd, "score": rule})
+        scored.append({"ticker": t, "event_type": etype, "ex_date": ex, "fwd": fwd, "car": car, "score": rule})
 
     if not scored:
         raise ChapterDataError("Tidak ada event dengan forward return valid.")
@@ -109,14 +113,16 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         lines.append(f"  {et}: {cnt}")
 
     lines.append("")
-    lines.append("Avg forward 5d return by event_type:")
+    lines.append("Avg forward 5d return & CAR (abnormal return vs IHSG) by event_type:")
     for et, rets in sorted(fwd_by_type.items(), key=lambda x: -len(x[1])):
         avg = sum(rets) / len(rets)
-        lines.append(f"  {et:<20} n={len(rets):3d}  mean_fwd={avg:+.2%}")
+        avg_car = sum(car_by_type[et]) / len(car_by_type[et])
+        lines.append(f"  {et:<20} n={len(rets):3d}  mean_fwd={avg:+.2%}  mean_CAR={avg_car:+.2%}")
 
     overall = sum(s["fwd"] for s in scored) / len(scored)
+    overall_car = sum(s["car"] for s in scored) / len(scored)
     lines.append("")
-    lines.append(f"Overall event-study mean fwd: {overall:+.2%}")
+    lines.append(f"Overall event-study mean fwd: {overall:+.2%}  mean CAR: {overall_car:+.2%}")
     lines.append("Rule score: dividend-like=1.0, lainnya=0.5 (demo kasar).")
 
     top = sorted(scored, key=lambda s: s["score"], reverse=True)[:10]
@@ -125,6 +131,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "n_with_fwd": len(scored),
         "type_counts": dict(type_counts),
         "mean_fwd_overall": overall,
+        "mean_car_overall": overall_car,
     }
     return DemoResult(
         title="Corp events · event study",
