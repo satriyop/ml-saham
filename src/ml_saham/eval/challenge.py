@@ -15,6 +15,7 @@ ENGINE_FACTORS = {
         "bandar-detector",
         "broker-flow",
         "accum-policy",
+        "accum-macro",
         "pre-open-heuristic",
     ],
     "signal_engine": [
@@ -95,7 +96,10 @@ def challenge_screener(chapter_ctx: ChapterContext, scenario: str | None = None)
     if scenario == "pre-open":
         factors = ["pre-open-heuristic"]
     elif scenario == "accum":
-        factors = ["accum-policy"]
+        if chapter_ctx.eval_type == "macro":
+            factors = ["accum-macro"]
+        else:
+            factors = ["accum-policy"]
     return _run_factor_challenge(chapter_ctx, factors)
 
 
