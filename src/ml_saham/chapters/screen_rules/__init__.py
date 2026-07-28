@@ -31,8 +31,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "",
         "Opsi pendekatan",
         "  1) Hand screen: threshold PE/ROE/PBV",
-        "  2) Decision tree / logistic pada label 'return di atas median'",
-        "  3) Bandingkan hit-list & rank IC (compare)",
+        "  2) LightGBM Classifier (SOTA) pada label 'return di atas median'",
+        "  3) Bandingkan hit-list & rank IC (compare) vs DecisionTree",
         "",
         "Caveat",
         "  • Fundamentals pakai fetched_date — waspadai look-ahead (lihat Ch.0)",
@@ -41,7 +41,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Bukan saran trading / investasi",
         "",
         f"Lanjut:  ml-saham demo {META.slug}",
-        f"Compare: ml-saham compare {META.slug} --baseline hand --against tree",
+        f"Compare: ml-saham compare {META.slug} --baseline tree --against lgbm",
     ]
     if verbose:
         lines.append("\nDetail: deepdive boleh menyinggung risk-gate precursors (stub OK).")
@@ -91,10 +91,9 @@ def _hand_score(row: dict) -> float:
     return (-row["pe"]) + 10.0 * row["roe"]
 
 
-def _learned_scores(rows: list[dict]) -> tuple[list[float], str, dict[str, float]]:
+def _learned_scores(rows: list[dict], model_type: str = "lgbm") -> tuple[list[float], str, dict[str, float]]:
     try:
         import numpy as np
-        from sklearn.linear_model import LogisticRegression
         from sklearn.tree import DecisionTreeClassifier
     except ImportError as exc:
         raise ChapterError(
@@ -119,14 +118,24 @@ def _learned_scores(rows: list[dict]) -> tuple[list[float], str, dict[str, float
         scores = [float(-r["pe"] + 5 * r["roe"]) for r in rows]
         return scores, "hand-fallback", {"pe_z": 0.5, "roe_z": 0.5}
 
+    if model_type == "lgbm":
+        try:
+            import lightgbm as lgb
+            clf = lgb.LGBMClassifier(n_estimators=50, max_depth=3, random_state=42, verbose=-1)
+            clf.fit(X, y)
+            scores = clf.predict_proba(X)[:, 1].tolist()
+            importances = {
+                "pe_z": float(clf.feature_importances_[0]),
+                "roe_z": float(clf.feature_importances_[1]),
+            }
+            return scores, "lightgbm", importances
+        except ImportError:
+            model_type = "tree"  # Fallback
+            
+    # DecisionTree baseline
     tree = DecisionTreeClassifier(max_depth=3, random_state=42)
     tree.fit(X, y)
-    if hasattr(tree, "predict_proba"):
-        scores = tree.predict_proba(X)[:, 1].tolist()
-    else:
-        scores = tree.predict(X).astype(float).tolist()
-    _ = LogisticRegression(max_iter=200)
-
+    scores = tree.predict_proba(X)[:, 1].tolist()
     importances = {
         "pe_z": float(tree.feature_importances_[0]),
         "roe_z": float(tree.feature_importances_[1]),
@@ -141,7 +150,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             f"Panel terlalu kecil (n={len(rows)}). Cek fundamentals + candles."
         )
     hand = [_hand_score(r) for r in rows]
-    learned, model, importances = _learned_scores(rows)
+    learned, model, importances = _learned_scores(rows, model_type="lgbm")
     rets = maybe_haircut([r["fwd"] for r in rows], with_costs=ctx.with_costs)
     ic_hand = rank_ic(hand, rets)
     ic_learned = rank_ic(learned, rets)
@@ -169,12 +178,12 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     lines = [
         f"as_of={as_of}  n={len(rows)}  horizon=5d",
         f"Hand rank IC:    {ic_hand:+.3f}",
-        f"Tree rank IC:    {ic_learned:+.3f}  ({model})",
-        f"Tree feature importance: {imp_str}",
-        f"Top-10 overlap hand∩tree: {len(overlap)}  {', '.join(overlap) or '—'}",
-        "Catatan: IC tree di sini in-sample — Ch.12 untuk walk-forward jujur.",
+        f"{model} rank IC: {ic_learned:+.3f}  ({model})",
+        f"{model} feat imp: {imp_str}",
+        f"Top-10 overlap hand∩{model}: {len(overlap)}  {', '.join(overlap) or '—'}",
+        "Catatan: IC model di sini in-sample — Ch.13 untuk walk-forward jujur.",
         "",
-        "Top tree names:",
+        f"Top {model} names:",
     ]
     for t in top[:8]:
         lines.append(
@@ -186,7 +195,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "as_of": as_of,
         "n": len(rows),
         "rank_ic_hand": ic_hand,
-        "rank_ic_tree": ic_learned,
+        "rank_ic_model": ic_learned,
         "overlap_top10": len(overlap),
         "n_tickers": len(rows),
     }
@@ -195,13 +204,13 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         for t in top
     ]
     return DemoResult(
-        title="Screen rules · hand vs tree",
+        title="Screen rules · hand vs LightGBM",
         lines=lines,
         metrics=metrics,
         model=model,
         summary_md=(
             "# Screen rules\n\n"
-            f"as_of={as_of}. Hand score vs decision tree pada PE/ROE.\n\n"
+            f"as_of={as_of}. Hand score vs LightGBM pada PE/ROE.\n\n"
             "## Caveat\n\n- Bukan saran trading / investasi.\n"
             "- Label median-split mudah bocor jika as_of tidak disiplin.\n"
         ),
@@ -214,24 +223,35 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareResult:
     as_of, rows = _panel(ctx)
     hand = [_hand_score(r) for r in rows]
-    learned, model, _ = _learned_scores(rows)
+    
+    # Generate scores based on args
+    base_scores = hand
+    if "tree" in baseline:
+        base_scores, _, _ = _learned_scores(rows, model_type="tree")
+    elif "lgbm" in baseline:
+        base_scores, _, _ = _learned_scores(rows, model_type="lgbm")
+        
+    ag_scores = hand
+    model_against = "hand"
+    if "tree" in against:
+        ag_scores, model_against, _ = _learned_scores(rows, model_type="tree")
+    elif "lgbm" in against:
+        ag_scores, model_against, _ = _learned_scores(rows, model_type="lgbm")
+
     rets = maybe_haircut([r["fwd"] for r in rows], with_costs=ctx.with_costs)
-    base_scores = hand if baseline.startswith("hand") else learned
-    ag_scores = learned if "tree" in against or against == "logistic" else hand
-    if against == "hand":
-        ag_scores = hand
+    
     ic_b = rank_ic(base_scores, rets)
     ic_a = rank_ic(ag_scores, rets)
+    
     top_b = [
         rows[i]["ticker"]
-        for i in sorted(range(len(rows)), key=lambda i: base_scores[i], reverse=True)[
-            :10
-        ]
+        for i in sorted(range(len(rows)), key=lambda i: base_scores[i], reverse=True)[:10]
     ]
     top_a = [
         rows[i]["ticker"]
         for i in sorted(range(len(rows)), key=lambda i: ag_scores[i], reverse=True)[:10]
     ]
+    
     lines = [
         f"as_of={as_of}  n={len(rows)}",
         f"{baseline}: rank_ic={ic_b:+.3f}  top10={', '.join(top_b[:5])}…",
@@ -240,7 +260,7 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
     ]
     compare = {
         "baseline": {"id": baseline, "rank_ic": ic_b, "top10": top_b},
-        "against": {"id": against, "rank_ic": ic_a, "top10": top_a, "model": model},
+        "against": {"id": against, "rank_ic": ic_a, "top10": top_a, "model": model_against},
         "as_of": as_of,
         "n": len(rows),
     }
