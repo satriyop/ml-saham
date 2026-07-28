@@ -62,12 +62,37 @@ Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir`.
 | 0 | Scaffold CLI + registry + DB resolve | **done** |
 | 1 | Doctor tabel MVP + loaders + universe | **done** |
 | 2 | Metrics + artifacts + explore pager | **done** |
-| 3 | Chapter 0,1,2,3,4,6 | **done** |
+| 3 | Chapter 0, 1, 2, 3, 4, 6 | **done** |
 | 4 | MVP harden / sign-off | **done** |
-| 5 | v1.1 chapters 5,7,8 | **done** |
+| 5 | v1.1 chapters 5, 7, 8 | **done** |
 | 6 | Phase-2 curriculum 9–17 (+18) | **done** |
-| 7 | UX extras | opsional |
+| 7 | Fitur Algoritma & Performa Suite ML | **done** |
+
+## Algoritma ML & Performa Dataplane
+
+- **Dataplane Bebas N+1 Query & Aman SQL**: Resolusi universe menggunakan `GROUP BY` batch query 1x ke SQLite. Semua pengaksesan nama tabel/kolom dinamis divalidasi regex `[a-zA-Z0-9_]+` terhadap injeksi SQL.
+- **Vektor & In-Memory Efficiency**: Pengolahan z-score dan filtering rentang tanggal (`end=as_of`) dioptimalkan dengan NumPy & query tanggal langsung di SQLite.
+- **Quant ML Suite per Chapter**:
+  - **Ch.1 clean-prices**: IQR + Isolation Forest + CUSUM Change-Point Detection.
+  - **Ch.2 screen-rules**: DecisionTree feature importances & rules threshold.
+  - **Ch.3 pattern-fail**: Uji signifikansi statistik Binomial Z-test ($p$-value) vs coin-flip baseline.
+  - **Ch.4 factor-score**: Bobot koefisien fitur (`ElasticNet.coef_` & `Ridge`).
+  - **Ch.5 cluster-peers**: Silhouette Score & Davies-Bouldin Index untuk evaluasi kluster.
+  - **Ch.6 broker-flow**: Model regresi inkremental net flow asing vs price momentum.
+  - **Ch.7 insider**: Koefisien Logistic Regression pada tipe transaksi insider (BUY/SELL).
+  - **Ch.8 volume-anomaly**: IsolationForest vs One-Class SVM anomaly overlap.
+  - **Ch.9 headline-tone**: Ekstraksi token TF-IDF & log-ratio MultinomialNB.
+  - **Ch.10 volatility-sizing**: EWMA ($\lambda=0.94$) volatility forecasting & risk-targeted position sizing.
+  - **Ch.11 market-regime**: State GMM terurut (Bearish, Neutral, Bullish) + probabilitas posterior.
+  - **Ch.12 walk-forward**: Purged Time-Series Split ($H=5$ days gap) pencegah target leakage.
+  - **Ch.13 portfolio-small**: Hierarchical Risk Parity (HRP) / inverse-variance asset allocation.
+  - **Ch.14 corp-events**: Event study Cumulative Abnormal Return (CAR) vs IHSG.
+  - **Ch.15 earnings-surprise**: Estimasi slope drift PEAD ($\beta_1$) & $R^2$.
+  - **Ch.16 pre-open-rank**: Prediksi ketidakseimbangan order book pre-open (IEV vs IEP).
+  - **Ch.17 research-pipeline**: Combinatorial Purged CV & Probability of Overfitting ($P_{\text{CSCV}}$).
+  - **Ch.18 rl-sandbox**: Policy Shannon Entropy ($H(\pi)$) & tracking distribusi aksi bandit.
 
 ## Catatan
 
 Bukan saran trading/investasi. Skorboard demo default long-only vs IHSG (gross + banner biaya) — lihat desain di repo.
+

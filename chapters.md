@@ -71,27 +71,27 @@ Roadmap: [roadmap.md](./roadmap.md)
 
 ## Chapter list
 
-| # | Title (generic problem) | Tier | Algorithms (intro) | Optional deep-dive → `ai-saham` |
+| # | Title (generic problem) | Tier | Implemented Algorithms & Quant Suite | Optional deep-dive → `ai-saham` |
 |---|---|---|---|---|
-| 0 | **Orientasi** — how we judge “good” without fooling ourselves | — | Baselines (buy & hold, rules) | Data paths, PIT/`fetched_date` honesty |
-| 1 | **Membersihkan harga saham** — missing bars, splits, spikes | Simple | z-score / IQR → Isolation Forest, LOF; change-point | Corp-action break hygiene in caches |
-| 2 | **Saring saham dengan aturan** — rules vs learned rank | Simple | Rules → decision tree, logistic | Risk-gate *precursors* (fund/liquidity features) |
-| 3 | **Mengenali pola harga sederhana** — next-day / pattern **failure lab** | Simple | k-NN, tree, forest vs coin-flip; pointer to better framing | — |
-| 4 | **Skor faktor** — value, momentum, quality (+ ownership sleeve) | Medium | Hand weights → elastic net → LightGBM | Fundamentals / shareholding caches |
-| 5 | **Mengelompokkan saham yang bergerak mirip** — peers / clusters | Medium | k-means, hierarchical clustering, PCA | Sector-context diagnostics |
-| 6 | **Aliran broker & asing** — *who* ranks from flow | Medium | Flow rules → elastic net / logistic → LightGBM + momentum; bandar lab | Accum / foreign-flow score components, BCI |
-| 7 | **Aktivitas insider** — sparse disclosed insider events | Medium | Rules → logistic / GBDT | Insider enrichment flags |
-| 8 | **Volume & lonjakan tidak biasa** — *how much* anomalies | Medium | Isolation Forest, One-Class SVM (price/volume only) | — |
-| 9 | **Membaca berita singkat** — headline tone | Medium | TF-IDF + naive Bayes / logistic → small IndoBERT | Sentiment path (when headlines exist) |
-| 10 | **Volatilitas & ukuran posisi** — forecast risk for sizing | Medium | GARCH vs GBDT / RF; liquidity/spread inputs | — |
-| 11 | **Rezim pasar** — when the same edge stops working | Hard | HMM, GMM, change-point + classifier; breadth / foreign / macro-style features | Market context / regime engine |
-| 12 | **Prediksi multi-fitur + walk-forward** — honest evaluation | Hard | LightGBM / XGBoost; leakage demos; label corpus | Calibrate rule score weights vs forward labels; regime-stratified checks |
-| 13 | **Membangun portofolio kecil** — constraints & holdings | Hard | Scores + constrained optimization | Risk funnel as filters before sizing |
-| 14 | **Peristiwa korporasi massal** — rights, buybacks, index events | Hard | GBDT event models; intro causal forest | Corp-action calendars / events |
-| 15 | **Earnings surprise** — miss/beat → short-horizon return | Hard | Linear / GBDT; PIT dates | Earnings cache |
-| 16 | **Peringkat menjelang pembukaan** — opening-session ranking | Hard | Rank/classify pre-open features; session scoreboard | IEV movers + pre-open screen |
-| 17 | **Pipeline riset ujung-ke-ujung** — ingest → model → report | Complex | Stacking / ensemble + experiment tracking | Artifact pack (factor-card style; human-applied) |
-| 18 | **Sandbox keputusan berurutan** — sequential allocation under costs | Complex | **Optional appendix:** bandits → toy RL (PPO / DQN) | — |
+| 0 | **Orientasi** — how we judge “good” without fooling ourselves | — | Baselines (buy & hold, rules), PIT/`fetched_date` checks | Data paths, PIT/`fetched_date` honesty |
+| 1 | **Membersihkan harga saham** — missing bars, splits, spikes | Simple | z-score / IQR + Isolation Forest + CUSUM Change-Point Detection | Corp-action break hygiene in caches |
+| 2 | **Saring saham dengan aturan** — rules vs learned rank | Simple | Hand rules vs DecisionTree classifier + feature importances & split rules | Risk-gate *precursors* (fund/liquidity features) |
+| 3 | **Mengenali pola harga sederhana** — next-day / pattern **failure lab** | Simple | DecisionTree vs 50% coin-flip baseline + Binomial Z-test ($p$-value) | — |
+| 4 | **Skor faktor** — value, momentum, quality (+ ownership sleeve) | Medium | Equal-weight hand blend vs ElasticNet / Ridge + feature weights (`coef_`) | Fundamentals / shareholding caches |
+| 5 | **Mengelompokkan saham yang bergerak mirip** — peers / clusters | Medium | k-means + Agglomerative clustering + PCA 2D + Silhouette & Davies-Bouldin | Sector-context diagnostics |
+| 6 | **Aliran broker & asing** — *who* ranks from flow | Medium | Foreign-net 5d z-score vs momentum + Logistic/Ridge feature importance | Accum / foreign-flow score components, BCI |
+| 7 | **Aktivitas insider** — sparse disclosed insider events | Medium | Insider net shares rule vs Logistic Regression on transaction types & feature weights | Insider enrichment flags |
+| 8 | **Volume & lonjakan tidak biasa** — *how much* anomalies | Medium | Multivariate IsolationForest vs One-Class SVM price-volume anomaly overlap | — |
+| 9 | **Membaca berita singkat** — headline tone | Medium | TF-IDF + MultinomialNB vs LogisticRegression + top sentiment vocabulary log-ratios | Sentiment path (when headlines exist) |
+| 10 | **Volatilitas & ukuran posisi** — forecast risk for sizing | Medium | 20d realized vol vs EWMA ($\lambda=0.94$) volatility forecasting & risk-targeted weights | — |
+| 11 | **Rezim pasar** — when the same edge stops working | Hard | Sorted Gaussian Mixture Model (Bearish, Neutral, Bullish) + posterior probabilities | Market context / regime engine |
+| 12 | **Prediksi multi-fitur + walk-forward** — honest evaluation | Hard | ElasticNet / Ridge + Purged Time-Series Split ($H=5$ days gap) + feature weights | Calibrate rule score weights vs forward labels; regime-stratified checks |
+| 13 | **Membangun portofolio kecil** — constraints & holdings | Hard | Equal-weight vs Capped-weight vs Hierarchical Risk Parity (HRP) inverse-variance | Risk funnel as filters before sizing |
+| 14 | **Peristiwa korporasi massal** — rights, buybacks, index events | Hard | Event study Cumulative Abnormal Return (CAR) vs IHSG market benchmark | Corp-action calendars / events |
+| 15 | **Earnings surprise** — miss/beat → short-horizon return | Hard | EPS surprise rank + Ridge Post-Earnings Announcement Drift (PEAD) slope ($\beta_1$) & $R^2$ | Earnings cache |
+| 16 | **Peringkat menjelang pembukaan** — opening-session ranking | Hard | Pre-open IEV/IEP price imbalance ratio & open-session scoreboard | IEV movers + pre-open screen |
+| 17 | **Pipeline riset ujung-ke-ujung** — ingest → model → report | Complex | Feature engineering → stacked metrics + Combinatorial Purged CV ($P_{\text{CSCV}}$) | Artifact pack (factor-card style; human-applied) |
+| 18 | **Sandbox keputusan berurutan** — sequential allocation under costs | Complex | Multi-armed bandit epsilon-greedy vs random + Policy Shannon Entropy ($H(\pi)$) | — |
 
 **Appendix (not numbered):** kamus bertahap — unlock terms only when the chapter needs them.
 
