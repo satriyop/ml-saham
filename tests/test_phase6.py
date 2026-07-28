@@ -31,6 +31,9 @@ PHASE2_SLUGS = [
     "sector-breadth",
     "volatility-squeeze",
     "relative-strength",
+    "financial-quality",
+    "financial-distress",
+    "ichimoku-cloud",
 ]
 OPTIONAL_SLUGS = ["rl-sandbox"]
 

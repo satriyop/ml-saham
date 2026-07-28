@@ -31,6 +31,9 @@ _SLUG_TO_MOD = {
     "sector-breadth": "ml_saham.chapters.sector_breadth",
     "volatility-squeeze": "ml_saham.chapters.volatility_squeeze",
     "relative-strength": "ml_saham.chapters.relative_strength",
+    "financial-quality": "ml_saham.chapters.financial_quality",
+    "financial-distress": "ml_saham.chapters.financial_distress",
+    "ichimoku-cloud": "ml_saham.chapters.ichimoku_cloud",
 }
 
 

@@ -252,10 +252,21 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
             CREATE TABLE broker_distribution_cache (
                 ticker TEXT, trading_date TEXT, top_buyers_json TEXT, top_sellers_json TEXT, fetched_date TEXT
             );
+            CREATE TABLE company_financials (
+                ticker TEXT, statement_kind TEXT, period_end TEXT, period_type TEXT,
+                total_revenue REAL, net_income REAL, operating_income REAL, total_assets REAL,
+                total_liabilities REAL, stockholders_equity REAL, cash_and_equivalents REAL,
+                total_debt REAL, operating_cash_flow REAL, free_cash_flow REAL, fetched_at TEXT
+            );
             """
         )
         as_of_fix = (start + timedelta(days=min_bars - 8)).isoformat()
         iev_date = as_of_fix
+        for si, t in enumerate(_STOCKS):
+            conn.execute(
+                "INSERT INTO company_financials VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (t, "annual", "2023-12-31", "FY", 1e12 * (si + 1), 1e11 * (si + 1), 1.2e11 * (si + 1), 2e12 * (si + 1), 1e12 * (si + 1), 1e12 * (si + 1), 2e11 * (si + 1), 5e11 * (si + 1), 1.5e11 * (si + 1), 1e11 * (si + 1), "2024-06-01"),
+            )
         for si, t in enumerate(_STOCKS):
             conn.execute(
                 "INSERT INTO seasonality_cache VALUES (?,?,?,?,?,?,?,?)",

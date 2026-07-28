@@ -97,6 +97,9 @@ Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir`.
   - **Ch.22 sector-breadth**: PCA Primary Sector Breadth Factor & Partisipasi Sektor (> SMA-20).
   - **Ch.23 volatility-squeeze**: RandomForest Breakout Classifier pada Bollinger Bandwidth Squeeze & Surge Volume Ratio.
   - **Ch.24 relative-strength**: Regresi ElasticNet Relative Strength Mansfield vs IHSG Benchmark.
+  - **Ch.25 financial-quality**: Matriks 9 Sinyal Akuntansi Piotroski F-Score & Regresi Logistik Kualitas Laporan Keuangan.
+  - **Ch.26 financial-distress**: Emerging Market Altman Z'-Score Bankruptcy Model & Isolation Forest Anomaly Filter.
+  - **Ch.27 ichimoku-cloud**: RandomForest Kumo Cloud Breakout Classifier pada Tenkan/Kijun/Span A/B.
 
 ## Catatan
 

@@ -282,3 +282,30 @@ def load_shareholding(
     sql += " ORDER BY ticker"
     return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
+
+def load_company_financials(
+    conn: sqlite3.Connection,
+    tickers: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    if not table_exists(conn, "company_financials"):
+        return []
+    cols = table_columns(conn, "company_financials")
+    if "ticker" not in cols:
+        return []
+    select = [
+        c for c in (
+            "ticker", "statement_kind", "period_end", "period_type", "total_revenue",
+            "net_income", "operating_income", "total_assets", "total_liabilities",
+            "stockholders_equity", "cash_and_equivalents", "total_debt", "operating_cash_flow",
+            "free_cash_flow", "fetched_at"
+        ) if c in cols
+    ]
+    sql = f"SELECT {', '.join(select)} FROM company_financials WHERE 1=1"
+    params: list[Any] = []
+    if tickers:
+        sql += f" AND ticker IN ({_placeholders(len(tickers))})"
+        params.extend(tickers)
+    sql += " ORDER BY ticker, period_end DESC"
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
