@@ -500,6 +500,129 @@ def deepdive_cmd(
     mark(topic, "deepdive")
 
 
+@app.command("leaderboard")
+def leaderboard_cmd(
+    ctx: typer.Context,
+    with_costs: bool = typer.Option(
+        False,
+        "--with-costs",
+        help="Terapkan haircut biaya pada metrik return",
+    ),
+    as_of: Optional[str] = typer.Option(
+        None,
+        "--as-of",
+        help="Tanggal as_of (YYYY-MM-DD); default dipilih otomatis",
+    ),
+    sort_by: str = typer.Option(
+        "chapter",
+        "--sort",
+        help="Urutkan hasil berdasarkan: chapter, metric, slug",
+    ),
+    export_json: Optional[Path] = typer.Option(
+        None,
+        "--export-json",
+        help="Tulis hasil leaderboard ke file JSON",
+    ),
+) -> None:
+    """Tampilkan papan peringkat metrik kuantitatif seluruh chapter ML."""
+    chapters = all_chapters()
+    chapter_ctx = _build_ctx(ctx, with_costs=with_costs, as_of=as_of)
+
+    console.print("[bold cyan]=== QUANTITATIVE ML MODEL LEADERBOARD ===[/bold cyan]")
+    console.print(f"Database: {chapter_ctx.db_path}\n")
+
+    rows_data = []
+
+    for ch in chapters:
+        if not has_chapter_module(ch.slug):
+            continue
+
+        mod = load_chapter(ch.slug)
+        try:
+            res = mod.run_demo(chapter_ctx)
+            metrics = res.metrics or {}
+
+            primary_metric_name = "N/A"
+            primary_metric_val = 0.0
+            primary_metric_str = "—"
+
+            for k, v in metrics.items():
+                if k.startswith("rank_ic"):
+                    primary_metric_name = k
+                    primary_metric_val = float(v)
+                    primary_metric_str = f"Rank IC: {primary_metric_val:+.3f}"
+                    break
+                elif "accuracy" in k:
+                    primary_metric_name = k
+                    primary_metric_val = float(v)
+                    primary_metric_str = f"Accuracy: {primary_metric_val:.1%}"
+                    break
+                elif "precision" in k:
+                    primary_metric_name = k
+                    primary_metric_val = float(v)
+                    primary_metric_str = f"Precision: {primary_metric_val:.1%}"
+                    break
+
+            top_names = getattr(res, "top_names", [])
+            top_pick = (
+                top_names[0]["ticker"]
+                if top_names
+                and isinstance(top_names[0], dict)
+                and "ticker" in top_names[0]
+                else "—"
+            )
+
+            rows_data.append(
+                {
+                    "number": ch.number,
+                    "slug": ch.slug,
+                    "title": ch.title,
+                    "model": res.model,
+                    "metric_name": primary_metric_name,
+                    "metric_val": primary_metric_val,
+                    "metric_str": primary_metric_str,
+                    "top_pick": top_pick,
+                }
+            )
+        except Exception:  # noqa: BLE001
+            continue
+
+    if sort_by == "metric":
+        rows_data.sort(key=lambda r: abs(r["metric_val"]), reverse=True)
+    elif sort_by == "slug":
+        rows_data.sort(key=lambda r: r["slug"])
+    else:
+        rows_data.sort(key=lambda r: r["number"])
+
+    table = Table(
+        title="Papan Peringkat Strategy & Factor ML (30 Chapter)",
+        header_style="bold magenta",
+    )
+    table.add_column("#", justify="right", style="cyan")
+    table.add_column("Slug", style="bold green")
+    table.add_column("Model ML", style="yellow")
+    table.add_column("Primary Metric", justify="left")
+    table.add_column("Top Pick", justify="center", style="bold white")
+
+    for r in rows_data:
+        table.add_row(
+            str(r["number"]),
+            r["slug"],
+            r["model"],
+            r["metric_str"],
+            r["top_pick"],
+        )
+
+    console.print(table)
+
+    if export_json:
+        export_json.parent.mkdir(parents=True, exist_ok=True)
+        export_json.write_text(
+            json.dumps(rows_data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        console.print(f"\n[green]Saved leaderboard JSON to {export_json}[/green]")
+
+
 @app.command("glossary")
 def glossary_cmd(
     term: Optional[str] = typer.Argument(None, help="Istilah (EN), opsional"),
