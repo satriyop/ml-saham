@@ -18,6 +18,10 @@ ENGINE_FACTORS = {
         "accum-macro",
         "accum-deep",
         "pre-open-heuristic",
+        "pre-open-direction",
+        "pre-open-participation",
+        "pre-open-auction",
+        "pre-open-macro",
     ],
     "signal_engine": [
         "meta-ensemble",
@@ -95,7 +99,16 @@ def challenge_screener(chapter_ctx: ChapterContext, scenario: str | None = None)
     """Challenge the pre-open and accum screener factors."""
     factors = ENGINE_FACTORS["screener"]
     if scenario == "pre-open":
-        factors = ["pre-open-heuristic"]
+        if chapter_ctx.eval_type == "direction":
+            factors = ["pre-open-direction"]
+        elif chapter_ctx.eval_type == "participation":
+            factors = ["pre-open-participation"]
+        elif chapter_ctx.eval_type == "auction":
+            factors = ["pre-open-auction"]
+        elif chapter_ctx.eval_type == "macro":
+            factors = ["pre-open-macro"]
+        else:
+            factors = ["pre-open-heuristic"]
     elif scenario == "accum":
         if chapter_ctx.eval_type == "macro":
             factors = ["accum-macro"]

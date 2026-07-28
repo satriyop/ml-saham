@@ -44,6 +44,10 @@ _SLUG_TO_MOD = {
     "accum-macro": "ml_saham.chapters.accum_macro",
     "accum-deep": "ml_saham.chapters.accum_deep",
     "pre-open-heuristic": "ml_saham.chapters.pre_open_heuristic",
+    "pre-open-direction": "ml_saham.chapters.pre_open_direction",
+    "pre-open-participation": "ml_saham.chapters.pre_open_participation",
+    "pre-open-auction": "ml_saham.chapters.pre_open_auction",
+    "pre-open-macro": "ml_saham.chapters.pre_open_macro",
 }
 
 
