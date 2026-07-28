@@ -13,7 +13,7 @@ from ml_saham.chapters.panel import (
     resolve_universe,
 )
 from ml_saham.chapters.registry import get as get_meta
-from ml_saham.chapters.types import ChapterContext, DemoResult
+from ml_saham.chapters.types import ChapterContext, DemoResult, CompareResult
 from ml_saham.data.aisaham_read import connect, insider_date_stats, load_insider_events
 from ml_saham.eval.metrics import rank_ic
 
@@ -30,8 +30,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  punya tanggal absurd (mis. 1970) — harus di-scrub dulu.",
         "",
         "Opsi pendekatan",
-        "  1) Aturan: net BUY−SELL shares dalam lookback → rank",
-        "  2) Logistic / tree kecil pada fitur net + count events",
+        "  1) Baseline (compare): Aturan simple net BUY−SELL shares dalam lookback → rank",
+        "  2) SOTA (default): Logistic Regression pada fitur net + count events",
         "  3) Bandingkan rank IC vs forward return (jujur, n sering kecil)",
         "",
         "Caveat",
@@ -47,7 +47,7 @@ def explore_text(*, verbose: bool = False) -> str:
     return "\n".join(lines)
 
 
-def run_demo(ctx: ChapterContext) -> DemoResult:
+def _prepare_data(ctx: ChapterContext):
     with connect(ctx.db_path) as conn:
         stats = insider_date_stats(conn)
         if stats["usable"] <= 0:
@@ -98,12 +98,14 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             "Perlu lebih banyak overlap universe + events."
         )
 
-    scores = [net[t] for t in tickers]
     rets = maybe_haircut([fwd[t] for t in tickers], with_costs=ctx.with_costs)
-    ic_rule = rank_ic(scores, rets)
+    return stats, as_of, lookback_start, tickers, net, buys, sells, rets
 
-    model_name = "net_shares_rule"
-    ic_model = ic_rule
+
+def run_demo(ctx: ChapterContext) -> DemoResult:
+    stats, as_of, lookback_start, tickers, net, buys, sells, rets = _prepare_data(ctx)
+
+    model_name = "logistic"
     try:
         import numpy as np
         from sklearn.linear_model import LogisticRegression
@@ -130,11 +132,12 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             clf.fit(X, y)
             proba = clf.predict_proba(X)[:, 1].tolist()
             ic_model = rank_ic(proba, rets)
-            model_name = "logistic"
             scores_model = proba
             coef_dict = dict(zip(feat_names, clf.coef_[0].tolist(), strict=True))
         else:
-            scores_model = scores
+            scores_model = [net[t] for t in tickers]
+            ic_model = rank_ic(scores_model, rets)
+            model_name = "fallback_rule"
     except ImportError as exc:
         raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
 
@@ -154,8 +157,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         f"as_of={as_of}  lookback_start={lookback_start}  n={len(tickers)}",
         f"Cache: total={stats['total']} usable={stats['usable']} "
         f"absurd_scrubbed≈{stats['absurd']}",
-        f"Rule net-shares rank IC: {ic_rule:+.3f}",
-        f"Model ({model_name}) rank IC: {ic_model:+.3f}  (in-sample)",
+        f"SOTA Model ({model_name}) rank IC: {ic_model:+.3f}  (in-sample)",
     ]
     if coef_dict:
         coef_str = ", ".join(f"{k}:{v:+.3f}" for k, v in coef_dict.items())
@@ -174,7 +176,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     metrics = {
         "as_of": as_of,
         "n": len(tickers),
-        "rank_ic_rule": ic_rule,
         "rank_ic_model": ic_model,
         "feature_coefs": coef_dict,
         "insider_stats": stats,
@@ -186,17 +187,92 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         for t in top
     ]
     return DemoResult(
-        title="Insider · net shares + logistic",
+        title="Insider · SOTA Logistic Regression",
         lines=lines,
         metrics=metrics,
         model=model_name,
         summary_md=(
             f"# Insider\n\nas_of={as_of}. Scrub tanggal <1990. "
-            f"Rule IC={ic_rule:.3f}, model IC={ic_model:.3f}.\n"
+            f"Model IC={ic_model:.3f}.\n"
         ),
         scoreboard=True,
         top_names=top,
         extra_files={"top_names.csv": "\n".join(csv) + "\n"},
+    )
+
+
+def run_compare(ctx: ChapterContext) -> CompareResult:
+    stats, as_of, lookback_start, tickers, net, buys, sells, rets = _prepare_data(ctx)
+
+    scores_rule = [net[t] for t in tickers]
+    ic_rule = rank_ic(scores_rule, rets)
+
+    model_name = "logistic"
+    try:
+        import numpy as np
+        from sklearn.linear_model import LogisticRegression
+
+        X = np.array(
+            [
+                [
+                    net[t],
+                    buys[t],
+                    sells[t],
+                    buys[t] + sells[t],
+                ]
+                for t in tickers
+            ],
+            dtype=float,
+        )
+        y_ret = rets
+        med = sorted(y_ret)[len(y_ret) // 2]
+        y = np.array([1 if r >= med else 0 for r in y_ret])
+        feat_names = ["net_shares", "buys", "sells", "total_events"]
+        coef_dict = {}
+        if len(set(y.tolist())) >= 2:
+            clf = LogisticRegression(max_iter=500)
+            clf.fit(X, y)
+            scores_model = clf.predict_proba(X)[:, 1].tolist()
+            ic_model = rank_ic(scores_model, rets)
+            coef_dict = dict(zip(feat_names, clf.coef_[0].tolist(), strict=True))
+        else:
+            scores_model = scores_rule
+            ic_model = ic_rule
+            model_name = "fallback_rule"
+    except ImportError as exc:
+        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
+
+    lines = [
+        f"as_of={as_of}  n={len(tickers)}",
+        "",
+        "--- Baseline: Insider Net Shares Rule ---",
+        f"Rank IC: {ic_rule:+.3f}",
+        "",
+        f"--- SOTA: {model_name.capitalize()} ---",
+        f"Rank IC: {ic_model:+.3f}",
+    ]
+
+    if coef_dict:
+        coef_str = ", ".join(f"{k}:{v:+.3f}" for k, v in coef_dict.items())
+        lines.append(f"Weights: {coef_str}")
+
+    return CompareResult(
+        title="Insider · SOTA vs Baseline",
+        lines=lines,
+        metrics={
+            "as_of": as_of,
+            "n": len(tickers),
+        },
+        compare={
+            "baseline_ic": ic_rule,
+            "sota_ic": ic_model,
+        },
+        model=model_name,
+        summary_md=(
+            f"# Insider Compare\n\n"
+            f"Baseline IC={ic_rule:.3f}, SOTA IC={ic_model:.3f}\n"
+        ),
+        scoreboard=True,
     )
 
 
