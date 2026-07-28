@@ -1,4 +1,4 @@
-"""Ch.28 Bandar detector — multi-window broker accumulation classifier."""
+"""Ch.31 Bandar detector — multi-window broker accumulation classifier."""
 
 from __future__ import annotations
 
@@ -40,13 +40,13 @@ def explore_text(*, verbose: bool = False) -> str:
         f"topic={META.slug}  phase={META.phase}  data={META.required_data}",
         "",
         "Masalah",
-        "  Mengklasifikasikan sinyal akumulasi/distribusi bandar multi-window (Top 1/3/5/10 broker)",
-        "  untuk menguji apakah deteksi akumulasi bandar konsisten menghasilkan markup harga.",
+        "  Mendeteksi anomali aliran broker (bandar) untuk menemukan sinyal akumulasi yang tidak wajar.",
+        "  SOTA (default): Menggunakan Isolation Forest pada data broker flow.",
+        "  Baseline (compare): Menggunakan naive net volume (persentase net hari ini).",
         "",
         "Opsi pendekatan",
-        "  1) Vektor Sinyal Multi-Window (Today, 5D, Top 1/3/5 AccDist)",
-        "  2) Random Forest Classifier Prediksi Forward Continuation 5 Hari",
-        "  3) Feature Importances: Buyer/Seller Count Ratio, Top1 % Volume",
+        "  1) SOTA (Isolation Forest): Mendeteksi outlier pada distribusi persentase volume top broker.",
+        "  2) Baseline (Naive Net Volume): Menggunakan persentase net volume sederhana.",
         "",
         "Caveat",
         "  • Kode broker ditutup oleh bursa (IDX broker summary delay)",
@@ -54,6 +54,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Bukan saran trading / investasi",
         "",
         f"Lanjut:  ml-saham demo {META.slug}",
+        f"         ml-saham compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: bandar_detector di ai-saham.")
@@ -63,9 +64,7 @@ def explore_text(*, verbose: bool = False) -> str:
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
         import numpy as np
-        from sklearn.ensemble import RandomForestClassifier
-        from sklearn.metrics import accuracy_score, precision_score, recall_score
-        from sklearn.model_selection import train_test_split
+        from sklearn.ensemble import IsolationForest
     except ImportError as exc:
         raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
 
@@ -77,7 +76,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
         detector_rows = load_bandar_detector(conn, uni)
         fwd = forward_returns_by_ticker(conn, uni, as_of=as_of, horizon=5)
-        bench = ihsg_forward_return(conn, as_of=as_of, horizon=5)
 
     if not detector_rows:
         raise ChapterDataError(
@@ -85,7 +83,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             hint="ml-saham doctor",
         )
 
-    # Process bandar detector rows
     by_t = {}
     for r in detector_rows:
         t = r["ticker"]
@@ -96,87 +93,152 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     if len(tickers) < 8:
         raise ChapterDataError(f"Panel bandar_detector terlalu kecil (n={len(tickers)}).")
 
-    X_list, y_list = [], []
-    scores = []
-
+    X_list = []
+    
     for t in tickers:
         r = by_t[t]
         tag_today = _ACCDIST_MAP.get(str(r.get("today_accdist") or "").upper(), 0.0)
-        tag_5d = _ACCDIST_MAP.get(str(r.get("five_day_accdist") or "").upper(), 0.0)
-        tag_top1 = _ACCDIST_MAP.get(str(r.get("top1_accdist") or "").upper(), 0.0)
-        tag_top3 = _ACCDIST_MAP.get(str(r.get("top3_accdist") or "").upper(), 0.0)
-
         top1_pct = float(r.get("top1_percent") or 0.0)
         today_pct = float(r.get("today_percent") or 0.0)
         num_brokers = float(r.get("number_broker_buysell") or 1.0)
+        
+        # SOTA Features
+        X_list.append([tag_today, top1_pct, today_pct, num_brokers])
 
-        accum_score = tag_today * 2.0 + tag_5d * 3.0 + tag_top3 * 2.0
-        scores.append(accum_score)
-
-        fwd_ret = float(fwd[t])
-        label = 1 if fwd_ret > 0 else 0
-
-        X_list.append([tag_today, tag_5d, tag_top1, tag_top3, top1_pct, today_pct, num_brokers])
-        y_list.append(label)
-
+    X_arr = np.array(X_list)
     rets = maybe_haircut([fwd[t] for t in tickers], with_costs=ctx.with_costs)
-    ic = rank_ic(scores, rets)
 
-    X_arr, y_arr = np.array(X_list), np.array(y_list)
-    counts = np.bincount(y_arr) if len(y_arr) > 0 else np.array([])
-    use_stratify = y_arr if len(counts) >= 2 and min(counts) >= 2 else None
-    Xtr, Xte, ytr, yte = train_test_split(X_arr, y_arr, test_size=0.3, random_state=42, stratify=use_stratify)
-
-    rf = RandomForestClassifier(n_estimators=50, max_depth=4, random_state=42)
-    rf.fit(Xtr, ytr)
-    preds = rf.predict(Xte)
-
-    acc = float(accuracy_score(yte, preds))
-    prec = float(precision_score(yte, preds, zero_division=0))
-
-    importances = {
-        "tag_5d_accdist": float(rf.feature_importances_[1]),
-        "tag_top3_accdist": float(rf.feature_importances_[3]),
-        "today_percent": float(rf.feature_importances_[5]),
-    }
-
-    order = sorted(range(len(tickers)), key=lambda i: scores[i], reverse=True)
+    # SOTA Model: Isolation Forest
+    iso = IsolationForest(contamination=0.1, random_state=42)
+    iso.fit(X_arr)
+    # Output is anomaly score (lower is more anomalous, we negate to make it positive = anomalous)
+    scores_iso = -iso.score_samples(X_arr)
+    
+    ic = rank_ic(scores_iso.tolist(), rets)
+    
+    order = sorted(range(len(tickers)), key=lambda i: scores_iso[i], reverse=True)
     top = [
-        {"ticker": tickers[i], "accum_score": scores[i], "fwd": rets[i]}
+        {"ticker": tickers[i], "anomaly_score": scores_iso[i], "fwd": rets[i]}
         for i in order[:10]
     ]
 
     lines = [
         f"as_of={as_of}  n_tickers={len(tickers)}  source=bandar_detector",
-        f"Bandar Accumulation Rank IC vs 5d fwd return: {ic:+.3f}",
-        f"RandomForest Accumulation Accuracy:           {acc:.1%}",
-        f"Precision (Positive Markup Continuation):     {prec:.1%}",
+        f"Isolation Forest Anomaly IC vs 5d fwd return: {ic:+.3f}",
         "",
-        "Top Bandar Accumulation Names:",
+        "Top Anomalous Accumulation Names (SOTA):",
     ]
 
     for t in top[:8]:
         lines.append(
-            f"  {t['ticker']:<6} AccumScore={t['accum_score']:+4.1f}  fwd={t['fwd']:+.2%}"
+            f"  {t['ticker']:<6} AnomalyScore={t['anomaly_score']:+.3f}  fwd={t['fwd']:+.2%}"
         )
 
     metrics = {
         "as_of": as_of,
         "n_tickers": len(tickers),
-        "rank_ic_bandar_accum": ic,
-        "model_accuracy": acc,
-        "model_precision": prec,
-        "feature_importances": importances,
+        "rank_ic_sota": ic,
     }
+    
     return DemoResult(
-        title="Bandar detector · accumulation classifier",
+        title="Bandar detector · SOTA (Isolation Forest)",
         lines=lines,
         metrics=metrics,
-        model="rf_bandar_detector",
-        summary_md=f"# Bandar detector\n\nRank IC={ic:+.3f}. Accuracy={acc:.1%}.\n",
+        model="isolation_forest_bandar",
+        summary_md=f"# Bandar detector SOTA\n\nIsolation Forest IC={ic:+.3f}.\n",
         scoreboard=True,
         scoreboard_kind="long_only",
         top_names=top,
+    )
+
+
+def run_compare(ctx: ChapterContext) -> DemoResult:
+    try:
+        import numpy as np
+        from sklearn.ensemble import IsolationForest
+    except ImportError as exc:
+        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
+
+    with connect(ctx.db_path) as conn:
+        uni = ctx.universe or resolve_universe(conn, limit=50)
+        as_of = ctx.as_of or pick_as_of(conn, uni, min_forward=5)
+        if not as_of:
+            raise ChapterDataError("Tidak cukup history untuk as_of.")
+
+        detector_rows = load_bandar_detector(conn, uni)
+        fwd = forward_returns_by_ticker(conn, uni, as_of=as_of, horizon=5)
+
+    if not detector_rows:
+        raise ChapterDataError(
+            "bandar_detector kosong.",
+            hint="ml-saham doctor",
+        )
+
+    by_t = {}
+    for r in detector_rows:
+        t = r["ticker"]
+        if t not in by_t and t in fwd:
+            by_t[t] = r
+
+    tickers = sorted(by_t.keys())
+    if len(tickers) < 8:
+        raise ChapterDataError(f"Panel bandar_detector terlalu kecil (n={len(tickers)}).")
+
+    X_list = []
+    scores_baseline = []
+    
+    for t in tickers:
+        r = by_t[t]
+        tag_today = _ACCDIST_MAP.get(str(r.get("today_accdist") or "").upper(), 0.0)
+        top1_pct = float(r.get("top1_percent") or 0.0)
+        today_pct = float(r.get("today_percent") or 0.0)
+        num_brokers = float(r.get("number_broker_buysell") or 1.0)
+        
+        # SOTA Features
+        X_list.append([tag_today, top1_pct, today_pct, num_brokers])
+        
+        # Baseline: naive net volume (using today_pct)
+        scores_baseline.append(today_pct)
+
+    X_arr = np.array(X_list)
+    rets = maybe_haircut([fwd[t] for t in tickers], with_costs=ctx.with_costs)
+
+    # SOTA Model
+    iso = IsolationForest(contamination=0.1, random_state=42)
+    iso.fit(X_arr)
+    scores_sota = -iso.score_samples(X_arr)
+    
+    ic_sota = rank_ic(scores_sota.tolist(), rets)
+    ic_baseline = rank_ic(scores_baseline, rets)
+
+    lines = [
+        f"as_of={as_of}  n_tickers={len(tickers)}",
+        "",
+        f"SOTA (Isolation Forest) Rank IC : {ic_sota:+.3f}",
+        f"Baseline (Naive Net Volume) IC  : {ic_baseline:+.3f}",
+        "",
+        "Comparison:",
+    ]
+    
+    if ic_sota > ic_baseline:
+        lines.append("  SOTA Isolation Forest mendeteksi anomali lebih baik dari net volume.")
+    else:
+        lines.append("  Baseline net volume lebih stabil pada periode ini.")
+
+    metrics = {
+        "as_of": as_of,
+        "n_tickers": len(tickers),
+        "rank_ic_sota": ic_sota,
+        "rank_ic_baseline": ic_baseline,
+    }
+    
+    return DemoResult(
+        title="Bandar detector · SOTA vs Baseline",
+        lines=lines,
+        metrics=metrics,
+        model="compare_bandar",
+        summary_md=f"# Bandar detector Compare\n\nSOTA IC={ic_sota:+.3f} vs Baseline IC={ic_baseline:+.3f}.\n",
+        scoreboard=False,
     )
 
 
@@ -184,5 +246,5 @@ def deepdive_text() -> str:
     return deepdive_stub(
         topic=META.slug,
         related="bandar_detector di ai-saham",
-        bring_back="bandar accdist tags + RF accumulation precision habit",
+        bring_back="bandar anomaly scores (SOTA)",
     )
