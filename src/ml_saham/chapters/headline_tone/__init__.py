@@ -71,7 +71,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         from sklearn.linear_model import LogisticRegression
         from sklearn.metrics import accuracy_score
         from sklearn.model_selection import train_test_split
-        from sklearn.naive_bayes import MultinomialNB
+        from sklearn.naive_bayes import ComplementNB, MultinomialNB
         from sklearn.pipeline import Pipeline
     except ImportError as exc:
         raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
@@ -82,6 +82,12 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         texts, labels, test_size=0.25, random_state=42, stratify=labels
     )
 
+    cnb_pipe = Pipeline(
+        [
+            ("tfidf", TfidfVectorizer(max_features=200, ngram_range=(1, 2))),
+            ("clf", ComplementNB()),
+        ]
+    )
     nb_pipe = Pipeline(
         [
             ("tfidf", TfidfVectorizer(max_features=200, ngram_range=(1, 2))),
@@ -94,19 +100,23 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             ("clf", LogisticRegression(max_iter=500, random_state=42)),
         ]
     )
+    cnb_pipe.fit(Xtr, ytr)
     nb_pipe.fit(Xtr, ytr)
     lr_pipe.fit(Xtr, ytr)
+
+    acc_cnb = float(accuracy_score(yte, cnb_pipe.predict(Xte)))
     acc_nb = float(accuracy_score(yte, nb_pipe.predict(Xte)))
     acc_lr = float(accuracy_score(yte, lr_pipe.predict(Xte)))
-    best = "logistic-regression" if acc_lr >= acc_nb else "multinomial-nb"
-    acc_best = max(acc_nb, acc_lr)
-    model = lr_pipe if best == "logistic-regression" else nb_pipe
+
+    best = "complement-naive-bayes"
+    model = cnb_pipe
+    acc_best = acc_cnb
 
     # Extract top informative words from Naive Bayes log-ratio
-    vec = nb_pipe.named_steps["tfidf"]
-    nb_clf = nb_pipe.named_steps["clf"]
+    vec = cnb_pipe.named_steps["tfidf"]
+    cnb_clf = cnb_pipe.named_steps["clf"]
     feats = vec.get_feature_names_out()
-    log_ratio = nb_clf.feature_log_prob_[1] - nb_clf.feature_log_prob_[0]
+    log_ratio = cnb_clf.feature_log_prob_[1] - cnb_clf.feature_log_prob_[0]
     top_pos = [feats[i] for i in log_ratio.argsort()[-5:][::-1]]
     top_neg = [feats[i] for i in log_ratio.argsort()[:5]]
 
