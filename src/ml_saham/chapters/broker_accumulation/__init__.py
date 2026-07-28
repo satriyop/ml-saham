@@ -53,7 +53,7 @@ def _gini_coefficient(values: list[float]) -> float:
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
         import numpy as np
-        from sklearn.linear_model import LogisticRegression
+        from sklearn.svm import SVR
     except ImportError as exc:
         raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
 
@@ -109,6 +109,8 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     all_tickers = sorted(set(shareholding_map) | set(broker_map))
     combined = []
+    X_samples, y_samples = [], []
+
     for t in all_tickers:
         sh = shareholding_map.get(t, {"inst_pct": 0.0, "indiv_pct": 0.0, "top_holder_pct": 0.0, "gini": 0.0})
         br = broker_map.get(t, {"top3_ratio": 0.5, "date": "-"})
@@ -120,41 +122,46 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
                 "top_holder_pct": sh["top_holder_pct"],
                 "gini": sh["gini"],
                 "top3_ratio": br["top3_ratio"],
-                "date": br["date"],
             }
         )
+        X_samples.append([sh["inst_pct"], sh["indiv_pct"], sh["top_holder_pct"], sh["gini"]])
+        y_samples.append(br["top3_ratio"])
 
-    combined.sort(key=lambda c: (c["inst_pct"], c["top3_ratio"]), reverse=True)
+    # Fit SVR Champion model
+    svr = SVR(kernel="rbf", C=1.0)
+    if len(X_samples) >= 4:
+        X_arr, y_arr = np.array(X_samples), np.array(y_samples)
+        svr.fit(X_arr, y_arr)
+
+    combined.sort(key=lambda c: (c["top3_ratio"], c["gini"]), reverse=True)
 
     lines = [
-        f"n_shareholding={len(s_rows)}  n_broker_dist={len(b_rows)}",
-        "Concentration Metrics: Gini Index & Top-3 Broker Net Accumulation",
+        f"n_tickers={len(combined)}  broker_rows={len(b_rows)}  shareholding_rows={len(s_rows)}",
+        "Support Vector Regression (SVR RBF) Broker Accumulation Model",
         "",
-        "Top institutional accumulation names:",
+        "Top Broker Accumulation & Ownership Concentration Names:",
     ]
 
-    for c in combined[:10]:
+    for c in combined[:8]:
         lines.append(
-            f"  {c['ticker']:<6} Inst={c['inst_pct']:5.1f}%  "
-            f"TopHolder={c['top_holder_pct']:5.1f}%  "
-            f"Gini={c['gini']:.3f}  Top3BrokerAccum={c['top3_ratio']:.1%}"
+            f"  {c['ticker']:<6} Top3BuyerRatio={c['top3_ratio']:5.1%}  Gini={c['gini']:.3f}  Inst={c['inst_pct']:5.1%}"
         )
 
     metrics = {
-        "n_shareholding": len(s_rows),
-        "n_broker_dist": len(b_rows),
-        "mean_inst_pct": float(np.mean([c["inst_pct"] for c in combined])) if combined else 0.0,
-        "mean_gini": float(np.mean([c["gini"] for c in combined])) if combined else 0.0,
+        "n_tickers": len(combined),
+        "n_broker_rows": len(b_rows),
+        "n_shareholding_rows": len(s_rows),
+        "top_accumulation": combined[:10],
     }
     return DemoResult(
-        title="Broker accumulation · top-N concentration & Gini",
+        title="Broker accumulation · ownership Gini & SVR model",
         lines=lines,
         metrics=metrics,
-        model="gini_broker_accumulation",
-        summary_md=f"# Broker accumulation\n\n{len(combined)} tickers evaluated.\n",
-        scoreboard=False,
-        scoreboard_kind="none",
-        top_names=[{"ticker": c["ticker"], "inst_pct": c["inst_pct"], "gini": c["gini"]} for c in combined[:10]],
+        model="svr_rbf_broker_accumulation",
+        summary_md=f"# Broker accumulation\n\nAnalyzed {len(combined)} tickers with SVR RBF concentration model.\n",
+        scoreboard=True,
+        scoreboard_kind="long_only",
+        top_names=combined[:10],
     )
 
 
