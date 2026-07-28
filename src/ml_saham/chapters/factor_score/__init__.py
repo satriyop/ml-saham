@@ -39,9 +39,9 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • ownership (soft): z(institution_pct) bila tersedia",
         "",
         "Opsi pendekatan",
-        "  1) Hand blend equal-weight z-scores",
-        "  2) Elastic-net / LightGBM pada faktor → forward return",
-        "  3) Bandingkan equal-weight vs model (compare)",
+        "  1) LightGBM + SHAP pada faktor → forward return (SOTA)",
+        "  2) ElasticNet / Ridge (baseline linear)",
+        "  3) Bandingkan LightGBM vs ElasticNet (compare)",
         "",
         "Caveat",
         "  • PIT fundamentals — lihat Ch.0",
@@ -50,7 +50,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Bukan saran trading / investasi",
         "",
         f"Lanjut:  ml-saham demo {META.slug}",
-        f"Compare: ml-saham compare {META.slug} --baseline equal-weight --against elastic-net",
+        f"Compare: ml-saham compare {META.slug} --baseline elastic-net --against lightgbm",
     ]
     if verbose:
         lines.append("\nDetail: deepdive boleh menyinggung cache fundamentals ai-saham.")
@@ -152,6 +152,36 @@ def _elastic_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], 
     return pred.tolist(), "elastic-net", model.coef_.tolist()
 
 
+def _lgbm_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], str, list[float]]:
+    try:
+        import numpy as np
+        import lightgbm as lgb
+        import shap
+    except ImportError as exc:
+        raise ChapterError("Butuh lightgbm dan shap: pip install lightgbm shap") from exc
+    
+    arr = np.array(X, dtype=float)
+    yy = np.array(y, dtype=float)
+    
+    model = lgb.LGBMRegressor(
+        n_estimators=50,
+        max_depth=3,
+        learning_rate=0.05,
+        random_state=42,
+        n_jobs=1
+    )
+    model.fit(arr, yy)
+    pred = model.predict(arr)
+    
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(arr)
+    if isinstance(shap_values, list):
+        shap_values = shap_values[0]
+    
+    importances = np.abs(shap_values).mean(axis=0).tolist()
+    return pred.tolist(), "lightgbm", importances
+
+
 def run_demo(ctx: ChapterContext) -> DemoResult:
     as_of, rows, bench, ownership_used = _build_rows(ctx)
     if len(rows) < 12:
@@ -159,9 +189,11 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     hand, X = _factor_matrix(rows, use_ownership=ownership_used)
     rets_raw = [r["fwd"] for r in rows]
     rets = maybe_haircut(rets_raw, with_costs=ctx.with_costs)
-    model_scores, model_name, coefs = _elastic_scores(X, rets)
+    
+    model_scores, model_name, importances = _lgbm_scores(X, rets)
     ic_hand = rank_ic(hand, rets)
     ic_model = rank_ic(model_scores, rets)
+    
     bundle = metrics_bundle(
         model_scores,
         rets,
@@ -181,14 +213,14 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     ]
 
     feature_names = ["value", "mom", "quality"] + (["ownership"] if ownership_used else [])
-    coef_str = ", ".join(f"{name}:{c:+.4f}" for name, c in zip(feature_names, coefs, strict=False))
+    imp_str = ", ".join(f"{name}:{imp:.4f}" for name, imp in zip(feature_names, importances, strict=False))
 
     lines = [
         f"as_of={as_of}  n={len(rows)}  horizon=5d",
         f"Ownership sleeve: {'aktif' if ownership_used else 'skip (soft / data tipis)'}",
         f"Hand equal-weight rank IC: {ic_hand:+.3f}",
-        f"Elastic-net rank IC:       {ic_model:+.3f}",
-        f"Feature weights (coefs):   {coef_str}",
+        f"LightGBM rank IC:          {ic_model:+.3f}",
+        f"SHAP importances:          {imp_str}",
         "Catatan: skor model fit in-sample pada as_of panel — bukan walk-forward.",
     ]
     if bench is not None:
@@ -198,7 +230,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         )
         lines.append(f"Top-quantile sample mean fwd: {top_mean:+.2%}  vs IHSG")
     lines.append("")
-    lines.append("Top elastic-net names:")
+    lines.append(f"Top {model_name} names:")
     for t in top[:8]:
         lines.append(
             f"  {t['ticker']:<6} score={t['score']:+.3f}  "
@@ -212,20 +244,20 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "rank_ic_model": ic_model,
         "ownership_used": ownership_used,
         "model": model_name,
-        "feature_coefs": dict(zip(feature_names, coefs, strict=False)),
+        "shap_importances": dict(zip(feature_names, importances, strict=False)),
     }
     csv = ["ticker,score,hand,fwd"] + [
         f"{t['ticker']},{t['score']:.6f},{t['hand']:.6f},{t['fwd']:.6f}" for t in top
     ]
     return DemoResult(
-        title="Factor score · hand vs elastic-net",
+        title="Factor score · hand vs LightGBM",
         lines=lines,
         metrics=metrics,
         model=model_name,
         summary_md=(
             f"# Factor score\n\nas_of={as_of}. value/momentum/quality "
             f"(+ ownership={'on' if ownership_used else 'off'}).\n"
-            f"Hand IC={ic_hand:.3f}, elastic-net IC={ic_model:.3f}.\n"
+            f"Hand IC={ic_hand:.3f}, LightGBM IC={ic_model:.3f}.\n"
         ),
         scoreboard=True,
         top_names=top,
@@ -237,41 +269,52 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
     as_of, rows, bench, ownership_used = _build_rows(ctx)
     hand, X = _factor_matrix(rows, use_ownership=ownership_used)
     rets = maybe_haircut([r["fwd"] for r in rows], with_costs=ctx.with_costs)
-    model_scores, model_name, _ = _elastic_scores(X, rets)
-    base = hand if "equal" in baseline or baseline == "hand" else model_scores
-    ag = model_scores if "elastic" in against or "model" in against else hand
-    ic_b = rank_ic(base, rets)
-    ic_a = rank_ic(ag, rets)
+    
+    def get_scores(name: str):
+        if "equal" in name or name == "hand":
+            return hand, "equal-weight"
+        elif "elastic" in name or "ridge" in name:
+            scores, model_name, _ = _elastic_scores(X, rets)
+            return scores, model_name
+        else:
+            scores, model_name, _ = _lgbm_scores(X, rets)
+            return scores, model_name
+
+    base_scores, base_name = get_scores(baseline)
+    ag_scores, ag_name = get_scores(against)
+    
+    ic_b = rank_ic(base_scores, rets)
+    ic_a = rank_ic(ag_scores, rets)
     top_b = [
         rows[i]["ticker"]
-        for i in sorted(range(len(rows)), key=lambda i: base[i], reverse=True)[:10]
+        for i in sorted(range(len(rows)), key=lambda i: base_scores[i], reverse=True)[:10]
     ]
     top_a = [
         rows[i]["ticker"]
-        for i in sorted(range(len(rows)), key=lambda i: ag[i], reverse=True)[:10]
+        for i in sorted(range(len(rows)), key=lambda i: ag_scores[i], reverse=True)[:10]
     ]
     lines = [
         f"as_of={as_of}  n={len(rows)}",
-        f"{baseline}: rank_ic={ic_b:+.3f}",
-        f"{against}:  rank_ic={ic_a:+.3f} ({model_name})",
+        f"{base_name}: rank_ic={ic_b:+.3f}",
+        f"{ag_name}: rank_ic={ic_a:+.3f}",
         f"overlap top10: {len(set(top_b) & set(top_a))}",
     ]
     if bench is not None:
         lines.append(f"IHSG fwd: {bench:+.2%}")
     compare = {
-        "baseline": {"id": baseline, "rank_ic": ic_b, "top10": top_b},
-        "against": {"id": against, "rank_ic": ic_a, "top10": top_a},
+        "baseline": {"id": base_name, "rank_ic": ic_b, "top10": top_b},
+        "against": {"id": ag_name, "rank_ic": ic_a, "top10": top_a},
         "as_of": as_of,
         "ownership_used": ownership_used,
         "benchmark_return": bench,
     }
     return CompareResult(
-        title=f"Compare · {baseline} vs {against}",
+        title=f"Compare · {base_name} vs {ag_name}",
         lines=lines,
         metrics={"rank_ic_baseline": ic_b, "rank_ic_against": ic_a, "n": len(rows)},
         compare=compare,
-        model=f"{baseline}_vs_{against}",
-        summary_md=f"# Compare factor-score\n\n`{baseline}` vs `{against}`.\n",
+        model=f"{base_name}_vs_{ag_name}",
+        summary_md=f"# Compare factor-score\n\n`{base_name}` vs `{ag_name}`.\n",
         scoreboard=True,
     )
 
