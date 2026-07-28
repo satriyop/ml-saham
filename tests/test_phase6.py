@@ -160,3 +160,27 @@ def test_leaderboard_command(fixture_db: Path, tmp_path: Path):
     assert "QUANTITATIVE ML MODEL LEADERBOARD" in r.stdout
     assert json_path.is_file()
     assert "clean-prices" in json_path.read_text()
+
+
+def test_challenge_command(fixture_db: Path, tmp_path: Path):
+    json_path = tmp_path / "ch.json"
+    md_path = tmp_path / "ch.md"
+    r = runner.invoke(
+        app,
+        [
+            "--db",
+            str(fixture_db),
+            "challenge",
+            "all",
+            "--export-json",
+            str(json_path),
+            "--export-md",
+            str(md_path),
+        ],
+    )
+    assert r.exit_code == 0, r.stdout
+    assert "AI-SAHAM ENGINE CHALLENGE & PARAMETER AUDIT" in r.stdout
+    assert json_path.is_file()
+    assert md_path.is_file()
+    assert "screener" in json_path.read_text()
+

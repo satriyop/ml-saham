@@ -623,6 +623,80 @@ def leaderboard_cmd(
         console.print(f"\n[green]Saved leaderboard JSON to {export_json}[/green]")
 
 
+@app.command("challenge")
+def challenge_cmd(
+    ctx: typer.Context,
+    target: str = typer.Argument(
+        "all",
+        help="Engine target: screener, plan, risk, market-context, atau all",
+    ),
+    as_of: Optional[str] = typer.Option(
+        None,
+        "--as-of",
+        help="Tanggal as_of (YYYY-MM-DD); default dipilih otomatis",
+    ),
+    export_json: Optional[Path] = typer.Option(
+        None,
+        "--export-json",
+        help="Tulis hasil challenge ke file JSON",
+    ),
+    export_md: Optional[Path] = typer.Option(
+        None,
+        "--export-md",
+        help="Tulis hasil challenge ke file Markdown report",
+    ),
+) -> None:
+    """Audit sensitivitas & tantang faktor/parameter engine ai-saham."""
+    from ml_saham.eval.challenge import (
+        audit_market_context,
+        audit_plan,
+        audit_risk,
+        audit_screener,
+        run_full_challenge,
+    )
+
+    db_path: Path = ctx.obj["db"]
+    target_clean = target.lower().strip()
+
+    console.print("[bold cyan]=== AI-SAHAM ENGINE CHALLENGE & PARAMETER AUDIT ===[/bold cyan]")
+    console.print(f"Database: {db_path}\n")
+
+    results: dict = {}
+
+    with connect(db_path) as conn:
+        if target_clean in ("screener", "screen"):
+            results = {"screener": audit_screener(conn, as_of=as_of)}
+        elif target_clean == "plan":
+            results = {"plan": audit_plan(conn, as_of=as_of)}
+        elif target_clean == "risk":
+            results = {"risk": audit_risk(conn, as_of=as_of)}
+        elif target_clean in ("market-context", "context", "regime"):
+            results = {"market_context": audit_market_context(conn, as_of=as_of)}
+        else:
+            results = run_full_challenge(conn, as_of=as_of)
+
+    for eng, res in results.items():
+        console.print(f"[bold yellow]Engine: {eng.upper()}[/bold yellow]")
+        for k, v in res.items():
+            if isinstance(v, (dict, list)):
+                console.print(f"  {k}:")
+                console.print(f"    {json.dumps(v, indent=4)}")
+            else:
+                console.print(f"  {k:<30}: [bold white]{v}[/bold white]")
+        console.print("─" * 50)
+
+    if export_json:
+        export_json.parent.mkdir(parents=True, exist_ok=True)
+        export_json.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+        console.print(f"\n[green]Saved challenge audit JSON to {export_json}[/green]")
+
+    if export_md:
+        export_md.parent.mkdir(parents=True, exist_ok=True)
+        md_text = f"# ai-saham Engine Challenge Report\n\n```json\n{json.dumps(results, indent=2)}\n```\n"
+        export_md.write_text(md_text, encoding="utf-8")
+        console.print(f"[green]Saved challenge audit Markdown report to {export_md}[/green]")
+
+
 @app.command("glossary")
 def glossary_cmd(
     term: Optional[str] = typer.Argument(None, help="Istilah (EN), opsional"),
