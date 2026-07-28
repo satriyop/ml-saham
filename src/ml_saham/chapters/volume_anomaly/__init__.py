@@ -131,30 +131,32 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             f"|ret|={f['abs_ret']:.2%}  vol/avg={f['vol_ratio']:.1f}x  {f['reason']}"
         )
 
+    unique_t = set(f["ticker"] for f in flagged)
     metrics = {
         "n_tickers": len(by_t),
-        "n_rows": len(feats),
+        "n_samples": len(feats),
         "n_flagged": len(flagged),
-        "overlap_both": both,
-        "methods": ["isolation_forest", "one_class_svm"],
-        "top_flagged": top[:20],
+        "n_both_flagged": both,
+        "flagged_tickers_count": len(unique_t),
+        "top_anomalies": top[:10],
     }
     csv = ["ticker,date,abs_ret,vol_ratio,reason"] + [
         f"{f['ticker']},{f['date']},{f['abs_ret']:.6f},{f['vol_ratio']:.6f},{f['reason']}"
         for f in top
     ]
     return DemoResult(
-        title="Volume anomaly · IF + One-Class SVM",
+        title="Volume anomaly · Isolation Forest vs One-Class SVM",
         lines=lines,
         metrics=metrics,
-        model="if_ocsvm",
+        model="oc_svm_rbf",
         summary_md=(
             "# Volume anomaly\n\n"
-            "Price/volume only — bukan flow/broker. "
-            f"Flagged={len(flagged)}, overlap={both}.\n"
+            f"Flagged {len(flagged)} price-volume anomalies across {len(unique_t)} tickers.\n"
+            f"Both methods agreed on {both} anomalies.\n"
         ),
         scoreboard=True,
-        top_names=top[:20],
+        scoreboard_kind="long_only",
+        top_names=top[:10],
         extra_files={"top_names.csv": "\n".join(csv) + "\n"},
     )
 
