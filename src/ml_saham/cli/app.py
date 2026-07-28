@@ -628,7 +628,7 @@ def challenge_cmd(
     ctx: typer.Context,
     target: str = typer.Argument(
         "all",
-        help="Engine target: screener, plan, risk, market-context, atau all",
+        help="Engine target: screener, engine, other, atau all",
     ),
     as_of: Optional[str] = typer.Option(
         None,
@@ -648,35 +648,32 @@ def challenge_cmd(
 ) -> None:
     """Audit sensitivitas & tantang faktor/parameter engine ai-saham."""
     from ml_saham.eval.challenge import (
-        audit_market_context,
-        audit_plan,
-        audit_risk,
-        audit_screener,
+        challenge_engine,
+        challenge_other,
+        challenge_screener,
         run_full_challenge,
     )
 
     db_path: Path = ctx.obj["db"]
     target_clean = target.lower().strip()
+    chapter_ctx = _build_ctx(ctx, with_costs=False, as_of=as_of)
 
     console.print("[bold cyan]=== AI-SAHAM ENGINE CHALLENGE & PARAMETER AUDIT ===[/bold cyan]")
     console.print(f"Database: {db_path}\n")
 
     results: dict = {}
 
-    with connect(db_path) as conn:
-        if target_clean in ("screener", "screen"):
-            results = {"screener": audit_screener(conn, as_of=as_of)}
-        elif target_clean == "plan":
-            results = {"plan": audit_plan(conn, as_of=as_of)}
-        elif target_clean == "risk":
-            results = {"risk": audit_risk(conn, as_of=as_of)}
-        elif target_clean in ("market-context", "context", "regime"):
-            results = {"market_context": audit_market_context(conn, as_of=as_of)}
-        else:
-            results = run_full_challenge(conn, as_of=as_of)
+    if target_clean in ("screener", "screen"):
+        results = {"screener": challenge_screener(chapter_ctx)}
+    elif target_clean == "engine":
+        results = {"engine": challenge_engine(chapter_ctx)}
+    elif target_clean in ("other", "other_aspects"):
+        results = {"other_aspects": challenge_other(chapter_ctx)}
+    else:
+        results = run_full_challenge(chapter_ctx)
 
-    for eng, res in results.items():
-        console.print(f"[bold yellow]Engine: {eng.upper()}[/bold yellow]")
+    for category, res in results.items():
+        console.print(f"[bold yellow]Category: {category.upper()}[/bold yellow]")
         for k, v in res.items():
             if isinstance(v, (dict, list)):
                 console.print(f"  {k}:")
