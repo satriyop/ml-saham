@@ -1,4 +1,4 @@
-"""Ch.25 Financial quality — Piotroski F-Score & accounting quality signals."""
+"""Ch.28 Financial quality — Piotroski F-Score & accounting quality signals."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from ml_saham.chapters.panel import (
     resolve_universe,
 )
 from ml_saham.chapters.registry import get as get_meta
-from ml_saham.chapters.types import ChapterContext, DemoResult
+from ml_saham.chapters.types import ChapterContext, DemoResult, CompareResult
 from ml_saham.data.aisaham_read import connect
 from ml_saham.data.phase2_read import load_company_financials
 from ml_saham.eval.metrics import rank_ic
@@ -29,33 +29,25 @@ def explore_text(*, verbose: bool = False) -> str:
         f"topic={META.slug}  phase={META.phase}  data={META.required_data}",
         "",
         "Masalah",
-        "  Menilai kualitas фундаментал & akuntansi perusahaan menggunakan matriks 9 sinyal",
-        "  Piotroski F-Score (Profitabilitas, Likuiditas/Leverage, Efisiensi Operasional).",
+        "  Menilai kualitas fundamental & akuntansi perusahaan.",
         "",
         "Opsi pendekatan",
-        "  1) Matriks 9 Sinyal Akuntansi Piotroski F-Score (Score 0-9)",
-        "  2) Logistic Regression / Decision Tree memprediksi Outperformer Return",
-        "  3) Rank IC F-Score vs Forward Return 20 Hari",
+        "  1) LightGBM Classification pada sinyal Piotroski/Beneish (SOTA/default)",
+        "  2) Penjumlahan skor Piotroski F-Score (baseline/compare)",
         "",
         "Caveat",
         "  • Laporan keuangan dipublikasikan kuartalan (PIT delay)",
-        "  • Perusahaan sektor keuangan (Bank) membutuhkan penyesuaian F-Score khusus",
-        "  • Bukan saran trading / investasi",
+        "  • Perusahaan sektor keuangan membutuhkan penyesuaian khusus",
         "",
         f"Lanjut:  ml-saham demo {META.slug}",
+        f"Bandingkan: ml-saham compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: load_company_financials di ai-saham.")
     return "\n".join(lines)
 
 
-def run_demo(ctx: ChapterContext) -> DemoResult:
-    try:
-        import numpy as np
-        from sklearn.linear_model import LogisticRegression
-    except ImportError as exc:
-        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
-
+def _prepare_data(ctx: ChapterContext):
     with connect(ctx.db_path) as conn:
         uni = ctx.universe or resolve_universe(conn, limit=50)
         as_of = ctx.as_of or pick_as_of(conn, uni, min_forward=5)
@@ -72,7 +64,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             hint="ml-saham doctor",
         )
 
-    # Calculate Piotroski F-Score signals per ticker
     scores: dict[str, float] = {}
     f_details: dict[str, list[int]] = {}
 
@@ -120,52 +111,138 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     f_scores = [scores[t] for t in tickers]
     rets = maybe_haircut([fwd[t] for t in tickers], with_costs=ctx.with_costs)
-    ic = rank_ic(f_scores, rets)
 
-    # Fit Logistic Regression on 9 signals predicting positive return
+    return as_of, tickers, f_scores, rets, f_details
+
+
+def run_demo(ctx: ChapterContext) -> DemoResult:
+    try:
+        import numpy as np
+        import lightgbm as lgb
+    except ImportError as exc:
+        raise ChapterError("Butuh lightgbm: pip install lightgbm") from exc
+
+    as_of, tickers, f_scores, rets, f_details = _prepare_data(ctx)
+
+    # LightGBM classification on Piotroski/Beneish
     X = np.array([f_details[t] for t in tickers])
     y = np.array([1 if r > 0 else 0 for r in rets])
 
-    model_acc = 0.5
+    clf = lgb.LGBMClassifier(
+        n_estimators=50,
+        max_depth=3,
+        random_state=42,
+        verbose=-1,
+    )
     if len(set(y.tolist())) >= 2:
-        clf = LogisticRegression(max_iter=200)
         clf.fit(X, y)
-        model_acc = float(clf.score(X, y))
+        preds = clf.predict_proba(X)[:, 1]
+    else:
+        preds = np.zeros(len(tickers))
 
-    order = sorted(range(len(tickers)), key=lambda i: f_scores[i], reverse=True)
+    ic = rank_ic(preds.tolist(), rets)
+    acc = float((clf.predict(X) == y).mean()) if len(set(y.tolist())) >= 2 else 0.5
+
+    order = sorted(range(len(tickers)), key=lambda i: preds[i], reverse=True)
     top = [
-        {"ticker": tickers[i], "f_score": f_scores[i], "fwd": rets[i]}
+        {"ticker": tickers[i], "prob": float(preds[i]), "fwd": rets[i]}
         for i in order[:10]
     ]
 
     lines = [
         f"as_of={as_of}  n_tickers={len(tickers)}",
-        f"Piotroski F-Score Rank IC vs 5d fwd return: {ic:+.3f}",
-        f"9-Signal Logistic Model In-Sample Accuracy: {model_acc:.1%}",
+        f"SOTA LightGBM Rank IC vs 5d fwd return: {ic:+.3f}",
+        f"LightGBM In-Sample Accuracy: {acc:.1%}",
         "",
-        "Top Piotroski F-Score Companies (Score 0-9):",
+        "Top SOTA LightGBM Companies:",
     ]
-
     for t in top[:8]:
-        lines.append(
-            f"  {t['ticker']:<6} F-Score={t['f_score']:.0f}/9  fwd={t['fwd']:+.2%}"
-        )
+        lines.append(f"  {t['ticker']:<6} SOTA_Prob={t['prob']:.2f}  fwd={t['fwd']:+.2%}")
 
     metrics = {
         "as_of": as_of,
         "n_tickers": len(tickers),
-        "rank_ic_f_score": ic,
-        "model_accuracy": model_acc,
+        "rank_ic": ic,
+        "model_accuracy": acc,
     }
     return DemoResult(
-        title="Financial quality · Piotroski F-Score",
+        title="Financial quality · SOTA LightGBM",
         lines=lines,
         metrics=metrics,
-        model="piotroski_f_score_logistic",
-        summary_md=f"# Financial quality\n\nRank IC={ic:+.3f}. Accuracy={model_acc:.1%}.\n",
+        model="lightgbm_classification",
+        summary_md=f"# Financial quality\n\nRank IC={ic:+.3f}. Accuracy={acc:.1%}.\n",
         scoreboard=True,
         scoreboard_kind="long_only",
         top_names=top,
+    )
+
+
+def run_compare(ctx: ChapterContext) -> CompareResult:
+    try:
+        import numpy as np
+        import lightgbm as lgb
+    except ImportError as exc:
+        raise ChapterError("Butuh lightgbm: pip install lightgbm") from exc
+
+    as_of, tickers, f_scores, rets, f_details = _prepare_data(ctx)
+
+    # LightGBM (SOTA)
+    X = np.array([f_details[t] for t in tickers])
+    y = np.array([1 if r > 0 else 0 for r in rets])
+
+    clf = lgb.LGBMClassifier(
+        n_estimators=50,
+        max_depth=3,
+        random_state=42,
+        verbose=-1,
+    )
+    if len(set(y.tolist())) >= 2:
+        clf.fit(X, y)
+        preds_sota = clf.predict_proba(X)[:, 1]
+    else:
+        preds_sota = np.zeros(len(tickers))
+        
+    ic_sota = rank_ic(preds_sota.tolist(), rets)
+    acc_sota = float((clf.predict(X) == y).mean()) if len(set(y.tolist())) >= 2 else 0.5
+
+    # Piotroski F-Score Sum (Baseline)
+    ic_baseline = rank_ic(f_scores, rets)
+    
+    # Simple threshold accuracy for baseline: >5 means outperformer
+    preds_baseline = np.array([1 if s > 5 else 0 for s in f_scores])
+    acc_baseline = float((preds_baseline == y).mean())
+
+    lines = [
+        f"as_of={as_of}  n_tickers={len(tickers)}",
+        "",
+        "[ SOTA: LightGBM Classification ]",
+        f"  Rank IC  : {ic_sota:+.3f}",
+        f"  Accuracy : {acc_sota:.1%}",
+        "",
+        "[ Baseline: Piotroski F-Score Sum ]",
+        f"  Rank IC  : {ic_baseline:+.3f}",
+        f"  Accuracy : {acc_baseline:.1%}",
+    ]
+    
+    metrics = {
+        "as_of": as_of,
+        "n_tickers": len(tickers),
+    }
+    compare = {
+        "sota_ic": ic_sota,
+        "sota_acc": acc_sota,
+        "baseline_ic": ic_baseline,
+        "baseline_acc": acc_baseline,
+    }
+
+    return CompareResult(
+        title="Financial quality · SOTA vs Baseline",
+        lines=lines,
+        metrics=metrics,
+        compare=compare,
+        model="lightgbm_vs_f_score",
+        summary_md=f"# Financial quality\n\nSOTA IC={ic_sota:+.3f} vs Baseline IC={ic_baseline:+.3f}.\n",
+        scoreboard=True,
     )
 
 
