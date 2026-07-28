@@ -46,6 +46,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         import numpy as np
         from sklearn.cluster import AgglomerativeClustering, KMeans
         from sklearn.decomposition import PCA
+        from sklearn.metrics import davies_bouldin_score, silhouette_score
         from sklearn.preprocessing import StandardScaler
     except ImportError as exc:
         raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
@@ -101,6 +102,9 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     pca = PCA(n_components=2, random_state=42)
     coords = pca.fit_transform(X)
 
+    sil_score = float(silhouette_score(X, labels_km)) if len(set(labels_km)) > 1 else 0.0
+    db_score = float(davies_bouldin_score(X, labels_km)) if len(set(labels_km)) > 1 else 0.0
+
     # agreement: same pair co-clustered?
     agree = 0
     total_pairs = 0
@@ -118,6 +122,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         f"PCA var explained: {pca.explained_variance_ratio_[0]:.2%} / "
         f"{pca.explained_variance_ratio_[1]:.2%}",
         f"k-means vs hierarchical pair-agreement: {agree_rate:.1%}",
+        f"Cluster diagnostics: Silhouette={sil_score:+.3f}  Davies-Bouldin={db_score:.3f}",
         "",
         "Clusters (k-means) · contoh anggota + sector:",
     ]
@@ -134,6 +139,8 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "n_clusters": n_clusters,
         "window": window,
         "pair_agreement": agree_rate,
+        "silhouette_score": sil_score,
+        "davies_bouldin_score": db_score,
         "pca_var": pca.explained_variance_ratio_.tolist(),
         "clusters": {str(c): by_c[c] for c in by_c},
     }

@@ -24,22 +24,23 @@ def today_iso() -> str:
     return date.today().isoformat()
 
 
+import numpy as np
+
+
 def zscore(values: list[float | None]) -> list[float | None]:
-    xs = [v for v in values if v is not None and not math.isnan(float(v))]
-    if len(xs) < 2:
+    arr = np.array([np.nan if (v is None or math.isnan(float(v))) else float(v) for v in values], dtype=float)
+    valid_mask = ~np.isnan(arr)
+    if np.sum(valid_mask) < 2:
         return [None for _ in values]
-    mean = sum(xs) / len(xs)
-    var = sum((x - mean) ** 2 for x in xs) / len(xs)
+
+    mean = float(np.mean(arr[valid_mask]))
+    var = float(np.var(arr[valid_mask]))
     std = math.sqrt(var) if var > 0 else 0.0
     if std == 0.0:
-        return [0.0 if v is not None else None for v in values]
-    out: list[float | None] = []
-    for v in values:
-        if v is None or math.isnan(float(v)):
-            out.append(None)
-        else:
-            out.append((float(v) - mean) / std)
-    return out
+        return [0.0 if (v is not None and not math.isnan(float(v))) else None for v in values]
+
+    z = (arr - mean) / std
+    return [None if np.isnan(val) else float(val) for val in z]
 
 
 def forward_returns_by_ticker(
@@ -137,7 +138,7 @@ def foreign_net_nday(
 ) -> dict[str, float]:
     """Sum foreign buy-sell value over last `window` sessions ending at as_of."""
     # Prefer broker_summaries; fall back to foreign_flow_points
-    rows = load_broker_summaries(conn, tickers)
+    rows = load_broker_summaries(conn, tickers, end=as_of)
     by_t: dict[str, list[tuple[str, float]]] = defaultdict(list)
     if rows:
         for r in rows:
@@ -145,7 +146,7 @@ def foreign_net_nday(
             sell = float(r["foreign_sell_value"] or 0)
             by_t[r["ticker"]].append((r["date"], buy - sell))
     else:
-        for r in load_foreign_flow_points(conn, tickers):
+        for r in load_foreign_flow_points(conn, tickers, end=as_of):
             by_t[r["ticker"]].append((r["date"], float(r["net_val"] or 0)))
 
     out: dict[str, float] = {}
@@ -171,7 +172,7 @@ def momentum_nday(
     as_of: str,
     window: int = 20,
 ) -> dict[str, float]:
-    candles = load_candles(conn, tickers)
+    candles = load_candles(conn, tickers, end=as_of)
     by_t: dict[str, list[tuple[str, float]]] = defaultdict(list)
     for row in candles:
         by_t[row["ticker"]].append((row["date"], float(row["close"])))

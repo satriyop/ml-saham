@@ -133,7 +133,7 @@ def _factor_matrix(rows: list[dict], *, use_ownership: bool):
     return hand, X
 
 
-def _elastic_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], str]:
+def _elastic_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], str, list[float]]:
     try:
         import numpy as np
         from sklearn.linear_model import ElasticNet, Ridge
@@ -148,8 +148,8 @@ def _elastic_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], 
         ridge = Ridge(alpha=1.0, random_state=42)
         ridge.fit(arr, yy)
         pred = ridge.predict(arr)
-        return pred.tolist(), "ridge-fallback"
-    return pred.tolist(), "elastic-net"
+        return pred.tolist(), "ridge-fallback", ridge.coef_.tolist()
+    return pred.tolist(), "elastic-net", model.coef_.tolist()
 
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
@@ -159,7 +159,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     hand, X = _factor_matrix(rows, use_ownership=ownership_used)
     rets_raw = [r["fwd"] for r in rows]
     rets = maybe_haircut(rets_raw, with_costs=ctx.with_costs)
-    model_scores, model_name = _elastic_scores(X, rets)
+    model_scores, model_name, coefs = _elastic_scores(X, rets)
     ic_hand = rank_ic(hand, rets)
     ic_model = rank_ic(model_scores, rets)
     bundle = metrics_bundle(
@@ -179,11 +179,16 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         }
         for i in order[:10]
     ]
+
+    feature_names = ["value", "mom", "quality"] + (["ownership"] if ownership_used else [])
+    coef_str = ", ".join(f"{name}:{c:+.4f}" for name, c in zip(feature_names, coefs, strict=False))
+
     lines = [
         f"as_of={as_of}  n={len(rows)}  horizon=5d",
         f"Ownership sleeve: {'aktif' if ownership_used else 'skip (soft / data tipis)'}",
         f"Hand equal-weight rank IC: {ic_hand:+.3f}",
         f"Elastic-net rank IC:       {ic_model:+.3f}",
+        f"Feature weights (coefs):   {coef_str}",
         "Catatan: skor model fit in-sample pada as_of panel — bukan walk-forward.",
     ]
     if bench is not None:
@@ -207,6 +212,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "rank_ic_model": ic_model,
         "ownership_used": ownership_used,
         "model": model_name,
+        "feature_coefs": dict(zip(feature_names, coefs, strict=False)),
     }
     csv = ["ticker,score,hand,fwd"] + [
         f"{t['ticker']},{t['score']:.6f},{t['hand']:.6f},{t['fwd']:.6f}" for t in top
@@ -231,7 +237,7 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
     as_of, rows, bench, ownership_used = _build_rows(ctx)
     hand, X = _factor_matrix(rows, use_ownership=ownership_used)
     rets = maybe_haircut([r["fwd"] for r in rows], with_costs=ctx.with_costs)
-    model_scores, model_name = _elastic_scores(X, rets)
+    model_scores, model_name, _ = _elastic_scores(X, rets)
     base = hand if "equal" in baseline or baseline == "hand" else model_scores
     ag = model_scores if "elastic" in against or "model" in against else hand
     ic_b = rank_ic(base, rets)

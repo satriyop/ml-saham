@@ -2,11 +2,22 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from collections.abc import Iterable, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
+
+_IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z0-9_]+$")
+
+
+def _validate_identifier(name: str) -> str:
+    """Ensure identifier consists strictly of safe alphanumeric and underscore characters."""
+    if not _IDENTIFIER_PATTERN.match(name):
+        raise ValueError(f"Invalid SQL identifier: {name!r}")
+    return name
+
 
 
 @contextmanager
@@ -31,9 +42,10 @@ def table_exists(conn: sqlite3.Connection, name: str) -> bool:
 
 
 def table_columns(conn: sqlite3.Connection, name: str) -> set[str]:
-    if not table_exists(conn, name):
+    safe_name = _validate_identifier(name)
+    if not table_exists(conn, safe_name):
         return set()
-    rows = conn.execute(f"PRAGMA table_info({name})").fetchall()
+    rows = conn.execute(f"PRAGMA table_info({safe_name})").fetchall()
     return {r["name"] for r in rows}
 
 
@@ -221,20 +233,22 @@ def load_shareholding_latest(
 
 
 def count_rows(conn: sqlite3.Connection, table: str) -> int:
-    if not table_exists(conn, table):
+    safe_table = _validate_identifier(table)
+    if not table_exists(conn, safe_table):
         return 0
-    row = conn.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()
+    row = conn.execute(f"SELECT COUNT(*) AS n FROM {safe_table}").fetchone()
     return int(row["n"]) if row else 0
 
 
 def distinct_ticker_count(conn: sqlite3.Connection, table: str) -> int:
-    if not table_exists(conn, table):
+    safe_table = _validate_identifier(table)
+    if not table_exists(conn, safe_table):
         return 0
-    cols = table_columns(conn, table)
+    cols = table_columns(conn, safe_table)
     if "ticker" not in cols:
         return 0
     row = conn.execute(
-        f"SELECT COUNT(DISTINCT ticker) AS n FROM {table}"
+        f"SELECT COUNT(DISTINCT ticker) AS n FROM {safe_table}"
     ).fetchone()
     return int(row["n"]) if row else 0
 
@@ -245,12 +259,25 @@ def filter_tickers_with_min_bars(
     *,
     min_bars: int = 60,
 ) -> list[str]:
-    """Keep tickers that have at least min_bars candle rows."""
-    out: list[str] = []
-    for t in tickers:
-        if ticker_candle_count(conn, t) >= min_bars:
-            out.append(t)
-    return out
+    """Keep tickers that have at least min_bars candle rows in a single batch query (no N+1)."""
+    if not table_exists(conn, "candles"):
+        return []
+    ticker_list = list(tickers)
+    if not ticker_list:
+        return []
+
+    ph = _placeholders(len(ticker_list))
+    sql = f"""
+        SELECT ticker
+        FROM candles
+        WHERE ticker IN ({ph})
+        GROUP BY ticker
+        HAVING COUNT(*) >= ?
+    """
+    params: list[Any] = list(ticker_list)
+    params.append(min_bars)
+    valid_set = {r["ticker"] for r in conn.execute(sql, params).fetchall()}
+    return [t for t in ticker_list if t in valid_set]
 
 
 _INSIDER_MIN_DATE = "1990-01-01"
@@ -335,8 +362,10 @@ def load_sector_map(conn: sqlite3.Connection) -> dict[str, str]:
         cols = table_columns(conn, tname)
         if "ticker" not in cols or sector_col not in cols:
             continue
+        safe_tname = _validate_identifier(tname)
+        safe_sector_col = _validate_identifier(sector_col)
         rows = conn.execute(
-            f"SELECT ticker, {sector_col} AS sector FROM {tname}"
+            f"SELECT ticker, {safe_sector_col} AS sector FROM {safe_tname}"
         ).fetchall()
         for r in rows:
             sec = (r["sector"] or "").strip()

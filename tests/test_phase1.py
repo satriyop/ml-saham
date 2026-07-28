@@ -78,3 +78,28 @@ def test_doctor_cli_exit_codes(tmp_path: Path):
     empty = build_mvp_fixture(tmp_path / "empty.db", with_hard=False)
     bad = runner.invoke(app, ["--db", str(empty), "doctor"])
     assert bad.exit_code == 1
+
+
+def test_sql_identifier_sanitization(tmp_path: Path):
+    import pytest
+    from ml_saham.data.aisaham_read import count_rows, distinct_ticker_count, table_columns
+
+    db = build_mvp_fixture(tmp_path / "mvp.db")
+    with connect(db) as conn:
+        with pytest.raises(ValueError, match="Invalid SQL identifier"):
+            count_rows(conn, "candles; DROP TABLE candles;")
+        with pytest.raises(ValueError, match="Invalid SQL identifier"):
+            distinct_ticker_count(conn, "candles; DROP TABLE candles;")
+        with pytest.raises(ValueError, match="Invalid SQL identifier"):
+            table_columns(conn, "candles; DROP TABLE candles;")
+
+
+def test_filter_tickers_with_min_bars_batch(tmp_path: Path):
+    from ml_saham.data.aisaham_read import filter_tickers_with_min_bars
+
+    db = build_mvp_fixture(tmp_path / "mvp.db")
+    with connect(db) as conn:
+        filtered = filter_tickers_with_min_bars(conn, ["BBCA", "BMRI", "NONEXISTENT"], min_bars=60)
+        assert "BBCA" in filtered
+        assert "NONEXISTENT" not in filtered
+

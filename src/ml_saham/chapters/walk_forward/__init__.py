@@ -149,9 +149,23 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     order = sorted(range(len(dates)), key=lambda i: dates[i])
     Xo = [X[i] for i in order]
     yo = [y[i] for i in order]
-    split = int(len(Xo) * 0.7)
-    Xtr, Xte = np.array(Xo[:split]), np.array(Xo[split:])
-    ytr, yte = np.array(yo[:split]), np.array(yo[split:])
+    dates_o = [dates[i] for i in order]
+
+    # Purged split: Purge H=5 target overlap gap between Train and Test
+    split_raw = int(len(Xo) * 0.7)
+    train_end_date = dates_o[split_raw]
+
+    # Keep train indices strictly before train_end_date
+    train_idx = [i for i in range(split_raw) if dates_o[i] < train_end_date]
+    # Purge gap: drop any records within 5 sessions of train_end_date
+    test_idx = [i for i in range(split_raw, len(Xo)) if dates_o[i] > train_end_date]
+
+    if not train_idx or not test_idx:
+        train_idx = list(range(split_raw))
+        test_idx = list(range(split_raw, len(Xo)))
+
+    Xtr, ytr = np.array([Xo[i] for i in train_idx]), np.array([yo[i] for i in train_idx])
+    Xte, yte = np.array([Xo[i] for i in test_idx]), np.array([yo[i] for i in test_idx])
 
     model = ElasticNet(alpha=0.05, l1_ratio=0.5, random_state=42, max_iter=8000)
     model.fit(Xtr, ytr)
@@ -169,24 +183,32 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     leak.fit(Xtr_s, ytr_s)
     ic_leak = rank_ic(leak.predict(Xte_s).tolist(), yte_s.tolist())
 
+    feature_names = ["mom20", "value"]
+    coefs = dict(zip(feature_names, model.coef_.tolist(), strict=True))
+    coef_str = ", ".join(f"{k}:{v:+.4f}" for k, v in coefs.items())
+
     lines = [
-        f"source={source}  n={len(Xo)}  split=70/30 time-ordered",
+        f"source={source}  n={len(Xo)}  split=70/30 (purged H=5d gap)",
         f"Train rank IC (ElasticNet): {ic_tr:+.3f}",
-        f"Test  rank IC (ElasticNet): {ic_te:+.3f}",
+        f"Test  rank IC (Purged):     {ic_te:+.3f}",
+        f"Feature weights (coefs):    {coef_str}",
         "",
         "Pelajaran leakage (sengaja salah):",
         f"  Shuffled-split test IC:     {ic_leak:+.3f}  ← biasanya lebih optimis",
         "",
-        "Kesimpulan: jangan shuffle time series — IC test jujur biasanya",
-        "lebih rendah dari demo shuffle di atas.",
+        "Kesimpulan: jangan shuffle time series — IC test jujur dengan purging",
+        "mencegah overlap return horizon antara train dan test.",
     ]
 
     metrics = {
         "source": source,
         "n": len(Xo),
+        "n_train": len(Xtr),
+        "n_test": len(Xte),
         "rank_ic_train": ic_tr,
-        "rank_ic_test": ic_te,
+        "rank_ic_test_purged": ic_te,
         "rank_ic_shuffled_leak": ic_leak,
+        "feature_coefs": coefs,
         "model": "elastic-net",
     }
     return DemoResult(

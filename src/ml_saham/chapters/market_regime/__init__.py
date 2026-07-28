@@ -93,8 +93,20 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     X = np.array(feats)
     gmm = GaussianMixture(n_components=3, random_state=42, n_init=5)
-    labels = gmm.fit_predict(X)
-    gmm_counts = Counter(int(l) for l in labels)
+    raw_labels = gmm.fit_predict(X)
+
+    # Sort clusters by mean ret20 to give consistent semantic labels:
+    # 0 = Bearish, 1 = Neutral/Sideways, 2 = Bullish
+    cluster_means = {}
+    for k in range(3):
+        idx = [i for i, l in enumerate(raw_labels) if l == k]
+        cluster_means[k] = np.mean([feats[i][0] for i in idx]) if idx else 0.0
+    sorted_clusters = sorted(cluster_means, key=lambda k: cluster_means[k])
+    label_map = {old_k: new_k for new_k, old_k in enumerate(sorted_clusters)}
+    labels = [label_map[l] for l in raw_labels]
+    state_names = {0: "Bearish", 1: "Neutral", 2: "Bullish"}
+
+    gmm_counts = Counter(labels)
 
     lines.append("")
     lines.append("GMM on IHSG (return20 + vol20):")
@@ -104,17 +116,22 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         avg_ret = sum(feats[i][0] for i in idx) / len(idx)
         avg_vol = sum(feats[i][1] for i in idx) / len(idx)
         lines.append(
-            f"  cluster={k}  n={len(idx)}  "
+            f"  state={k} ({state_names[k]:<7})  n={len(idx)}  "
             f"mean_ret20={avg_ret:+.2%}  vol={avg_vol:.4f}  "
             f"mean_fwd5d={avg_fwd:+.2%}"
         )
 
-    last_label = int(labels[-1])
+    last_label = labels[-1]
+    raw_probs = gmm.predict_proba(X[-1:])[0]
+    sorted_probs = [float(raw_probs[old_k]) for old_k in sorted_clusters]
+    prob_str = ", ".join(f"{state_names[i]}:{p:.1%}" for i, p in enumerate(sorted_probs))
+
     lines.append("")
     lines.append(
-        f"Latest GMM cluster={last_label}  date={dates[-1]}  "
+        f"Latest GMM state={last_label} ({state_names[last_label]})  date={dates[-1]}  "
         f"fwd5d={fwd5[-1]:+.2%}"
     )
+    lines.append(f"Latest regime probabilities: {prob_str}")
     lines.append("Catatan: cluster unsupervised — interpretasi manual.")
 
     metrics.update(
@@ -122,7 +139,9 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             "gmm_n": len(labels),
             "gmm_clusters": dict(gmm_counts),
             "latest_cluster": last_label,
+            "latest_state_name": state_names[last_label],
             "latest_date": dates[-1],
+            "latest_probabilities": dict(zip(["Bearish", "Neutral", "Bullish"], sorted_probs, strict=True)),
         }
     )
     return DemoResult(
