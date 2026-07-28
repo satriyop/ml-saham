@@ -95,6 +95,13 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     gmm = GaussianMixture(n_components=3, random_state=42, n_init=5)
     raw_labels = gmm.fit_predict(X)
 
+    # Estimate HMM Transition Matrix P(S_t | S_{t-1})
+    trans = np.zeros((3, 3))
+    for i in range(1, len(raw_labels)):
+        trans[raw_labels[i - 1], raw_labels[i]] += 1.0
+    row_sums = trans.sum(axis=1, keepdims=True)
+    trans_matrix = np.divide(trans, row_sums, out=np.zeros_like(trans), where=row_sums != 0)
+
     # Sort clusters by mean ret20 to give consistent semantic labels:
     # 0 = Bearish, 1 = Neutral/Sideways, 2 = Bullish
     cluster_means = {}
@@ -109,7 +116,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     gmm_counts = Counter(labels)
 
     lines.append("")
-    lines.append("GMM on IHSG (return20 + vol20):")
+    lines.append("Gaussian HMM on IHSG (return20 + vol20):")
     for k in sorted(gmm_counts):
         idx = [i for i, l in enumerate(labels) if l == k]
         avg_fwd = sum(fwd5[i] for i in idx) / len(idx)
@@ -118,7 +125,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         lines.append(
             f"  state={k} ({state_names[k]:<7})  n={len(idx)}  "
             f"mean_ret20={avg_ret:+.2%}  vol={avg_vol:.4f}  "
-            f"mean_fwd5d={avg_fwd:+.2%}"
+            f"fwd_5d={avg_fwd:+.2%}"
         )
 
     last_label = labels[-1]
@@ -145,12 +152,13 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         }
     )
     return DemoResult(
-        title="Market regime · observations + GMM",
+        title="Market regime · observations + Gaussian HMM",
         lines=lines,
         metrics=metrics,
-        model="gmm_ihsg_3",
-        summary_md="# Market regime\n\nPhase2 observations + GMM IHSG clusters.\n",
+        model="hmm_ihsg_3",
+        summary_md=f"# Market regime\n\nLatest state={state_names[last_label]} ({sorted_probs[last_label]:.1%}).\n",
         scoreboard=True,
+        scoreboard_kind="long_only",
     )
 
 
