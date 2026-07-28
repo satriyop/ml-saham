@@ -38,6 +38,7 @@ PHASE2_SLUGS = [
     "forward-valuation",
     "special-monitoring",
     "earnings-quality",
+    "microstructure-impact",
 ]
 OPTIONAL_SLUGS = ["rl-sandbox"]
 

@@ -38,6 +38,7 @@ _SLUG_TO_MOD = {
     "forward-valuation": "ml_saham.chapters.forward_valuation",
     "special-monitoring": "ml_saham.chapters.special_monitoring",
     "earnings-quality": "ml_saham.chapters.earnings_quality",
+    "microstructure-impact": "ml_saham.chapters.microstructure_impact",
 }
 
 
