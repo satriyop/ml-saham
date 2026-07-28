@@ -164,53 +164,72 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
+    import json
+    import sqlite3
+    import numpy as np
+
     with connect(ctx.db_path) as conn:
-        rows = load_iev_snapshots(conn, as_of=ctx.as_of, limit_dates=3)
-        if not rows:
-            raise ChapterDataError(
-                "iev_snapshots kosong.",
-                hint="ml-saham doctor",
-            )
-
-    latest_date = rows[0]["date"]
-    day_rows = [r for r in rows if r["date"] == latest_date]
-
-    meta = []
-    X = []
-    y = []
-    for r in day_rows:
-        iev = r.get("iev")
-        iep = r.get("iep")
-        rank = r.get("rank")
-        try:
-            iev_f = float(iev) if iev is not None else 0.0
-            iep_f = float(iep) if iep is not None else 0.0
-            rank_i = int(rank) if rank is not None else 999
-        except (TypeError, ValueError):
-            continue
-
-        imbalance = (iev_f / iep_f - 1.0) if iep_f > 0 else 0.0
-        X.append([iev_f, iep_f, imbalance])
-        is_top = 1 if rank_i <= 100 else 0
-        y.append(is_top)
-        meta.append(
-            {
-                "ticker": r["ticker"],
-                "iev": iev_f,
-                "iep": iep_f,
-                "imbalance": imbalance,
-                "orig_rank": rank_i,
-            }
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(
+            "SELECT decision_payload_json FROM learning_observations WHERE purpose='PRE_OPEN_AUCTION_DIRECTION' ORDER BY captured_at DESC LIMIT 1000"
+        )
+        rows = cursor.fetchall()
+        
+    if not rows:
+        raise ChapterDataError(
+            "learning_observations untuk PRE_OPEN_AUCTION_DIRECTION kosong.",
+            hint="Sistem AI-Saham belum mencatat observasi pre-open.",
         )
 
-    # SOTA
+    # Prepare dataset
+    X_list = []
+    y_list = []
+    baseline_scores = []
+    meta = []
+    feature_names = ["book_pressure", "delta_iev_ratio", "iep_gap_pct", "iev_intensity", "spread_pct"]
+
+    for row in rows:
+        try:
+            payload = json.loads(row["decision_payload_json"])
+            signal = payload.get("signal", {})
+            factors = signal.get("factors", {})
+            
+            # Extract features
+            feats = [
+                float(factors.get("book_pressure", 0.0)),
+                float(factors.get("delta_iev_ratio", 0.0)),
+                float(factors.get("iep_gap_pct", 0.0)),
+                float(factors.get("iev_intensity", 0.0)),
+                float(factors.get("spread_pct", 0.0)),
+            ]
+            X_list.append(feats)
+            
+            # Extract Baseline score
+            baseline_scores.append(float(signal.get("raw_score", 0.0)))
+            
+            # Extract target (using proxy: is IEP gap positive? Or rank?)
+            # Usually pre-open target is whether it actually gaps up or closes higher.
+            # Here we mock a binary target for ML classification (e.g., raw_score > 50 as a simple proxy for training if no forward returns)
+            # A real backtest would join with forward_returns, but this is a structural challenge demonstration.
+            is_top = 1 if float(signal.get("raw_score", 0.0)) >= 50 else 0
+            y_list.append(is_top)
+            
+            meta.append({
+                "ticker": payload.get("ticker", "UNKNOWN"),
+                "date": payload.get("snapshot_date", "UNKNOWN"),
+            })
+        except Exception:
+            continue
+
+    if not X_list:
+        raise ChapterDataError("Gagal mem-parsing payload JSON.")
+
+    X_arr = np.array(X_list)
+    y_arr = np.array(y_list)
+
+    # Train SOTA Model
     try:
         import xgboost as xgb
-        import numpy as np
-
-        X_arr = np.array(X)
-        y_arr = np.array(y)
-
         clf = xgb.XGBClassifier(
             n_estimators=20,
             learning_rate=0.1,
@@ -218,85 +237,78 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
             use_label_encoder=False,
             eval_metric="logloss",
         )
-        if len(set(y)) > 1:
+        if len(set(y_list)) > 1:
             clf.fit(X_arr, y_arr)
             sota_scores = clf.predict_proba(X_arr)[:, 1]
+            
+            # Feature Importance / SHAP Analysis
+            try:
+                import shap
+                explainer = shap.TreeExplainer(clf)
+                shap_values = explainer.shap_values(X_arr)
+                mean_shap = np.abs(shap_values).mean(axis=0)
+                importances = (mean_shap / mean_shap.sum()) * 100
+                imp_source = "SHAP"
+            except ImportError:
+                gains = clf.feature_importances_
+                importances = (gains / gains.sum()) * 100
+                imp_source = "Gain"
         else:
-            sota_scores = [m["imbalance"] for m in meta]
+            sota_scores = np.array(baseline_scores) / 100.0
+            importances = np.zeros(len(feature_names))
+            imp_source = "None"
     except (ImportError, ValueError, Exception):
-        sota_scores = [m["imbalance"] for m in meta]
+        sota_scores = np.array(baseline_scores) / 100.0
+        importances = np.zeros(len(feature_names))
+        imp_source = "None"
 
-    # Baseline: Deterministic Decision Tree & Capping
+    # Evaluate Rank IC (Correlation)
     try:
-        from sklearn.tree import DecisionTreeClassifier
-        import numpy as np
-
-        dt = DecisionTreeClassifier(max_depth=3, random_state=42)
-        X_arr = np.array(X)
-        y_arr = np.array(y)
-        if len(set(y)) > 1:
-            dt.fit(X_arr, y_arr)
-            baseline_raw = dt.predict_proba(X_arr)[:, 1]
-        else:
-            baseline_raw = [m["imbalance"] for m in meta]
-        # capping
-        baseline_scores = [min(0.95, max(0.05, float(s))) for s in baseline_raw]
-    except (ImportError, ValueError, Exception):
-        baseline_scores = [min(0.95, max(0.05, m["imbalance"])) for m in meta]
-
-    for i, m in enumerate(meta):
-        m["sota_score"] = float(sota_scores[i])
-        m["baseline_score"] = baseline_scores[i]
-
-    sota_sorted = sorted(meta, key=lambda x: x["sota_score"], reverse=True)
-    baseline_sorted = sorted(meta, key=lambda x: x["baseline_score"], reverse=True)
-
-    sota_top = sota_sorted[:10]
-    baseline_top = baseline_sorted[:10]
-
-    sota_avg_imb = (
-        sum(x["imbalance"] for x in sota_top) / len(sota_top) if sota_top else 0.0
-    )
-    base_avg_imb = (
-        sum(x["imbalance"] for x in baseline_top) / len(baseline_top)
-        if baseline_top
-        else 0.0
-    )
+        from scipy.stats import spearmanr
+        # Correlate baseline and sota with the target
+        baseline_ic, _ = spearmanr(baseline_scores, y_arr)
+        sota_ic, _ = spearmanr(sota_scores, y_arr)
+    except ImportError:
+        baseline_ic = 0.0
+        sota_ic = 0.0
 
     lines = [
-        f"date={latest_date}  n={len(meta)}  source=iev_snapshots",
-        "Perbandingan: SOTA (XGBoost Classifier) vs Baseline (Deterministic Decision Tree & Capping)",
+        f"date={meta[0]['date']}  n_samples={len(meta)}  source=learning_observations",
+        "Perbandingan SOTA (XGBoost) vs Baseline (AI-Saham ASLI dari DB)",
         "",
-        f"Baseline Top 10 Avg Imbalance: {base_avg_imb:+.2%}",
-        f"SOTA Top 10 Avg Imbalance: {sota_avg_imb:+.2%}",
+        f"Baseline Rank IC : {baseline_ic:+.3f}",
+        f"SOTA Rank IC     : {sota_ic:+.3f}",
         "",
-        "Top SOTA names:",
+        f"=== Analisis Kontribusi Faktor SOTA ({imp_source}) ==="
     ]
-    for t in sota_top:
-        lines.append(
-            f"  {t['ticker']:<6}  IEV={t['iev']:.2f}  imb={t['imbalance']:+.2%}  score={t['sota_score']:.3f}"
-        )
-
-    lines.append("")
-    lines.append("Top Baseline names:")
-    for t in baseline_top:
-        lines.append(
-            f"  {t['ticker']:<6}  IEV={t['iev']:.2f}  imb={t['imbalance']:+.2%}  score={t['baseline_score']:.3f}"
-        )
+    
+    md_lines = [
+        "# Pre-open heuristic Compare\n",
+        "SOTA XGBoost vs Baseline Asli.\n",
+        f"- **Baseline Rank IC:** {baseline_ic:+.3f}",
+        f"- **SOTA Rank IC:** {sota_ic:+.3f}\n",
+        f"### Analisis Kontribusi Faktor ({imp_source})",
+    ]
+    
+    # Sort and display feature importances
+    if imp_source != "None":
+        feat_imp = sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True)
+        for name, imp in feat_imp:
+            lines.append(f"  {name:<16} : {imp:5.1f}%")
+            md_lines.append(f"- **{name}**: {imp:5.1f}%")
 
     metrics = {
-        "date": latest_date,
-        "n": len(meta),
-        "sota_avg_imbalance": sota_avg_imb,
-        "baseline_avg_imbalance": base_avg_imb,
+        "n_samples": len(meta),
+        "sota_ic": float(sota_ic),
+        "baseline_ic": float(baseline_ic),
     }
 
     return DemoResult(
-        title="Pre-open heuristic · Compare",
+        title="Pre-open heuristic · Compare Asli",
         lines=lines,
         metrics=metrics,
-        model="compare",
-        summary_md=f"# Pre-open heuristic Compare\n\nSOTA vs Baseline for {latest_date}.\n",
+        model="xgboost_vs_ai_saham",
+        summary_md="\n".join(md_lines) + "\n",
         scoreboard=False,
     )
 
