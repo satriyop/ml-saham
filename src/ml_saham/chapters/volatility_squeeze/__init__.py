@@ -1,4 +1,4 @@
-"""Ch.23 Volatility squeeze — Bollinger squeeze & breakout classifier."""
+"""Ch.26 Volatility squeeze — Bollinger squeeze & breakout classifier."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import pick_as_of, resolve_universe
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
-from ml_saham.data.aisaham_read import connect, load_candles
 
 META = get_meta("volatility-squeeze")
 
@@ -20,34 +19,26 @@ def explore_text(*, verbose: bool = False) -> str:
         f"topic={META.slug}  phase={META.phase}  data={META.required_data}",
         "",
         "Masalah",
-        "  Kompresi volatilitas (Bollinger Bandwidth Squeeze) sering mendahului",
-        "  pergerakan harga masif — namun banyak lonjakan volume awal yang berujung jebakan (false breakout).",
+        "  Kompresi volatilitas (Squeeze) mendahului pergerakan harga masif, namun breakout seringkali palsu.",
         "",
         "Opsi pendekatan",
-        "  1) Bollinger Bandwidth Squeeze Ratio = (Upper - Lower) / Middle",
-        "  2) Random Forest Classifier membedakan Genuine Breakout vs False Breakout",
-        "  3) Feature Importances: Bandwidth, Volume Ratio, VWAP Deviation",
+        "  1) SOTA (default): BB/KC Squeeze ML Predictor (ML classifier menggunakan sinyal Bollinger Bands & Keltner Channels)",
+        "  2) Baseline (compare): Fixed standard deviation (volatilitas harian di bawah threshold statis)",
         "",
         "Caveat",
-        "  • Squeeze bisa bertahan lama sebelum terjadi konfirmasi breakout",
-        "  • Butuh stop loss ketat pada jebakan breakout",
-        "  • Bukan saran trading / investasi",
+        "  • ML predictor bisa overfitting pada pola masa lalu.",
+        "  • Squeeze butuh volume konfirmasi untuk menghindari whipsaw.",
         "",
         f"Lanjut:  ml-saham demo {META.slug}",
+        f"         ml-saham compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: strategies/bb-squeeze di ai-saham.")
     return "\n".join(lines)
 
 
-def run_demo(ctx: ChapterContext) -> DemoResult:
-    try:
-        import numpy as np
-        from sklearn.ensemble import RandomForestClassifier
-        from sklearn.metrics import accuracy_score, precision_score, recall_score
-        from sklearn.model_selection import train_test_split
-    except ImportError as exc:
-        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
+def _prepare_data(ctx: ChapterContext):
+    from ml_saham.data.aisaham_read import connect, load_candles
 
     with connect(ctx.db_path) as conn:
         uni = ctx.universe or resolve_universe(conn, limit=40)
@@ -69,7 +60,10 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         if len(rows) < 30:
             continue
         rows = sorted(rows, key=lambda x: x["date"])
+        
         closes = [float(r["close"]) for r in rows]
+        highs = [float(r.get("high", r["close"])) for r in rows]
+        lows = [float(r.get("low", r["close"])) for r in rows]
         vols = [float(r["volume"] or 0) for r in rows]
 
         for i in range(20, len(closes) - 5):
@@ -77,9 +71,33 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             mean_c = sum(chunk_c) / 20.0
             std_c = math.sqrt(sum((x - mean_c) ** 2 for x in chunk_c) / 20.0) or 1e-6
 
-            upper = mean_c + 2.0 * std_c
-            lower = mean_c - 2.0 * std_c
-            bandwidth = (upper - lower) / (mean_c or 1.0)
+            # Bollinger Bands
+            bb_upper = mean_c + 2.0 * std_c
+            bb_lower = mean_c - 2.0 * std_c
+            bb_bandwidth = (bb_upper - bb_lower) / mean_c
+
+            # Keltner Channels
+            trs = []
+            for j in range(i - 20, i):
+                if j == 0:
+                    trs.append(highs[j] - lows[j])
+                else:
+                    tr = max(
+                        highs[j] - lows[j],
+                        abs(highs[j] - closes[j - 1]),
+                        abs(lows[j] - closes[j - 1])
+                    )
+                    trs.append(tr)
+            
+            atr = sum(trs) / 20.0 or 1e-6
+            kc_upper = mean_c + 1.5 * atr
+            kc_lower = mean_c - 1.5 * atr
+            kc_bandwidth = (kc_upper - kc_lower) / mean_c
+
+            # Squeeze Condition (BB inside KC)
+            squeeze_on = 1 if (bb_upper < kc_upper and bb_lower > kc_lower) else 0
+
+            bb_kc_ratio = bb_bandwidth / kc_bandwidth
 
             vol_ratio = (vols[i] + 1.0) / (sum(vols[i - 5 : i]) / 5.0 + 1.0)
             ret1 = (closes[i] / closes[i - 1] - 1.0)
@@ -88,42 +106,59 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             fwd_ret = (closes[i + 5] / closes[i] - 1.0)
             label = 1 if fwd_ret >= 0.03 else 0
 
-            X_samples.append([bandwidth, vol_ratio, ret1])
+            # X = [bb_bandwidth, kc_bandwidth, bb_kc_ratio, squeeze_on, vol_ratio, ret1, std_c_pct]
+            std_c_pct = std_c / mean_c
+            X_samples.append([bb_bandwidth, kc_bandwidth, bb_kc_ratio, squeeze_on, vol_ratio, ret1, std_c_pct])
             y_samples.append(label)
 
     if len(X_samples) < 50:
         raise ChapterDataError(f"Sample squeeze terlalu kecil (n={len(X_samples)}).")
 
+    return X_samples, y_samples, as_of
+
+
+def run_demo(ctx: ChapterContext) -> DemoResult:
+    try:
+        import numpy as np
+        import lightgbm as lgb
+        from sklearn.metrics import accuracy_score, precision_score, recall_score
+        from sklearn.model_selection import train_test_split
+    except ImportError as exc:
+        raise ChapterError("Butuh scikit-learn & lightgbm: pip install -e .") from exc
+
+    X_samples, y_samples, as_of = _prepare_data(ctx)
+
     X_arr, y_arr = np.array(X_samples), np.array(y_samples)
     counts = np.bincount(y_arr) if len(y_arr) > 0 else np.array([])
     use_stratify = y_arr if len(counts) >= 2 and min(counts) >= 2 else None
+    
     Xtr, Xte, ytr, yte = train_test_split(X_arr, y_arr, test_size=0.3, random_state=42, stratify=use_stratify)
 
-    rf = RandomForestClassifier(n_estimators=50, max_depth=4, random_state=42)
-    rf.fit(Xtr, ytr)
-    preds = rf.predict(Xte)
+    lgb_clf = lgb.LGBMClassifier(n_estimators=50, max_depth=4, random_state=42, verbose=-1)
+    lgb_clf.fit(Xtr, ytr)
+    preds = lgb_clf.predict(Xte)
 
     acc = float(accuracy_score(yte, preds))
     prec = float(precision_score(yte, preds, zero_division=0))
     rec = float(recall_score(yte, preds, zero_division=0))
 
-    importances = {
-        "bandwidth_squeeze": float(rf.feature_importances_[0]),
-        "volume_surge_ratio": float(rf.feature_importances_[1]),
-        "1d_price_momentum": float(rf.feature_importances_[2]),
-    }
+    importances = lgb_clf.feature_importances_
+    # X = [bb_bandwidth, kc_bandwidth, bb_kc_ratio, squeeze_on, vol_ratio, ret1, std_c_pct]
+    feat_names = ["BB Bandwidth", "KC Bandwidth", "BB/KC Ratio", "Squeeze On", "Vol Ratio", "1D Return", "Std Pct"]
+    imp_dict = {name: float(val) for name, val in zip(feat_names, importances)}
+    # Sort importances
+    sorted_imp = sorted(imp_dict.items(), key=lambda x: x[1], reverse=True)
 
     lines = [
         f"as_of={as_of}  samples={len(X_samples)}  train={len(Xtr)} test={len(Xte)}",
-        f"RandomForest Breakout Accuracy:  {acc:.1%}",
-        f"Precision (Genuine Breakout):   {prec:.1%}",
-        f"Recall (Breakout Capture Rate): {rec:.1%}",
+        f"SOTA BB/KC Squeeze LightGBM Accuracy:  {acc:.1%}",
+        f"Precision (Genuine Breakout):           {prec:.1%}",
+        f"Recall (Breakout Capture Rate):         {rec:.1%}",
         "",
-        "Feature Importances:",
-        f"  Bandwidth Squeeze:   {importances['bandwidth_squeeze']:.1%}",
-        f"  Volume Surge Ratio:  {importances['volume_surge_ratio']:.1%}",
-        f"  1D Price Momentum:   {importances['1d_price_momentum']:.1%}",
+        "Feature Importances:"
     ]
+    for name, val in sorted_imp:
+        lines.append(f"  {name}: {val}")
 
     metrics = {
         "as_of": as_of,
@@ -131,14 +166,96 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "accuracy": acc,
         "precision": prec,
         "recall": rec,
-        "feature_importances": importances,
+        "feature_importances": imp_dict,
     }
     return DemoResult(
-        title="Volatility squeeze · breakout classifier",
+        title="Volatility squeeze · SOTA BB/KC ML Predictor",
         lines=lines,
         metrics=metrics,
-        model="rf_volatility_squeeze",
-        summary_md=f"# Volatility squeeze\n\nAccuracy={acc:.1%}. Precision={prec:.1%}.\n",
+        model="sota_bb_kc_squeeze_lgb",
+        summary_md=f"# Volatility squeeze (SOTA)\n\nAccuracy={acc:.1%}. Precision={prec:.1%}.\n",
+        scoreboard=False,
+        scoreboard_kind="none",
+    )
+
+
+def run_compare(ctx: ChapterContext) -> DemoResult:
+    try:
+        import numpy as np
+        import lightgbm as lgb
+        from sklearn.metrics import accuracy_score, precision_score, recall_score
+        from sklearn.model_selection import train_test_split
+    except ImportError as exc:
+        raise ChapterError("Butuh scikit-learn & lightgbm: pip install -e .") from exc
+
+    X_samples, y_samples, as_of = _prepare_data(ctx)
+
+    X_arr, y_arr = np.array(X_samples), np.array(y_samples)
+    counts = np.bincount(y_arr) if len(y_arr) > 0 else np.array([])
+    use_stratify = y_arr if len(counts) >= 2 and min(counts) >= 2 else None
+    
+    Xtr, Xte, ytr, yte = train_test_split(X_arr, y_arr, test_size=0.3, random_state=42, stratify=use_stratify)
+
+    # 1. SOTA: LightGBM Predictor
+    lgb_clf = lgb.LGBMClassifier(n_estimators=50, max_depth=4, random_state=42, verbose=-1)
+    lgb_clf.fit(Xtr, ytr)
+    sota_preds = lgb_clf.predict(Xte)
+
+    sota_acc = float(accuracy_score(yte, sota_preds))
+    sota_prec = float(precision_score(yte, sota_preds, zero_division=0))
+    sota_rec = float(recall_score(yte, sota_preds, zero_division=0))
+
+    # 2. Baseline: Fixed standard deviation threshold + volume surge
+    # Features: X_arr = [..., vol_ratio (idx 4), ret1 (idx 5), std_c_pct (idx 6)]
+    # Baseline rule: Std Pct < 0.02 (low volatility) AND Vol Ratio > 1.2 AND ret1 > 0
+    base_preds = []
+    for x in Xte:
+        vol_ratio = x[4]
+        ret1 = x[5]
+        std_pct = x[6]
+        
+        if std_pct < 0.02 and vol_ratio > 1.2 and ret1 > 0:
+            base_preds.append(1)
+        else:
+            base_preds.append(0)
+    
+    base_preds = np.array(base_preds)
+    base_acc = float(accuracy_score(yte, base_preds))
+    base_prec = float(precision_score(yte, base_preds, zero_division=0))
+    base_rec = float(recall_score(yte, base_preds, zero_division=0))
+
+    lines = [
+        f"as_of={as_of}  samples={len(X_samples)}  test={len(Xte)}",
+        "",
+        "--- SOTA: BB/KC Squeeze ML Predictor (LightGBM) ---",
+        f"Accuracy:  {sota_acc:.1%}",
+        f"Precision: {sota_prec:.1%}",
+        f"Recall:    {sota_rec:.1%}",
+        "",
+        "--- Baseline: Fixed Standard Deviation Rule ---",
+        f"Accuracy:  {base_acc:.1%}",
+        f"Precision: {base_prec:.1%}",
+        f"Recall:    {base_rec:.1%}",
+        "",
+        "Kesimpulan: Model ML (SOTA) menggunakan interaksi non-linear antara Bollinger Bands",
+        "dan Keltner Channels, umumnya mencapai precision/recall lebih baik dibanding",
+        "aturan fixed standard deviation yang kaku."
+    ]
+
+    metrics = {
+        "as_of": as_of,
+        "n_samples": len(X_samples),
+        "sota_accuracy": sota_acc,
+        "sota_precision": sota_prec,
+        "base_accuracy": base_acc,
+        "base_precision": base_prec,
+    }
+    return DemoResult(
+        title="Compare: SOTA BB/KC Squeeze vs Baseline Fixed StdDev",
+        lines=lines,
+        metrics=metrics,
+        model="compare_volatility_squeeze",
+        summary_md=f"# Volatility squeeze (SOTA vs Baseline)\n\nSOTA Precision={sota_prec:.1%}, Baseline Precision={base_prec:.1%}.\n",
         scoreboard=False,
         scoreboard_kind="none",
     )
@@ -148,5 +265,5 @@ def deepdive_text() -> str:
     return deepdive_stub(
         topic=META.slug,
         related="strategies/bb-squeeze di ai-saham",
-        bring_back="bandwidth squeeze ratio + RF breakout precision habit",
+        bring_back="BB/KC Squeeze SOTA model + LightGBM precision",
     )
