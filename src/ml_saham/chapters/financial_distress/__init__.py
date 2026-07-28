@@ -1,9 +1,8 @@
-"""Ch.26 Financial distress — Altman Z-Score & bankruptcy risk filter."""
+"""Ch.29 Financial distress — Altman Z-Score & bankruptcy risk filter."""
 
 from __future__ import annotations
 
 from collections import defaultdict
-import math
 
 from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
@@ -15,7 +14,7 @@ from ml_saham.chapters.panel import (
     resolve_universe,
 )
 from ml_saham.chapters.registry import get as get_meta
-from ml_saham.chapters.types import ChapterContext, DemoResult
+from ml_saham.chapters.types import ChapterContext, CompareResult, DemoResult
 from ml_saham.data.aisaham_read import connect
 from ml_saham.data.phase2_read import load_company_financials
 from ml_saham.eval.metrics import rank_ic
@@ -29,13 +28,13 @@ def explore_text(*, verbose: bool = False) -> str:
         f"topic={META.slug}  phase={META.phase}  data={META.required_data}",
         "",
         "Masalah",
-        "  Mengukur risiko kebangkrutan & distress keuangan menggunakan Emerging Market Altman Z-Score",
-        "  untuk menyaring emiten berisiko tinggi (Z' < 1.1) demi menghindari downside tail risk.",
+        "  Mengukur risiko kebangkrutan & distress keuangan menggunakan fitur rasio keuangan.",
+        "  Model SOTA belajar threshold nonlinear dari fitur (XGBoost), sedangkan baseline menggunakan",
+        "  cut-off statis Altman Z-Score.",
         "",
         "Opsi pendekatan",
-        "  1) Emerging Market Altman Z-Score (Z' = 0.717 X1 + 0.847 X2 + 3.107 X3 + 0.420 X4 + 0.998 X5)",
-        "  2) Zonasi Risiko: Safe Zone (Z' > 2.9), Grey Zone (1.1 - 2.9), Distress Zone (Z' < 1.1)",
-        "  3) Multivariate Isolation Forest Anomaly Detection pada Rasio Keuangan",
+        "  1) XGBoost pada komponen Altman Z-Score (SOTA / Default)",
+        "  2) Altman Z-Score threshold (Z' < 1.1) (Baseline / Compare)",
         "",
         "Caveat",
         "  • Z-Score awal dirancang untuk manufaktur; versi EM (Z') disesuaikan untuk saham berkembang",
@@ -43,19 +42,14 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Bukan saran trading / investasi",
         "",
         f"Lanjut:  ml-saham demo {META.slug}",
+        f"Compare: ml-saham compare {META.slug} --baseline altman-z --against xgboost",
     ]
     if verbose:
         lines.append("\nDetail: load_company_financials di ai-saham.")
     return "\n".join(lines)
 
 
-def run_demo(ctx: ChapterContext) -> DemoResult:
-    try:
-        import numpy as np
-        from sklearn.ensemble import IsolationForest
-    except ImportError as exc:
-        raise ChapterError("Butuh scikit-learn: pip install -e .") from exc
-
+def _build_rows(ctx: ChapterContext):
     with connect(ctx.db_path) as conn:
         uni = ctx.universe or resolve_universe(conn, limit=50)
         as_of = ctx.as_of or pick_as_of(conn, uni, min_forward=5)
@@ -72,17 +66,15 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             hint="ml-saham doctor",
         )
 
-    z_scores: dict[str, float] = {}
-    z_components: dict[str, list[float]] = {}
-
     by_t = defaultdict(list)
     for f in financials:
         by_t[f["ticker"]].append(f)
 
-    for t, rows in by_t.items():
-        if not rows or t not in fwd:
+    rows = []
+    for t, fs in by_t.items():
+        if not fs or t not in fwd:
             continue
-        cur = rows[0]
+        cur = fs[0]
         assets = float(cur.get("total_assets") or 1.0)
         liab = float(cur.get("total_liabilities") or 1.0)
         equity = float(cur.get("stockholders_equity") or 1.0)
@@ -99,63 +91,162 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         x5 = rev / assets            # Sales / Assets
 
         z_prime = 0.717 * x1 + 0.847 * x2 + 3.107 * x3 + 0.420 * x4 + 0.998 * x5
-        z_scores[t] = z_prime
-        z_components[t] = [x1, x2, x3, x4, x5]
+        rows.append({
+            "ticker": t,
+            "components": [x1, x2, x3, x4, x5],
+            "z_score": z_prime,
+            "fwd": float(fwd[t]),
+        })
+    return as_of, rows, bench
 
-    tickers = sorted(z_scores.keys())
-    if len(tickers) < 8:
-        raise ChapterDataError(f"Panel financials terlalu kecil (n={len(tickers)}).")
 
-    scores = [z_scores[t] for t in tickers]
-    rets = maybe_haircut([fwd[t] for t in tickers], with_costs=ctx.with_costs)
-    ic = rank_ic(scores, rets)
+def _xgb_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], str, list[float]]:
+    try:
+        import numpy as np
+        import xgboost as xgb
+    except ImportError as exc:
+        raise ChapterError("Butuh xgboost: pip install xgboost") from exc
+    
+    arr = np.array(X, dtype=float)
+    yy = np.array(y, dtype=float)
+    
+    model = xgb.XGBRegressor(
+        n_estimators=50,
+        max_depth=3,
+        learning_rate=0.05,
+        random_state=42,
+        n_jobs=1,
+    )
+    model.fit(arr, yy)
+    pred = model.predict(arr)
+    
+    importances = model.feature_importances_.tolist()
+    return pred.tolist(), "xgboost", importances
 
-    # Multivariate Isolation Forest Anomaly Detection
-    X = np.array([z_components[t] for t in tickers])
-    iso = IsolationForest(contamination=0.1, random_state=42)
-    iso_labels = iso.fit_predict(X)
 
-    safe_count = sum(1 for z in scores if z > 2.9)
-    grey_count = sum(1 for z in scores if 1.1 <= z <= 2.9)
-    distress_count = sum(1 for z in scores if z < 1.1)
+def run_demo(ctx: ChapterContext) -> DemoResult:
+    as_of, rows, bench = _build_rows(ctx)
+    if len(rows) < 8:
+        raise ChapterDataError(f"Panel financials terlalu kecil (n={len(rows)}).")
 
-    order = sorted(range(len(tickers)), key=lambda i: scores[i], reverse=True)
+    X = [r["components"] for r in rows]
+    z_scores = [r["z_score"] for r in rows]
+    rets = maybe_haircut([r["fwd"] for r in rows], with_costs=ctx.with_costs)
+
+    model_scores, model_name, importances = _xgb_scores(X, rets)
+    ic_z = rank_ic(z_scores, rets)
+    ic_xgb = rank_ic(model_scores, rets)
+
+    safe_count = sum(1 for z in z_scores if z > 2.9)
+    grey_count = sum(1 for z in z_scores if 1.1 <= z <= 2.9)
+    distress_count = sum(1 for z in z_scores if z < 1.1)
+
+    order = sorted(range(len(rows)), key=lambda i: model_scores[i], reverse=True)
     top = [
-        {"ticker": tickers[i], "z_score": scores[i], "fwd": rets[i]}
+        {
+            "ticker": rows[i]["ticker"],
+            "score": model_scores[i],
+            "z_score": z_scores[i],
+            "fwd": rets[i]
+        }
         for i in order[:10]
     ]
 
+    feature_names = ["X1", "X2", "X3", "X4", "X5"]
+    imp_str = ", ".join(f"{name}:{imp:.4f}" for name, imp in zip(feature_names, importances, strict=False))
+
     lines = [
-        f"as_of={as_of}  n_tickers={len(tickers)}",
-        f"Altman Z'-Score Rank IC vs 5d fwd return: {ic:+.3f}",
+        f"as_of={as_of}  n_tickers={len(rows)}",
+        f"Altman Z'-Score Rank IC vs 5d fwd return: {ic_z:+.3f}",
+        f"XGBoost Rank IC vs 5d fwd return:         {ic_xgb:+.3f}",
         f"Risk Zone Distribution: Safe(Z'>2.9)={safe_count}  Grey(1.1-2.9)={grey_count}  Distress(Z'<1.1)={distress_count}",
+        f"XGBoost Feature Importances: {imp_str}",
         "",
-        "Top Safe Zone Financial Health Companies (Z'-Score):",
+        "Top Score (XGBoost SOTA):",
     ]
 
     for t in top[:8]:
         zone_str = "Safe" if t["z_score"] > 2.9 else ("Grey" if t["z_score"] >= 1.1 else "Distress")
         lines.append(
-            f"  {t['ticker']:<6} Z'-Score={t['z_score']:+6.2f}  Zone={zone_str:<8}  fwd={t['fwd']:+.2%}"
+            f"  {t['ticker']:<6} SOTA_score={t['score']:+.3f}  Z'-Score={t['z_score']:+6.2f}  Zone={zone_str:<8}  fwd={t['fwd']:+.2%}"
         )
 
     metrics = {
         "as_of": as_of,
-        "n_tickers": len(tickers),
-        "rank_ic_z_score": ic,
+        "n_tickers": len(rows),
+        "rank_ic_z_score": ic_z,
+        "rank_ic_xgb": ic_xgb,
         "safe_count": safe_count,
         "grey_count": grey_count,
         "distress_count": distress_count,
+        "xgb_importances": dict(zip(feature_names, importances, strict=False)),
     }
     return DemoResult(
-        title="Financial distress · Altman Z'-Score",
+        title="Financial distress · XGBoost vs Altman Z'-Score",
         lines=lines,
         metrics=metrics,
-        model="altman_z_score_isolation_forest",
-        summary_md=f"# Financial distress\n\nRank IC={ic:+.3f}. Safe={safe_count}, Distress={distress_count}.\n",
+        model="xgboost",
+        summary_md=f"# Financial distress\n\nRank IC: XGBoost={ic_xgb:+.3f}, Z-Score={ic_z:+.3f}.\nSafe={safe_count}, Distress={distress_count}.\n",
         scoreboard=True,
         scoreboard_kind="long_only",
         top_names=top,
+    )
+
+
+def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareResult:
+    as_of, rows, bench = _build_rows(ctx)
+    if len(rows) < 8:
+        raise ChapterDataError(f"Panel financials terlalu kecil (n={len(rows)}).")
+
+    X = [r["components"] for r in rows]
+    rets = maybe_haircut([r["fwd"] for r in rows], with_costs=ctx.with_costs)
+
+    def get_scores(name: str):
+        if "altman" in name.lower() or "z-score" in name.lower():
+            return [r["z_score"] for r in rows], "altman-z"
+        else:
+            scores, model_name, _ = _xgb_scores(X, rets)
+            return scores, model_name
+
+    base_scores, base_name = get_scores(baseline)
+    ag_scores, ag_name = get_scores(against)
+
+    ic_b = rank_ic(base_scores, rets)
+    ic_a = rank_ic(ag_scores, rets)
+
+    top_b = [
+        rows[i]["ticker"]
+        for i in sorted(range(len(rows)), key=lambda i: base_scores[i], reverse=True)[:10]
+    ]
+    top_a = [
+        rows[i]["ticker"]
+        for i in sorted(range(len(rows)), key=lambda i: ag_scores[i], reverse=True)[:10]
+    ]
+
+    lines = [
+        f"as_of={as_of}  n={len(rows)}",
+        f"{base_name}: rank_ic={ic_b:+.3f}",
+        f"{ag_name}: rank_ic={ic_a:+.3f}",
+        f"overlap top10: {len(set(top_b) & set(top_a))}",
+    ]
+    if bench is not None:
+        lines.append(f"IHSG fwd: {bench:+.2%}")
+
+    compare_data = {
+        "baseline": {"id": base_name, "rank_ic": ic_b, "top10": top_b},
+        "against": {"id": ag_name, "rank_ic": ic_a, "top10": top_a},
+        "as_of": as_of,
+        "benchmark_return": bench,
+    }
+
+    return CompareResult(
+        title=f"Compare · {base_name} vs {ag_name}",
+        lines=lines,
+        metrics={"rank_ic_baseline": ic_b, "rank_ic_against": ic_a, "n": len(rows)},
+        compare=compare_data,
+        model=f"{base_name}_vs_{ag_name}",
+        summary_md=f"# Compare financial-distress\n\n`{base_name}` vs `{ag_name}`.\n",
+        scoreboard=True,
     )
 
 
@@ -163,5 +254,5 @@ def deepdive_text() -> str:
     return deepdive_stub(
         topic=META.slug,
         related="company_financials di ai-saham",
-        bring_back="Altman Z'-Score EM formula + Distress filter habit",
+        bring_back="Altman Z'-Score EM formula / XGBoost components + Distress filter habit",
     )
