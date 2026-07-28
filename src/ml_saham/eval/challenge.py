@@ -106,6 +106,10 @@ def challenge_engine(chapter_ctx: ChapterContext, category: str | None = None, e
     # Run Signal Engine
     if category is None or category == "signal":
         factors = ENGINE_FACTORS["signal_engine"]
+        if eval_type == "ensemble":
+            factors = ["meta-ensemble"]
+        elif eval_type == "flow":
+            factors = ["broker-flow"]
         results.update(_run_factor_challenge(chapter_ctx, factors))
         
     # Run Risk Engine
