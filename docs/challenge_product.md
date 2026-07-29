@@ -18,8 +18,42 @@ Sibling ownership vs ai-saham: **[BOUNDARY.md](../BOUNDARY.md)** (ingest/corpus 
 | Factor keep/demote (accum sleeves) | Replacing `ai-saham` ingest/engines |
 | Engine portfolio rollups | Curriculum demos as promotion authority |
 | English audit reports + artifacts | Live trading / paper broker |
+| **Champion track** (planned) — beat production with a better score rule | Treating curriculum “Default” models as production authority |
 
 Learning (`explore` / chapters) is **secondary** and mostly Indonesian for pedagogy.
+
+---
+
+## Two purposes under Challenge (tune vs champion)
+
+Still **one axis** (Challenge), two **purposes / tracks**. Not a third top-level axis like Learning.
+
+| Track | Purpose | You care about ai-saham factors / weights / formula? | Question |
+|-------|---------|------------------------------------------------------|----------|
+| **Challenge (tune)** — **shipped** | Help humans **tune** production policy | **Yes** | (1) Is this **factor** worth it? (2) Are **weights & combination** sensible? |
+| **Challenge champion** — **planned** | Find a **better scoring rule** that beats production | **No** (internals optional / black-box OK) | (3) Is there a contender that **replaces** production score under the same protocol? |
+
+```text
+ml-saham
+├── Learning              teach methods (Default vs Baseline demos)
+└── Challenge             English audit lab (production baseline, no auto-promote)
+      ├── tune            factor worth? · weights/combo OK?     ← shipped
+      │     policy tournament · factor validity · engine rollup
+      └── champion        better score rule than production?  ← planned
+```
+
+| | **Tune** (today) | **Champion** (planned) |
+|--|------------------|-------------------------|
+| Baseline | Always **`production`** | Always **`production`** |
+| Typical against | `equal_sleeves`, `ridge_reweight`, drop-factor | e.g. `lgbm_reweight`, other learned scorers |
+| If WIN | Maybe retune weights / demote factor | Maybe **adopt a new scorer** (bigger human change) |
+| Protocol / folds / labels | Required | Required (same honesty) |
+| Auto-promote to ai-saham | **Never** | **Never** |
+
+**Champion is not Learning.** Curriculum LightGBM demos stay non-authority.  
+**Champion is not “SOTA.”** It is “beats production under protocol → human promote review.”
+
+Shipped CLI today is **tune** only (`run` / `factor` / `engine`). Champion CLI (e.g. `challenge champion …` or `--mode champion`) is **not implemented yet**.
 
 ---
 
@@ -32,8 +66,11 @@ Learning (`explore` / chapters) is **secondary** and mostly Indonesian for pedag
 | **Policy** | One frozen PolicySpec + protocol tournament | `screener.accum.score_weights` |
 | **Protocol** | Evaluation law (labels, horizons, folds) | `accum_path_v1`, `pre_open_session_v1` |
 | **Challenger** | Named alternative under the same decision type | `equal_sleeves`, `ridge_reweight` |
+| **Tune** | Challenge purpose: factor + weight/combo audit | `challenge factor`, `run --against equal_sleeves` |
+| **Champion** | Challenge purpose: beat production with a better score rule | planned; not shipped |
 
-Prefer **`--scenario`**, not “track.”
+Prefer **`--scenario`**, not “track,” for accum vs pre-open.  
+Prefer **tune vs champion** for purpose (not a third product axis).
 
 ---
 
@@ -103,11 +140,19 @@ Exports: `--export-json` / `--export-md`. Artifacts: `./artifacts/challenge/…`
 
 ## How to use results
 
+### Tune (shipped)
+
 1. **`challenge engine screener`** — “How is the screener stack?”  
-2. **`challenge run <policy>`** — dig one policy / challenger.  
-3. **`challenge factor …`** — sleeve keep/demote on accum weights.  
+2. **`challenge run <policy>`** — dig weights/combo vs equal or ridge.  
+3. **`challenge factor …`** — is this sleeve worth it?  
 4. Write a **human decision memo** if needed (example: [decisions/accum_score_weights_2026-07-29.md](./decisions/accum_score_weights_2026-07-29.md)).  
 5. **Do not** promote into ai-saham from a single thin window or BLOCKED run.
+
+### Champion (planned)
+
+1. Same protocol and production baseline.  
+2. Run a **learned / alternate scorer** challenger.  
+3. If **WIN** (and folds/stability OK) → promote-candidate **memo** only — human may redesign ai-saham scoring; ml-saham does not write config.
 
 ### Data-tolerant policies
 

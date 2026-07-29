@@ -10,6 +10,11 @@
 **Product map (start here):** [docs/challenge_product.md](./docs/challenge_product.md)  
 **ADRs:** [ADR-001 challenge-first](./docs/adr/ADR-001-challenge-first-product-axis.md) · [ADR-002 challenge system](./docs/adr/ADR-002-ideal-challenge-system.md)
 
+| Challenge purpose | Question | Status |
+|-------------------|----------|--------|
+| **Tune** | Factor worth it? Weights/combo OK? | **Shipped** |
+| **Champion** | Better score rule than production (internals optional)? | **Planned** |
+
 Not investment advice. **Never auto-promotes** configs into `ai-saham`.
 
 ### Sibling boundary (`ai-saham`)
