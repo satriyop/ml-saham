@@ -9,7 +9,11 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from ml_saham.artifacts.writer import resolve_artifacts_root
-from ml_saham.challenge.types import ChallengeResult, FactorChallengeResult
+from ml_saham.challenge.types import (
+    BatchFactorResult,
+    ChallengeResult,
+    FactorChallengeResult,
+)
 
 JAKARTA = ZoneInfo("Asia/Jakarta")
 
@@ -109,6 +113,61 @@ def write_factor_artifact(
     }
     (out / "metrics.json").write_text(
         json.dumps(metrics, indent=2) + "\n", encoding="utf-8"
+    )
+    (out / "summary.md").write_text(result.summary_md or "", encoding="utf-8")
+    result.artifact_dir = out
+    return out
+
+
+def write_batch_factor_artifact(
+    result: BatchFactorResult,
+    *,
+    db_path: Path,
+    artifacts_root: Path | None = None,
+) -> Path:
+    root = resolve_artifacts_root(artifacts_root)
+    ts = datetime.now(tz=JAKARTA).strftime("%Y%m%d_%H%M%S")
+    out = (
+        root
+        / "challenge"
+        / "factor"
+        / result.policy_id.replace("/", ".")
+        / "_all"
+        / ts
+    )
+    out.mkdir(parents=True, exist_ok=True)
+    factors_payload = [
+        {
+            "factor": r.factor,
+            "verdict": r.verdict.value,
+            "mean_delta_ic": r.mean_delta_ic,
+            "mean_univariate_ic": r.mean_univariate_ic,
+            "fold_agree_positive_delta": r.fold_agree_positive_delta,
+            "notes": r.notes[-3:],
+        }
+        for r in result.results
+    ]
+    manifest = {
+        "schema_version": 2,
+        "mode": "challenge_factor_batch",
+        "track": "factor_validity_batch",
+        "policy_id": result.policy_id,
+        "protocol_id": result.protocol_id,
+        "policy_hash": result.policy_hash,
+        "n_rows": result.n_rows,
+        "primary_horizon": result.primary_horizon,
+        "n_factors": len(result.results),
+        "blocked": result.blocked.value if result.blocked else None,
+        "db_path": str(db_path),
+        "created_at": datetime.now(tz=JAKARTA).isoformat(),
+        "factors": [f["factor"] for f in factors_payload],
+        "verdicts": {f["factor"]: f["verdict"] for f in factors_payload},
+    }
+    (out / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    (out / "metrics.json").write_text(
+        json.dumps({"factors": factors_payload}, indent=2) + "\n", encoding="utf-8"
     )
     (out / "summary.md").write_text(result.summary_md or "", encoding="utf-8")
     result.artifact_dir = out

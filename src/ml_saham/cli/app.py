@@ -669,6 +669,11 @@ def challenge_factor_cmd(
         "-f",
         help="Enabled sleeve key or alias (e.g. consistency, cons, streak)",
     ),
+    all_factors: bool = typer.Option(
+        False,
+        "--all",
+        help="Run validity for every enabled sleeve (summary table)",
+    ),
     list_factors: bool = typer.Option(
         False,
         "--list-factors",
@@ -691,7 +696,11 @@ def challenge_factor_cmd(
     ),
 ) -> None:
     """Factor validity: univariate IC + drop ablation → KEEP/DEMOTE/DROP_CANDIDATE."""
-    from ml_saham.challenge import list_enabled_factors, run_factor_challenge
+    from ml_saham.challenge import (
+        list_enabled_factors,
+        run_factor_challenge,
+        run_factor_challenge_batch,
+    )
 
     if list_factors:
         try:
@@ -712,16 +721,61 @@ def challenge_factor_cmd(
         console.print(table)
         raise typer.Exit(code=0)
 
-    if not factor:
-        console.print("[red]Require --factor KEY (or use --list-factors).[/red]")
+    if all_factors and factor:
+        console.print("[red]Use either --all or --factor, not both.[/red]")
+        raise typer.Exit(code=2)
+    if not all_factors and not factor:
+        console.print(
+            "[red]Require --factor KEY or --all (or use --list-factors).[/red]"
+        )
         raise typer.Exit(code=2)
 
     db_path: Path = ctx.obj["db"]
     arts = ctx.obj.get("artifacts_dir")
+
+    if all_factors:
+        batch = run_factor_challenge_batch(
+            db_path,
+            policy_id,
+            write_artifact=not no_artifact,
+            artifacts_dir=Path(arts) if arts else None,
+        )
+        for line in batch.lines:
+            console.print(line)
+        if export_json:
+            export_json.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "policy_id": batch.policy_id,
+                "protocol_id": batch.protocol_id,
+                "policy_hash": batch.policy_hash,
+                "n_rows": batch.n_rows,
+                "primary_horizon": batch.primary_horizon,
+                "blocked": batch.blocked.value if batch.blocked else None,
+                "factors": [
+                    {
+                        "factor": r.factor,
+                        "verdict": r.verdict.value,
+                        "mean_delta_ic": r.mean_delta_ic,
+                        "mean_univariate_ic": r.mean_univariate_ic,
+                        "fold_agree_positive_delta": r.fold_agree_positive_delta,
+                        "notes": r.notes[-3:],
+                    }
+                    for r in batch.results
+                ],
+                "artifact_dir": str(batch.artifact_dir) if batch.artifact_dir else None,
+            }
+            export_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            console.print(f"\n[green]Saved JSON to {export_json}[/green]")
+        if export_md:
+            export_md.parent.mkdir(parents=True, exist_ok=True)
+            export_md.write_text(batch.summary_md, encoding="utf-8")
+            console.print(f"[green]Saved Markdown to {export_md}[/green]")
+        raise typer.Exit(code=batch.exit_code())
+
     result = run_factor_challenge(
         db_path,
         policy_id,
-        factor=factor,
+        factor=factor or "",
         write_artifact=not no_artifact,
         artifacts_dir=Path(arts) if arts else None,
     )

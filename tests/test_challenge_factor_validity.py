@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ from ml_saham.challenge.factor_validity import (
     list_enabled_factors,
     resolve_factor_key,
     run_factor_challenge,
+    run_factor_challenge_batch,
 )
 from ml_saham.challenge.panel import PanelRow
 from ml_saham.challenge.policies.registry import load_policy
@@ -83,6 +85,70 @@ def test_run_factor_on_fixture(fixture_db: Path, tmp_path: Path):
         assert r.artifact_dir is not None
         assert (r.artifact_dir / "manifest.json").is_file()
         assert r.exit_code() == 0
+
+
+def test_batch_factor_challenge(fixture_db: Path, tmp_path: Path):
+    enabled = list_enabled_factors()
+    batch = run_factor_challenge_batch(
+        fixture_db,
+        write_artifact=True,
+        artifacts_dir=tmp_path / "arts",
+    )
+    if batch.blocked is None:
+        assert len(batch.results) == len(enabled)
+        assert batch.primary_horizon == 10
+        assert batch.exit_code() == 0
+        keys = {r.factor for r in batch.results}
+        assert keys == {r["key"] for r in enabled}
+        assert batch.artifact_dir is not None
+        assert (batch.artifact_dir / "manifest.json").is_file()
+        assert "FACTOR VALIDITY BATCH" in "\n".join(batch.lines)
+    else:
+        assert batch.exit_code() == 2
+
+
+def test_cli_all_mutual_exclusion(fixture_db: Path):
+    r = runner.invoke(
+        app,
+        [
+            "--db",
+            str(fixture_db),
+            "challenge",
+            "factor",
+            "--all",
+            "--factor",
+            "cons",
+        ],
+    )
+    assert r.exit_code == 2
+    assert "either" in r.stdout.lower() or "not both" in r.stdout.lower()
+
+
+def test_cli_all(fixture_db: Path, tmp_path: Path):
+    json_path = tmp_path / "all.json"
+    r = runner.invoke(
+        app,
+        [
+            "--db",
+            str(fixture_db),
+            "--artifacts-dir",
+            str(tmp_path / "a"),
+            "challenge",
+            "factor",
+            "screener.accum.score_weights",
+            "--all",
+            "--export-json",
+            str(json_path),
+            "--no-artifact",
+        ],
+    )
+    assert r.exit_code in (0, 2), r.stdout
+    if r.exit_code == 0:
+        assert "BATCH" in r.stdout or "consistency" in r.stdout
+        assert json_path.is_file()
+        data = json_path.read_text()
+        assert "factors" in data
+        assert "consistency" in data
 
 
 def test_cli_list_factors_and_run(fixture_db: Path, tmp_path: Path):

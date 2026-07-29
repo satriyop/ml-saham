@@ -118,3 +118,25 @@ class FactorChallengeResult:
         if self.verdict in (FactorVerdict.BLOCKED_DATA, FactorVerdict.BLOCKED_POLICY):
             return 2
         return 0
+
+
+@dataclass
+class BatchFactorResult:
+    """Batch factor validity over all enabled sleeves (shared prep)."""
+
+    policy_id: str
+    protocol_id: str
+    policy_hash: str
+    n_rows: int
+    primary_horizon: int
+    results: list[FactorChallengeResult] = field(default_factory=list)
+    blocked: FactorVerdict | None = None  # prep-level only
+    lines: list[str] = field(default_factory=list)
+    summary_md: str = ""
+    notes: list[str] = field(default_factory=list)
+    artifact_dir: Path | None = None
+
+    def exit_code(self) -> int:
+        if self.blocked in (FactorVerdict.BLOCKED_DATA, FactorVerdict.BLOCKED_POLICY):
+            return 2
+        return 0

@@ -13,7 +13,13 @@ ml-saham challenge factor screener.accum.score_weights --list-factors
 ml-saham challenge factor screener.accum.score_weights --factor consistency
 ml-saham challenge factor screener.accum.score_weights --factor cons   # alias
 ml-saham challenge factor screener.accum.score_weights --factor streak
+
+# Batch: one table for every enabled sleeve (prep once)
+ml-saham challenge factor screener.accum.score_weights --all
+ml-saham challenge factor screener.accum.score_weights --all --export-json /tmp/factors.json
 ```
+
+Use either `--all` or `--factor`, not both. Batch is the overview; re-run `--factor KEY` for fold detail.
 
 ## Methods (v1)
 
