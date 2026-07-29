@@ -6,7 +6,8 @@ Frozen design docs (this set). Early drafts live locally under `archive/` (gitig
 Ideas not scheduled: [problem_backlog.md](./problem_backlog.md)  
 CLI UX: [ux.md](./ux.md)  
 Architecture: [architecture.md](./architecture.md) · Data: [data_contract.md](./data_contract.md) · Artifacts: [artifacts.md](./artifacts.md) · MVP: [mvp_acceptance.md](./mvp_acceptance.md)  
-Roadmap: [roadmap.md](./roadmap.md)
+Roadmap: [roadmap.md](./roadmap.md)  
+SOTA vocabulary (not literature frontier): [docs/sota_vocabulary_and_literature.md](./docs/sota_vocabulary_and_literature.md)
 
 ---
 
@@ -28,6 +29,7 @@ Roadmap: [roadmap.md](./roadmap.md)
 6. Default scoreboard: **long-only vs IHSG** (gross + *belum termasuk biaya* banner). Optional long/short = “cara riset membaca faktor.” Ch.18 (`pre-open-rank`) uses an **opening-session** scoreboard instead.
 7. Ch.6 = *who* (broker / foreign flow rank); Ch.9 = *how much* (volume–price anomaly). No shared ownership of “burst” stories.
 8. Bandar / accum-style concentration = **lab inside Ch.6**, not a “smart money” chapter.
+9. **Method names are pedagogical defaults**, not a claim of literature state-of-the-art. Prefer “default / compare” language in new copy. Production policy authority is **`challenge run` / ADR-002**, not curriculum `compare`. Canonical papers for named methods: [§ Method sources](#method-sources-papers--journals).
 
 ### Teaching shape
 

@@ -148,4 +148,5 @@ ml-saham  →  read-only DB
               └─ explore / demo                    →  curriculum
 ```
 
-ADRs: [docs/adr/](./docs/adr/) · Architecture: [architecture.md](./architecture.md) · Boundary: [BOUNDARY.md](./BOUNDARY.md)
+ADRs: [docs/adr/](./docs/adr/) · Architecture: [architecture.md](./architecture.md) · Boundary: [BOUNDARY.md](./BOUNDARY.md)  
+SOTA vocabulary (not literature frontier): [docs/sota_vocabulary_and_literature.md](./docs/sota_vocabulary_and_literature.md)

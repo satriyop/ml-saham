@@ -145,6 +145,7 @@ That is intentional, not a failed install.
 | [engine_factor_map.md](./engine_factor_map.md) | Engines ↔ tables ↔ policies |
 | [data_contract.md](../data_contract.md) | Live SQLite tables; **label ownership** (corpus = ai-saham, challenge **y** = protocol / artifacts only) |
 | [BOUNDARY.md](../BOUNDARY.md) | Repo split: what ai-saham vs ml-saham owns (mirror next to ai-saham) |
+| [sota_vocabulary_and_literature.md](./sota_vocabulary_and_literature.md) | “SOTA” ≠ literature frontier; chapter vs challenge models |
 | [adr/](./adr/) | Locked product decisions |
 
 ---
