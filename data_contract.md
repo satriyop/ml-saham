@@ -70,15 +70,75 @@ Scrub absurd dates (e.g. year 1970) in chapter adapters; warn in `doctor`.
 
 ## Phase-2 data (summary)
 
-| Need | Tables (ai-saham) |
+| Need | Tables (ai-saham) — **live SSOT** |
 |---|---|
 | Earnings | `earnings_cache` |
 | Corp actions | `corp_action_cache` / `corporate_action_events` (+ dates) |
-| IEV / pre-open | `iev_snapshots` (+ sidecars if used by demos) |
-| Honest labels | `candidate_observations`, `signal_forward_labels` |
+| IEV / pre-open ranks | `iev_snapshots`, prefer `iev_snapshot_history` when present |
+| Learning observations (decisions) | **`learning_observations`** |
+| Learning outcomes (labels) | **`learning_outcome_labels`** |
+| Learning evaluations (cohort) | **`learning_evaluations`** (optional for demos; used by ai-saham research loop) |
 | Headlines | only if a real source exists |
 
-Detail column lists when those chapters are implemented; phase-2 data need not block the MVP roadmap.
+Detail for challenge-path columns: [§ Learning corpus](#learning-corpus-ai-saham-live).  
+Phase-2 soft tables need not block MVP demos; **challenge** needs observations + candles (see [docs/challenge_product.md](./docs/challenge_product.md)).
+
+### Retired / do not reintroduce
+
+These names appear in older notes or fixtures only. **Live ai-saham does not use them as the observation/label plane.** Do not teach agents to require them for challenge or new features:
+
+| Dead / legacy name | Replaced by |
+|---|---|
+| `candidate_observations` | `learning_observations` (`decision_payload_json`, `purpose`, …) |
+| `signal_forward_labels` | `learning_outcome_labels` (and multi-horizon excess from `candles` for ADR-002 panels) |
+
+Optional: a curriculum chapter may still soft-read `signal_forward_labels` if present in a fixture; that is **not** the production contract.
+
+---
+
+## Learning corpus (ai-saham live)
+
+Primary store for **challenge** policy panels and research captures.
+
+### `learning_observations`
+
+| Column (min) | Role |
+|---|---|
+| `purpose` | e.g. `ACCUMULATION_DISCOVERY`, `PRE_OPEN_AUCTION_DIRECTION` |
+| `captured_at` | Capture time (ordering / dedupe) |
+| `decision_payload_json` | Full decision JSON (components, scores, ticker, dates) |
+| `observation_id` | Identity for join to outcomes (when column present) |
+
+**Challenge use:**
+
+| Purpose | Policy / surface |
+|---|---|
+| `ACCUMULATION_DISCOVERY` (and ACCUM*) | `screener.accum.score_weights` |
+| `PRE_OPEN_AUCTION_DIRECTION` | `screener.pre_open.directional_score` |
+
+### `learning_outcome_labels`
+
+| Column (min) | Role |
+|---|---|
+| `observation_id` | Join key → observation |
+| `contract_id` | e.g. `price_path.open_30m.v1`, `price_path.accum_10d.v1` |
+| `outcome` / `availability` | SUCCESS/FAILURE/… + AVAILABLE |
+| `metrics_json` | Path metrics (e.g. open_to_close_return_pct) |
+| `labeled_at` | Label time |
+
+**Challenge use:** optional open-path labels for pre-open directional panel; accum ADR-002 primarily labels from **`candles`** excess vs IHSG.
+
+### `learning_evaluations`
+
+Cohort / evaluate artifacts from ai-saham `research <scenario> evaluate`.  
+Not required for ADR-002 `challenge run` panels today; doctor may report presence only.
+
+### Related caches (not observation plane)
+
+| Table | Role |
+|---|---|
+| `candles` (+ IHSG) | Forward and same-session returns for challenge labels |
+| `iev_snapshots` / `iev_snapshot_history` | Pre-open IEV rank policy (not learning_observations) |
 
 ---
 
@@ -90,7 +150,8 @@ Even with real caches, teach:
 2. Demos must print `as_of` (run date or user flag) and, where used, the snapshot date of fundamentals.  
 3. Ch.0 explains look-ahead with a tiny concrete example (e.g. using “today’s” PE on a past week).  
 4. Broker/flow joins to returns must use **known** session dates only (no future bars).  
-5. Ch.18 `pre-open-rank` (later): session clock vs availability — separate from IHSG long-only scoreboard.
+5. Pre-open: IEV / observation timestamps are pre-open; labels use **that session’s** open→close (or outcome contract) — separate from multi-day H=10 close excess.  
+6. Observation `captured_at` / payload `snapshot_date` / `session_date` must not be confused with label availability (`learning_outcome_labels.labeled_at`).
 
 Learning-store materialization (later) should add explicit `as_of_date` / `available_at` columns when panels are built — not required to start Direct-mode MVP.
 

@@ -306,27 +306,65 @@ def _phase2_checks(conn) -> list[CheckItem]:
             hard=True,
         )
     )
+    # Live learning plane (ai-saham SSOT). Soft here; integrity block deep-dives purpose counts.
     items.append(
         _check_table(
             conn,
-            "signal_forward_labels",
-            required_cols={"ticker", "signal_date", "horizon", "close_return"},
-            hard=True,
-        )
-    )
-    items.append(
-        _check_table(
-            conn,
-            "regime_observations",
-            required_cols={"observation_date", "regime"},
+            "learning_observations",
+            required_cols={"purpose", "decision_payload_json"},
             hard=False,
         )
     )
     items.append(
         _check_table(
             conn,
-            "candidate_observations",
-            required_cols={"ticker", "snapshot_date"},
+            "learning_outcome_labels",
+            required_cols={"observation_id", "contract_id"},
+            hard=False,
+        )
+    )
+    if table_exists(conn, "learning_evaluations"):
+        items.append(
+            _check_table(
+                conn,
+                "learning_evaluations",
+                required_cols=set(),
+                hard=False,
+            )
+        )
+    else:
+        items.append(
+            CheckItem(
+                "learning_evaluations",
+                "missing",
+                "optional cohort/evaluate store — not required for challenge panels",
+                hard=False,
+            )
+        )
+    # Legacy names (retired) — soft only if present; do not require for phase-2 ok
+    if table_exists(conn, "signal_forward_labels"):
+        items.append(
+            _check_table(
+                conn,
+                "signal_forward_labels",
+                required_cols={"ticker", "signal_date", "horizon", "close_return"},
+                hard=False,
+            )
+        )
+    if table_exists(conn, "candidate_observations"):
+        items.append(
+            CheckItem(
+                "candidate_observations",
+                "ok",
+                "legacy table present — prefer learning_observations",
+                hard=False,
+            )
+        )
+    items.append(
+        _check_table(
+            conn,
+            "regime_observations",
+            required_cols={"observation_date", "regime"},
             hard=False,
         )
     )
@@ -611,14 +649,16 @@ def run_doctor(db_path: Path | str, *, deep: bool = False) -> DoctorReport:
                 )
         if not all(i.status == "ok" for i in p2_items if i.hard):
             remediation.append(
-                "For phase-2: earnings_cache, corp actions, iev_snapshots, "
-                "signal_forward_labels."
+                "For phase-2: earnings_cache, corp actions, iev_snapshots "
+                "(+ iev_snapshot_history when available)."
             )
         if any(i.status != "ok" for i in int_items):
             remediation.append(
                 "For challenge path: capture learning_observations "
-                "(accum + pre-open) and keep candle/broker windows aligned. "
-                "See: ml-saham vet | ml-saham compare data-integrity"
+                "(ACCUMULATION_DISCOVERY + PRE_OPEN_AUCTION_DIRECTION), "
+                "optional learning_outcome_labels, and keep candles (incl. IHSG) aligned. "
+                "Do not require candidate_observations / signal_forward_labels "
+                "(retired). See: ml-saham vet | docs/challenge_product.md"
             )
 
         return DoctorReport(
