@@ -12,7 +12,7 @@ Do **not** invent curriculum for pure plumbing.
 
 | Engine / surface | Role | Primary tables / artifacts | Challenge group | Challenge slugs (today) |
 |------------------|------|----------------------------|-----------------|-------------------------|
-| **Screener (accum)** | Rank accumulation candidates | `broker_summaries`, `foreign_flow_points`, `broker_daily_flow`, `bandar_detector`, `learning_observations` (ACCUM…), `candles` | `screener` | `broker-flow`, `broker-accumulation`, `bandar-detector`, `accum-policy`, `accum-macro`, `accum-deep` |
+| **Screener (accum)** | Rank accumulation candidates | `broker_summaries`, `foreign_flow_points`, `broker_daily_flow`, `bandar_detector`, `learning_observations` (ACCUM…), `candles` | `screener` | **ADR-002 policy:** `screener.accum.score_weights` (`challenge run`). Legacy chapter slugs: `broker-flow`, `broker-accumulation`, `bandar-detector`, `accum-policy`, `accum-macro`, `accum-deep` |
 | **Screener (pre-open)** | Opening auction / IEV rank | `iev_snapshots`, `learning_observations` (PRE_OPEN…), `candles` | `screener` | `pre-open-rank`, `pre-open-heuristic`, `pre-open-direction`, `pre-open-participation`, `pre-open-auction`, `pre-open-macro` |
 | **SignalEngine** | Alpha / evidence groups → raw score | observations + fundamentals + flow fingerprints | `signal_engine` | `meta-ensemble`, `factor-score`, `relative-strength`, `ichimoku-cloud`, `pattern-fail`, `earnings-surprise`, `financial-quality`, `forward-valuation`, `analyst-consensus`, `seasonality-drift` |
 | **RiskEngine** | Gates, sizing, block/allow | notations, financials, vol fingerprints in observations | `risk_engine` | `volatility-sizing`, `portfolio-small`, `special-monitoring`, `financial-distress` |

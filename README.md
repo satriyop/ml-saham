@@ -46,68 +46,31 @@ ml-saham doctor
 
 ## Challenge first (main path)
 
-**Target design:** [ADR-002](./docs/adr/ADR-002-ideal-challenge-system.md) — policy tournaments + **factor keep/drop**, not curriculum slug dumps.  
-**Legacy CLI** below still works until migration; do not treat it as the long-term product.
+**Design:** [ADR-002](./docs/adr/ADR-002-ideal-challenge-system.md).  
+**First shipped policy challenge:** [docs/challenge_accum_score_weights.md](./docs/challenge_accum_score_weights.md)
 
-| Target command | Job |
-|----------------|-----|
-| `challenge run <policy>` | Production policy vs challengers (fixed protocol) |
-| `challenge inspect <policy>` | Deep single-policy lab (replaces muddy `compare`) |
-| `challenge factor …` | **Keep / demote / drop** — predictive validity + ablation |
-| `challenge engine <name>` | Portfolio of **policies** for that engine + rollup |
-| `vet` | Data-plane gate before any challenge |
+| Command | Job |
+|---------|-----|
+| `challenge list` | List ADR-002 policy ids |
+| `challenge run <policy>` | Production policy vs challenger (fixed protocol) |
+| `challenge legacy …` | Old chapter-loop batch (do not use for promotion) |
+| `vet` / `doctor --deep` | Data-plane gate |
+| `compare <slug>` | Curriculum / single-topic lab (not ADR-002 authority) |
 
-**Accum horizons (ai-saham):** report **3 / 10 / 20** sessions; **primary = 10** (`accum_10d` / swing path). See ADR-002 §4.
-
-Same data plane as `ai-saham` (read-only SQLite). **Never auto-promotes** configs.
-
-### Legacy CLI (until ADR-002 migration)
-
-Both related to `ai-saham` (ADR-001 §2):
-
-### `challenge` — engine audit
-
-Engine map: `src/ml_saham/eval/challenge.py` (`ENGINE_FACTORS`).
-
-| Target | What it audits |
-|--------|----------------|
-| `screener` | Pre-open + accumulation factors |
-| `engine` | Signal / risk / market-context factors (`--category`, `--type`) |
-| `other` | Supporting labs + **`data-integrity`** gate |
-| `all` | Full audit |
+**Accum horizons:** report **3 / 10 / 20** sessions; **primary = 10**. Never auto-promotes configs.
 
 ```bash
-ml-saham challenge all
-ml-saham challenge all --export-json /tmp/challenge.json --export-md /tmp/challenge.md
-ml-saham challenge screener
-ml-saham challenge screener --scenario pre-open
-ml-saham challenge screener --scenario accum
-ml-saham challenge engine --category signal
-ml-saham challenge engine --category risk --type sizing
-ml-saham challenge engine --category market --type regime
-ml-saham challenge other
-
-# Data plane vet (before engine challenge)
 ml-saham doctor --deep
 ml-saham vet
-ml-saham compare data-integrity --baseline coverage --against integrity
+ml-saham challenge list
+ml-saham challenge run screener.accum.score_weights --against equal_sleeves
+ml-saham challenge run screener.accum.score_weights --against ridge_reweight
+
+# Legacy batch only
+ml-saham challenge legacy all
 ```
 
-Engine → tables → slugs: [docs/engine_factor_map.md](./docs/engine_factor_map.md)  
-Curriculum gap example: **sector macro context** (ai-saham ADR-053) ≠ `sector-breadth` — candidate `sector-macro` (not shipped yet).
-
-### `compare` — single-factor experiment
-
-Prefer baselines that mean **current static / engine-like policy**; `--against` is the learned alternative. Requires `--baseline` and `--against`.
-
-```bash
-ml-saham compare factor-score --baseline equal-weight --against elastic-net
-ml-saham compare pattern-fail --baseline coinflip --against lgbm
-ml-saham compare broker-network --baseline degree --against pagerank
-```
-
-**Quality bar:** engine-map factors must have working **`run_compare`** + honest metrics.  
-Prefer install errors for missing ML deps over silent weak models that fake a win.
+Engine map: [docs/engine_factor_map.md](./docs/engine_factor_map.md).
 
 ---
 
@@ -150,8 +113,9 @@ Ch.18 `pre-open-rank` uses an open-session scoreboard.
 ```text
 ai-saham  →  fetch/enrich → SQLite
 ml-saham  →  read-only DB
-              ├─ challenge / compare  →  engine factor audit + artifacts  (primary)
-              └─ explore / demo       →  curriculum onboarding          (secondary)
+              ├─ challenge run <policy>  →  ADR-002 policy tournament (primary)
+              ├─ challenge legacy …      →  old chapter-loop batch
+              └─ explore / demo          →  curriculum onboarding
 ```
 
 Hard rules: no `ai-saham` Python imports · no scrapers · no auto-promote of configs.

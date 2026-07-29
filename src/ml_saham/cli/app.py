@@ -35,11 +35,17 @@ from ml_saham.progress import mark, topic_flags
 
 app = typer.Typer(
     name="ml-saham",
-    help="Kursus ML problem-centric untuk pasar IDX (personal learning).",
+    help="Challenge lab for ai-saham (+ curriculum onboarding).",
     no_args_is_help=True,
     add_completion=False,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
+challenge_app = typer.Typer(
+    name="challenge",
+    help="ADR-002 policy challenges (run/list) + legacy batch audit.",
+    no_args_is_help=True,
+)
+app.add_typer(challenge_app, name="challenge")
 console = Console()
 
 
@@ -626,45 +632,143 @@ def leaderboard_cmd(
         console.print(f"\n[green]Saved leaderboard JSON to {export_json}[/green]")
 
 
-@app.command("challenge")
-def challenge_cmd(
+@challenge_app.command("list")
+def challenge_list_cmd() -> None:
+    """List ADR-002 policy challenges."""
+    from ml_saham.challenge import list_policies
+
+    rows = list_policies()
+    table = Table(title="Policy challenges (ADR-002)")
+    table.add_column("policy_id")
+    table.add_column("version")
+    table.add_column("hash")
+    table.add_column("protocol")
+    for r in rows:
+        table.add_row(r["policy_id"], r["version"], r["hash"], r["protocol"])
+    console.print(table)
+    console.print(
+        "[dim]Run: ml-saham challenge run screener.accum.score_weights "
+        "--against ridge_reweight[/dim]"
+    )
+
+
+@challenge_app.command("run")
+def challenge_run_cmd(
     ctx: typer.Context,
-    target: str = typer.Argument(
-        "all",
-        help="Engine target: screener, engine, other, atau all",
+    policy_id: str = typer.Argument(
+        "screener.accum.score_weights",
+        help="Policy id (see: ml-saham challenge list)",
     ),
-    as_of: Optional[str] = typer.Option(
-        None,
-        "--as-of",
-        help="Tanggal as_of (YYYY-MM-DD); default dipilih otomatis",
+    against: str = typer.Option(
+        "ridge_reweight",
+        "--against",
+        help="Challenger: equal_sleeves | ridge_reweight",
+    ),
+    baseline: str = typer.Option(
+        "production",
+        "--baseline",
+        help="Baseline id (v1: production only)",
     ),
     export_json: Optional[Path] = typer.Option(
         None,
         "--export-json",
-        help="Tulis hasil challenge ke file JSON",
+        help="Write full result JSON",
     ),
     export_md: Optional[Path] = typer.Option(
         None,
         "--export-md",
-        help="Tulis hasil challenge ke file Markdown report",
+        help="Write summary markdown",
+    ),
+    no_artifact: bool = typer.Option(
+        False,
+        "--no-artifact",
+        help="Skip artifact pack under artifacts/challenge/",
+    ),
+) -> None:
+    """Run ADR-002 policy tournament (English report)."""
+    from ml_saham.challenge import run_policy_challenge
+
+    db_path: Path = ctx.obj["db"]
+    arts = ctx.obj.get("artifacts_dir")
+    result = run_policy_challenge(
+        db_path,
+        policy_id,
+        against=against,
+        baseline=baseline,
+        write_artifact=not no_artifact,
+        artifacts_dir=Path(arts) if arts else None,
+    )
+    for line in result.lines:
+        console.print(line)
+
+    if export_json:
+        export_json.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "status": result.status.value,
+            "policy_id": result.policy_id,
+            "protocol_id": result.protocol_id,
+            "policy_hash": result.policy_hash,
+            "baseline_id": result.baseline_id,
+            "against_id": result.against_id,
+            "n_rows": result.n_rows,
+            "primary_horizon": result.primary_horizon,
+            "primary_ic_baseline": result.primary_ic_baseline,
+            "primary_ic_against": result.primary_ic_against,
+            "horizon_metrics": result.horizon_metrics,
+            "fold_metrics": result.fold_metrics,
+            "weights": result.weights,
+            "notes": result.notes,
+            "artifact_dir": str(result.artifact_dir) if result.artifact_dir else None,
+        }
+        export_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        console.print(f"\n[green]Saved JSON to {export_json}[/green]")
+    if export_md:
+        export_md.parent.mkdir(parents=True, exist_ok=True)
+        export_md.write_text(result.summary_md, encoding="utf-8")
+        console.print(f"[green]Saved Markdown to {export_md}[/green]")
+
+    raise typer.Exit(code=result.exit_code())
+
+
+@challenge_app.command("legacy")
+def challenge_legacy_cmd(
+    ctx: typer.Context,
+    target: str = typer.Argument(
+        "all",
+        help="Legacy engine target: screener, engine, other, or all",
+    ),
+    as_of: Optional[str] = typer.Option(
+        None,
+        "--as-of",
+        help="as_of date (YYYY-MM-DD)",
+    ),
+    export_json: Optional[Path] = typer.Option(
+        None,
+        "--export-json",
+        help="Write legacy batch JSON",
+    ),
+    export_md: Optional[Path] = typer.Option(
+        None,
+        "--export-md",
+        help="Write legacy batch markdown",
     ),
     scenario: Optional[str] = typer.Option(
         None,
         "--scenario",
-        help="Skenario spesifik (contoh: pre-open, accum)",
+        help="Legacy scenario (pre-open, accum)",
     ),
     category: Optional[str] = typer.Option(
         None,
         "--category",
-        help="Kategori engine (contoh: risk, signal)",
+        help="Legacy engine category (risk, signal, market)",
     ),
     eval_type: Optional[str] = typer.Option(
         None,
         "--type",
-        help="Tipe evaluasi (contoh: gating, sizing)",
+        help="Legacy eval type",
     ),
 ) -> None:
-    """Audit sensitivitas & tantang faktor/parameter engine ai-saham."""
+    """Legacy chapter-loop batch audit (pre-ADR-002). Prefer: challenge run."""
     from ml_saham.eval.challenge import (
         challenge_engine,
         challenge_other,
@@ -678,11 +782,13 @@ def challenge_cmd(
     chapter_ctx.scenario = scenario
     chapter_ctx.eval_type = eval_type
 
-    console.print("[bold cyan]=== AI-SAHAM ENGINE CHALLENGE & PARAMETER AUDIT ===[/bold cyan]")
+    console.print(
+        "[bold cyan]=== LEGACY ENGINE CHALLENGE (chapter loop) ===[/bold cyan]"
+    )
+    console.print("[dim]Prefer: ml-saham challenge run screener.accum.score_weights[/dim]")
     console.print(f"Database: {db_path}\n")
 
     results: dict = {}
-
     if target_clean in ("screener", "screen"):
         results = {"screener": challenge_screener(chapter_ctx, scenario)}
     elif target_clean == "engine":
@@ -692,8 +798,8 @@ def challenge_cmd(
     else:
         results = run_full_challenge(chapter_ctx)
 
-    for category, res in results.items():
-        console.print(f"\n[bold yellow]=== Category: {category.upper()} ===[/bold yellow]")
+    for cat, res in results.items():
+        console.print(f"\n[bold yellow]=== Category: {cat.upper()} ===[/bold yellow]")
         for k, v in res.items():
             if "error" in v:
                 console.print(f"[bold red]❌ {k}[/bold red]")
@@ -703,30 +809,33 @@ def challenge_cmd(
                 console.print(f"\n[bold green]✅ {title}[/bold green] ([cyan]{k}[/cyan])")
                 if "model" in v:
                     console.print(f"   [dim]Model:[/dim] {v['model']}")
-                
-                # Format metrics side by side or simply
                 sota = v.get("sota_metrics", {})
-                baseline = v.get("baseline_metrics", {})
-                if sota or baseline:
+                baseline_m = v.get("baseline_metrics", {})
+                if sota or baseline_m:
                     console.print("   [dim]Metrics:[/dim]")
                     if sota:
                         console.print(f"     [bold blue]SOTA:[/bold blue] {sota}")
-                    if baseline:
-                        console.print(f"     [bold blue]Baseline:[/bold blue] {baseline}")
-                
+                    if baseline_m:
+                        console.print(f"     [bold blue]Baseline:[/bold blue] {baseline_m}")
                 summary = v.get("summary")
                 if summary:
-                    console.print(Panel(Markdown(summary), title="Penjelasan Audit", border_style="dim"))
+                    console.print(
+                        Panel(Markdown(summary), title="Audit notes", border_style="dim")
+                    )
         console.print("─" * 60)
 
     if export_json:
         export_json.parent.mkdir(parents=True, exist_ok=True)
-        export_json.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+        export_json.write_text(
+            json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         console.print(f"\n[green]Saved challenge audit JSON to {export_json}[/green]")
-
     if export_md:
         export_md.parent.mkdir(parents=True, exist_ok=True)
-        md_text = f"# ai-saham Engine Challenge Report\n\n```json\n{json.dumps(results, indent=2)}\n```\n"
+        md_text = (
+            f"# Legacy ai-saham Engine Challenge Report\n\n"
+            f"```json\n{json.dumps(results, indent=2)}\n```\n"
+        )
         export_md.write_text(md_text, encoding="utf-8")
         console.print(f"[green]Saved challenge audit Markdown report to {export_md}[/green]")
 

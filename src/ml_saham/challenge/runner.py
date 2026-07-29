@@ -1,0 +1,436 @@
+"""ADR-002 policy challenge runner."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Sequence
+
+from ml_saham.challenge.artifacts import write_challenge_artifact
+from ml_saham.challenge.metrics import bottom_decile_mean, ic_safe, time_purged_folds
+from ml_saham.challenge.panel import PanelRow, build_panel
+from ml_saham.challenge.policies.registry import list_policy_ids, load_policy
+from ml_saham.challenge.protocols import ACCUM_PATH_V1, get_protocol
+from ml_saham.challenge.scorers import (
+    score_equal_sleeves,
+    score_production,
+    score_ridge_reweight,
+)
+from ml_saham.challenge.types import ChallengeResult, ChallengeStatus, PolicySnapshot, Protocol
+from ml_saham.data.aisaham_read import has_ihsg
+from ml_saham.data.aisaham_read import connect as db_connect
+from ml_saham.data.doctor_checks import run_doctor
+
+
+def list_policies() -> list[dict[str, str]]:
+    out = []
+    for pid in list_policy_ids():
+        pol = load_policy(pid)
+        out.append(
+            {
+                "policy_id": pol.policy_id,
+                "version": pol.version,
+                "hash": pol.hash,
+                "protocol": "accum_path_v1",
+            }
+        )
+    return out
+
+
+def _vet_for_accum(db_path: Path, protocol: Protocol) -> tuple[bool, list[str]]:
+    notes: list[str] = []
+    report = run_doctor(db_path, deep=True)
+    if not report.db_exists:
+        return False, ["DB file not found"]
+    if not report.mvp_hard_ok:
+        return False, ["MVP hard data checks failed — run ml-saham doctor"]
+    with db_connect(db_path) as conn:
+        if not has_ihsg(conn):
+            return False, ["IHSG candles required for excess labels"]
+    # accum observations soft→hard for this protocol
+    obs_item = next(
+        (i for i in report.integrity.items if i.name == "learning_observations"),
+        None,
+    )
+    if obs_item is None or obs_item.status == "missing":
+        return False, ["learning_observations missing/empty for accum challenge"]
+    if obs_item.status == "partial":
+        notes.append(f"thin observations: {obs_item.detail}")
+    return True, notes
+
+
+def _select_rows(rows: Sequence[PanelRow], idx: Sequence[int]) -> list[PanelRow]:
+    return [rows[i] for i in idx]
+
+
+def _horizon_ics(
+    rows: Sequence[PanelRow],
+    scores: Sequence[float],
+    horizons: tuple[int, ...],
+) -> dict[str, float | None]:
+    out: dict[str, float | None] = {}
+    for h in horizons:
+        pairs_s: list[float] = []
+        pairs_r: list[float] = []
+        for r, s in zip(rows, scores, strict=True):
+            if h in r.excess:
+                pairs_s.append(s)
+                pairs_r.append(r.excess[h])
+        out[str(h)] = ic_safe(pairs_s, pairs_r) if len(pairs_s) >= 5 else None
+    return out
+
+
+def _verdict(
+    protocol: Protocol,
+    fold_rows: list[dict],
+    *,
+    baseline_id: str,
+    against_id: str,
+) -> tuple[ChallengeStatus, float | None, float | None, list[str]]:
+    notes: list[str] = []
+    valid = [f for f in fold_rows if f.get("ic_baseline") is not None and f.get("ic_against") is not None]
+    if not valid:
+        return ChallengeStatus.INCONCLUSIVE, None, None, ["no valid folds with IC"]
+
+    base_ics = [float(f["ic_baseline"]) for f in valid]
+    ag_ics = [float(f["ic_against"]) for f in valid]
+    mean_b = sum(base_ics) / len(base_ics)
+    mean_a = sum(ag_ics) / len(ag_ics)
+
+    fold_wins = sum(1 for f in valid if float(f["ic_against"]) > float(f["ic_baseline"]) + 1e-12)
+    agree = fold_wins / len(valid)
+
+    # tail: against should not be much worse on bottom-decile mean excess
+    tail_ok = True
+    for f in valid:
+        tb = f.get("tail_baseline")
+        ta = f.get("tail_against")
+        if tb is not None and ta is not None and ta < tb - 0.005:
+            tail_ok = False
+            notes.append("tail proxy worse on at least one fold")
+            break
+
+    if mean_a > mean_b + protocol.win_margin and agree >= protocol.min_fold_agree and tail_ok:
+        return ChallengeStatus.WIN, mean_b, mean_a, notes
+    if mean_a > mean_b + protocol.win_margin and agree < protocol.min_fold_agree:
+        notes.append(f"IC edge but fold agree {agree:.0%} < {protocol.min_fold_agree:.0%}")
+        return ChallengeStatus.INCONCLUSIVE, mean_b, mean_a, notes
+    if abs(mean_a - mean_b) <= protocol.win_margin:
+        notes.append("primary IC within margin")
+        return ChallengeStatus.INCONCLUSIVE, mean_b, mean_a, notes
+    return ChallengeStatus.LOSE, mean_b, mean_a, notes
+
+
+def run_policy_challenge(
+    db_path: Path | str,
+    policy_id: str = "screener.accum.score_weights",
+    *,
+    against: str = "ridge_reweight",
+    baseline: str = "production",
+    protocol_id: str = "accum_path_v1",
+    write_artifact: bool = True,
+    artifacts_dir: Path | None = None,
+) -> ChallengeResult:
+    path = Path(db_path)
+    against = against.strip().lower().replace("-", "_")
+    baseline = baseline.strip().lower().replace("-", "_")
+    if baseline not in ("production",):
+        # v1 only production baseline
+        baseline = "production"
+
+    try:
+        policy = load_policy(policy_id)
+        protocol = get_protocol(protocol_id)
+    except KeyError as exc:
+        return ChallengeResult(
+            status=ChallengeStatus.BLOCKED_POLICY,
+            policy_id=policy_id,
+            protocol_id=protocol_id,
+            baseline_id=baseline,
+            against_id=against,
+            policy_hash="",
+            n_rows=0,
+            primary_horizon=ACCUM_PATH_V1.primary_horizon,
+            lines=[f"BLOCKED_POLICY: {exc}"],
+            summary_md=f"# Challenge blocked\n\n{exc}\n",
+            notes=[str(exc)],
+        )
+
+    ok, vet_notes = _vet_for_accum(path, protocol)
+    if not ok:
+        return ChallengeResult(
+            status=ChallengeStatus.BLOCKED_DATA,
+            policy_id=policy.policy_id,
+            protocol_id=protocol.protocol_id,
+            baseline_id=baseline,
+            against_id=against,
+            policy_hash=policy.hash,
+            n_rows=0,
+            primary_horizon=protocol.primary_horizon,
+            lines=["BLOCKED_DATA:"] + [f"  - {n}" for n in vet_notes],
+            summary_md="# Challenge BLOCKED_DATA\n\n" + "\n".join(f"- {n}" for n in vet_notes) + "\n",
+            notes=vet_notes,
+        )
+
+    rows, panel_notes = build_panel(
+        path,
+        policy,
+        horizons=protocol.horizons_report,
+        primary_horizon=protocol.primary_horizon,
+    )
+    notes = list(vet_notes) + list(panel_notes)
+
+    if len(rows) < protocol.min_n_total:
+        msg = f"panel too small n={len(rows)} < min_n_total={protocol.min_n_total}"
+        return ChallengeResult(
+            status=ChallengeStatus.BLOCKED_DATA,
+            policy_id=policy.policy_id,
+            protocol_id=protocol.protocol_id,
+            baseline_id=baseline,
+            against_id=against,
+            policy_hash=policy.hash,
+            n_rows=len(rows),
+            primary_horizon=protocol.primary_horizon,
+            lines=["BLOCKED_DATA:", f"  - {msg}"] + [f"  - {n}" for n in notes],
+            summary_md=f"# Challenge BLOCKED_DATA\n\n{msg}\n",
+            notes=notes + [msg],
+        )
+
+    folds = time_purged_folds(rows, protocol)
+    if not folds:
+        return ChallengeResult(
+            status=ChallengeStatus.BLOCKED_DATA,
+            policy_id=policy.policy_id,
+            protocol_id=protocol.protocol_id,
+            baseline_id=baseline,
+            against_id=against,
+            policy_hash=policy.hash,
+            n_rows=len(rows),
+            primary_horizon=protocol.primary_horizon,
+            lines=["BLOCKED_DATA: could not form time folds"],
+            summary_md="# Challenge BLOCKED_DATA\n\nNo time folds.\n",
+            notes=notes + ["no folds"],
+        )
+
+    fold_metrics: list[dict] = []
+    last_coefs: dict[str, float] = {}
+    oos_base_scores: list[float] = []
+    oos_ag_scores: list[float] = []
+    oos_rows: list[PanelRow] = []
+
+    for fi, fold in enumerate(folds):
+        train = _select_rows(rows, fold.train_idx)
+        test = _select_rows(rows, fold.test_idx)
+        base_s = score_production(test, policy)
+
+        if against in ("equal_sleeves", "equal"):
+            ag_s = score_equal_sleeves(test, policy)
+            coefs = {c.key: 1.0 for c in policy.enabled_components()}
+        elif against in ("ridge_reweight", "ridge"):
+            ag_s, coefs = score_ridge_reweight(
+                train, test, policy, primary_horizon=protocol.primary_horizon
+            )
+            last_coefs = coefs
+        elif against == "production":
+            ag_s = score_production(test, policy)
+            coefs = policy.weight_map()
+        else:
+            return ChallengeResult(
+                status=ChallengeStatus.BLOCKED_POLICY,
+                policy_id=policy.policy_id,
+                protocol_id=protocol.protocol_id,
+                baseline_id=baseline,
+                against_id=against,
+                policy_hash=policy.hash,
+                n_rows=len(rows),
+                primary_horizon=protocol.primary_horizon,
+                lines=[f"Unknown challenger {against!r}. Use equal_sleeves|ridge_reweight"],
+                notes=[f"unknown against={against}"],
+            )
+
+        y = [r.excess[protocol.primary_horizon] for r in test]
+        ic_b = ic_safe(base_s, y)
+        ic_a = ic_safe(ag_s, y)
+        fold_metrics.append(
+            {
+                "fold": fi,
+                "n_train": len(train),
+                "n_test": len(test),
+                "ic_baseline": ic_b,
+                "ic_against": ic_a,
+                "tail_baseline": bottom_decile_mean(base_s, y),
+                "tail_against": bottom_decile_mean(ag_s, y),
+                "date_min": test[0].date if test else None,
+                "date_max": test[-1].date if test else None,
+            }
+        )
+        oos_base_scores.extend(base_s)
+        oos_ag_scores.extend(ag_s)
+        oos_rows.extend(test)
+
+    status, mean_b, mean_a, vnotes = _verdict(
+        protocol, fold_metrics, baseline_id=baseline, against_id=against
+    )
+    notes.extend(vnotes)
+
+    hz_base = _horizon_ics(oos_rows, oos_base_scores, protocol.horizons_report)
+    hz_ag = _horizon_ics(oos_rows, oos_ag_scores, protocol.horizons_report)
+    horizon_metrics = {
+        "baseline": hz_base,
+        "against": hz_ag,
+    }
+
+    prod_w = policy.weight_map()
+    weights = {
+        "production": prod_w,
+        "against": last_coefs if against.startswith("ridge") else (
+            {k: 1.0 for k in prod_w} if "equal" in against else prod_w
+        ),
+        "against_id": against,
+    }
+
+    lines = _format_lines(
+        policy=policy,
+        protocol=protocol,
+        status=status,
+        against=against,
+        n_rows=len(rows),
+        mean_b=mean_b,
+        mean_a=mean_a,
+        horizon_metrics=horizon_metrics,
+        fold_metrics=fold_metrics,
+        notes=notes,
+    )
+    summary = _format_summary(
+        policy=policy,
+        protocol=protocol,
+        status=status,
+        against=against,
+        mean_b=mean_b,
+        mean_a=mean_a,
+        horizon_metrics=horizon_metrics,
+        notes=notes,
+    )
+
+    result = ChallengeResult(
+        status=status,
+        policy_id=policy.policy_id,
+        protocol_id=protocol.protocol_id,
+        baseline_id=baseline,
+        against_id=against,
+        policy_hash=policy.hash,
+        n_rows=len(rows),
+        primary_horizon=protocol.primary_horizon,
+        primary_ic_baseline=mean_b,
+        primary_ic_against=mean_a,
+        horizon_metrics=horizon_metrics,
+        fold_metrics=fold_metrics,
+        weights=weights,
+        lines=lines,
+        summary_md=summary,
+        notes=notes,
+    )
+    if write_artifact:
+        write_challenge_artifact(result, db_path=path, artifacts_root=artifacts_dir)
+        if result.artifact_dir:
+            result.lines.append(f"Artifact: {result.artifact_dir}")
+    return result
+
+
+def _format_lines(
+    *,
+    policy: PolicySnapshot,
+    protocol: Protocol,
+    status: ChallengeStatus,
+    against: str,
+    n_rows: int,
+    mean_b: float | None,
+    mean_a: float | None,
+    horizon_metrics: dict,
+    fold_metrics: list[dict],
+    notes: list[str],
+) -> list[str]:
+    def fmt(x: float | None) -> str:
+        return f"{x:+.4f}" if x is not None else "n/a"
+
+    lines = [
+        "=== POLICY CHALLENGE (ADR-002) ===",
+        f"Policy:   {policy.policy_id}  hash={policy.hash}",
+        f"Protocol: {protocol.protocol_id}  primary_H={protocol.primary_horizon}  "
+        f"report_H={list(protocol.horizons_report)}",
+        f"Baseline: production   Against: {against}",
+        f"Panel n:  {n_rows}   Folds: {len(fold_metrics)}",
+        f"Status:   {status.value}",
+        "",
+        f"Primary rank IC @ H={protocol.primary_horizon} (mean OOS folds):",
+        f"  production: {fmt(mean_b)}",
+        f"  {against}:  {fmt(mean_a)}",
+        "",
+        "Horizon table (pooled OOS rank IC, excess vs IHSG):",
+    ]
+    base_h = horizon_metrics.get("baseline") or {}
+    ag_h = horizon_metrics.get("against") or {}
+    for h in protocol.horizons_report:
+        mark = "  <- primary" if h == protocol.primary_horizon else ""
+        lines.append(
+            f"  H={h:>2}:  production={fmt(base_h.get(str(h)))}  "
+            f"{against}={fmt(ag_h.get(str(h)))}{mark}"
+        )
+    lines.append("")
+    lines.append("Folds:")
+    for f in fold_metrics:
+        lines.append(
+            f"  fold {f['fold']}: n_test={f['n_test']}  "
+            f"ic_prod={fmt(f.get('ic_baseline'))}  ic_ag={fmt(f.get('ic_against'))}  "
+            f"dates={f.get('date_min')}..{f.get('date_max')}"
+        )
+    lines.append("")
+    lines.append("Costs: gross (not including fees) · Not investment advice")
+    lines.append("Never auto-promotes ai-saham config.")
+    if notes:
+        lines.append("")
+        lines.append("Notes:")
+        for n in notes[:12]:
+            lines.append(f"  - {n}")
+    return lines
+
+
+def _format_summary(
+    *,
+    policy: PolicySnapshot,
+    protocol: Protocol,
+    status: ChallengeStatus,
+    against: str,
+    mean_b: float | None,
+    mean_a: float | None,
+    horizon_metrics: dict,
+    notes: list[str],
+) -> str:
+    def fmt(x: float | None) -> str:
+        return f"{x:+.4f}" if x is not None else "n/a"
+
+    lines = [
+        f"# Challenge: {policy.policy_id}",
+        "",
+        f"- **Status:** {status.value}",
+        f"- **Protocol:** {protocol.protocol_id} (primary H={protocol.primary_horizon})",
+        f"- **Baseline:** production (`{policy.hash}`)",
+        f"- **Against:** {against}",
+        f"- **Primary IC:** production={fmt(mean_b)} · {against}={fmt(mean_a)}",
+        "",
+        "## Horizons",
+        "",
+    ]
+    base_h = horizon_metrics.get("baseline") or {}
+    ag_h = horizon_metrics.get("against") or {}
+    for h in protocol.horizons_report:
+        lines.append(
+            f"- H={h}: production={fmt(base_h.get(str(h)))}, "
+            f"{against}={fmt(ag_h.get(str(h)))}"
+        )
+    lines.extend(["", "## Notes", ""])
+    for n in notes[:20]:
+        lines.append(f"- {n}")
+    lines.append("")
+    lines.append("Do **not** auto-promote. Human review required.")
+    lines.append("")
+    return "\n".join(lines)

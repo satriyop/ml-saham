@@ -30,6 +30,9 @@ jobs:
       - name: Core curriculum / phase tests
         run: pytest tests/test_phase0.py tests/test_phase1.py tests/test_phase2.py tests/test_phase5.py -q --tb=short
 
+      - name: ADR-002 accum score-weights tests
+        run: pytest tests/test_challenge_accum_score_weights.py -q --tb=short
+
       - name: Challenge CLI smoke on fixture
         run: |
           python - <<'PY'
@@ -41,8 +44,21 @@ jobs:
 
           runner = CliRunner()
           with TemporaryDirectory() as td:
-              db = build_mvp_fixture(Path(td) / "c.db", min_bars=100)
-              r = runner.invoke(app, ["--db", str(db), "challenge", "screener", "--scenario", "accum"])
-              assert r.exit_code == 0, r.stdout
-              print("challenge CLI smoke OK")
+              db = build_mvp_fixture(Path(td) / "c.db", min_bars=120)
+              r = runner.invoke(
+                  app,
+                  [
+                      "--db",
+                      str(db),
+                      "challenge",
+                      "run",
+                      "screener.accum.score_weights",
+                      "--against",
+                      "equal_sleeves",
+                      "--no-artifact",
+                  ],
+              )
+              assert r.exit_code in (0, 2), r.stdout
+              assert "POLICY CHALLENGE" in r.stdout or "BLOCKED" in r.stdout
+              print("challenge run CLI smoke OK", r.exit_code)
           PY

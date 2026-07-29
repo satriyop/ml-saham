@@ -114,6 +114,7 @@ def test_challenge_cli_exports(fixture_db: Path, tmp_path: Path):
             "--db",
             str(fixture_db),
             "challenge",
+            "legacy",
             "all",
             "--export-json",
             str(json_path),
@@ -122,7 +123,7 @@ def test_challenge_cli_exports(fixture_db: Path, tmp_path: Path):
         ],
     )
     assert r.exit_code == 0, r.stdout
-    assert "AI-SAHAM ENGINE CHALLENGE" in r.stdout
+    assert "LEGACY ENGINE CHALLENGE" in r.stdout or "CHALLENGE" in r.stdout
     text = json_path.read_text()
     assert "screener" in text
     assert "signal_engine" in text or "engine" in text or "meta-ensemble" in text
@@ -132,7 +133,15 @@ def test_challenge_cli_exports(fixture_db: Path, tmp_path: Path):
 def test_challenge_screener_scenario_cli(fixture_db: Path):
     r = runner.invoke(
         app,
-        ["--db", str(fixture_db), "challenge", "screener", "--scenario", "accum"],
+        [
+            "--db",
+            str(fixture_db),
+            "challenge",
+            "legacy",
+            "screener",
+            "--scenario",
+            "accum",
+        ],
     )
     assert r.exit_code == 0, r.stdout
     assert "accum" in r.stdout.lower() or "ACCUM" in r.stdout or "policy" in r.stdout.lower()

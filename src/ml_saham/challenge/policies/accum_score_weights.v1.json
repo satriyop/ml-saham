@@ -1,0 +1,68 @@
+{
+  "policy_id": "screener.accum.score_weights",
+  "version": "v1",
+  "source": "ai-saham ScoreAccumUseCase.AccumScorePolicy defaults",
+  "source_ref": "src/application/use_case/score_accum_use_case.py (mirrored snapshot)",
+  "max_score": 100.0,
+  "components": [
+    {
+      "key": "consistency",
+      "aliases": [
+        "cons"
+      ],
+      "weight": 33.3,
+      "enabled": true
+    },
+    {
+      "key": "streak",
+      "aliases": [
+        "streak"
+      ],
+      "weight": 25.0,
+      "enabled": true
+    },
+    {
+      "key": "vwap_discount",
+      "aliases": [
+        "vwap"
+      ],
+      "weight": 16.7,
+      "enabled": true
+    },
+    {
+      "key": "rsi_headroom",
+      "aliases": [
+        "rsi"
+      ],
+      "weight": 8.3,
+      "enabled": true
+    },
+    {
+      "key": "foreign_flow_ratio",
+      "aliases": [
+        "flow"
+      ],
+      "weight": 8.3,
+      "enabled": true
+    },
+    {
+      "key": "bb_squeeze",
+      "aliases": [
+        "bb"
+      ],
+      "weight": 8.3,
+      "enabled": false
+    },
+    {
+      "key": "bci",
+      "aliases": [
+        "bci",
+        "inst"
+      ],
+      "weight": 0.0,
+      "enabled": false,
+      "note": "points-based additive in production; excluded from weighted sleeves in v1"
+    }
+  ],
+  "hash": "ac01f2a36342191f"
+}

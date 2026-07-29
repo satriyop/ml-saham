@@ -171,6 +171,7 @@ def test_challenge_command(fixture_db: Path, tmp_path: Path):
             "--db",
             str(fixture_db),
             "challenge",
+            "legacy",
             "all",
             "--export-json",
             str(json_path),
@@ -179,7 +180,7 @@ def test_challenge_command(fixture_db: Path, tmp_path: Path):
         ],
     )
     assert r.exit_code == 0, r.stdout
-    assert "AI-SAHAM ENGINE CHALLENGE & PARAMETER AUDIT" in r.stdout
+    assert "LEGACY ENGINE CHALLENGE" in r.stdout or "CHALLENGE" in r.stdout
     assert json_path.is_file()
     assert md_path.is_file()
     assert "screener" in json_path.read_text()

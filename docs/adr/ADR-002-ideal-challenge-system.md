@@ -304,10 +304,10 @@ Learning chapters may keep `run_compare` for pedagogy; **product challenge** mus
 ### Follow-ups
 
 - [ ] ADR or schema for PolicySnapshot export from ai-saham  
-- [ ] Implement Protocol registry (`accum_path_v1`, `pre_open_session_v1`, …)  
-- [ ] First production challenge: accum score weights @ H=10  
-- [ ] Factor-validity report template  
-- [ ] Retire chapter-loop challenge CLI  
+- [x] Implement Protocol registry (`accum_path_v1`) + first production challenge: **accum score weights @ H=10** (`src/ml_saham/challenge/`, `ml-saham challenge run`)  
+- [ ] Factor-validity CLI (`challenge factor`)  
+- [ ] Engine portfolios on PolicySpecs only  
+- [ ] Retire chapter-loop challenge CLI (`challenge legacy`)  
 
 ---
 
