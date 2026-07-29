@@ -1,6 +1,9 @@
 {
   "policy_id": "screener.accum.score_weights",
   "version": "v1",
+  "protocol_id": "accum_path_v1",
+  "panel_kind": "accum_components",
+  "score_kind": "weighted_sleeves",
   "source": "ai-saham ScoreAccumUseCase.AccumScorePolicy defaults",
   "source_ref": "src/application/use_case/score_accum_use_case.py (mirrored snapshot)",
   "max_score": 100.0,

@@ -8,6 +8,7 @@ from typing import Sequence
 from ml_saham.challenge.artifacts import write_challenge_artifact
 from ml_saham.challenge.metrics import bottom_decile_mean, ic_safe, time_purged_folds
 from ml_saham.challenge.panel import PanelRow, build_panel
+from ml_saham.challenge.panel_iev import build_iev_panel
 from ml_saham.challenge.policies.registry import list_policy_ids, load_policy
 from ml_saham.challenge.protocols import ACCUM_PATH_V1, get_protocol
 from ml_saham.challenge.scorers import (
@@ -18,14 +19,14 @@ from ml_saham.challenge.scorers import (
 from dataclasses import dataclass
 
 from ml_saham.challenge.types import ChallengeResult, ChallengeStatus, PolicySnapshot, Protocol
-from ml_saham.data.aisaham_read import has_ihsg
+from ml_saham.data.aisaham_read import has_ihsg, table_exists
 from ml_saham.data.aisaham_read import connect as db_connect
 from ml_saham.data.doctor_checks import run_doctor
 
 
 @dataclass
 class AccumPanelPrep:
-    """Shared prep for policy tournament and factor validity."""
+    """Shared prep for policy tournament and factor validity (any panel_kind)."""
 
     policy: PolicySnapshot | None
     protocol: Protocol | None
@@ -43,7 +44,9 @@ def list_policies() -> list[dict[str, str]]:
                 "policy_id": pol.policy_id,
                 "version": pol.version,
                 "hash": pol.hash,
-                "protocol": "accum_path_v1",
+                "protocol": pol.protocol_id,
+                "panel_kind": pol.panel_kind,
+                "score_kind": pol.score_kind,
             }
         )
     return out
@@ -71,6 +74,41 @@ def _vet_for_accum(db_path: Path, protocol: Protocol) -> tuple[bool, list[str]]:
     return True, notes
 
 
+def _vet_for_pre_open_iev(db_path: Path, protocol: Protocol) -> tuple[bool, list[str]]:
+    del protocol
+    notes: list[str] = []
+    report = run_doctor(db_path, deep=False)
+    if not report.db_exists:
+        return False, ["DB file not found"]
+    if not report.mvp_hard_ok:
+        return False, ["MVP hard data checks failed — run ml-saham doctor"]
+    with db_connect(db_path) as conn:
+        if not has_ihsg(conn):
+            return False, ["IHSG candles required for open→close excess labels"]
+        has_hist = table_exists(conn, "iev_snapshot_history")
+        has_snap = table_exists(conn, "iev_snapshots")
+        n_hist = 0
+        n_snap = 0
+        if has_hist:
+            n_hist = int(
+                conn.execute("SELECT COUNT(*) AS n FROM iev_snapshot_history").fetchone()["n"]
+            )
+        if has_snap:
+            n_snap = int(conn.execute("SELECT COUNT(*) AS n FROM iev_snapshots").fetchone()["n"])
+        if n_hist == 0 and n_snap == 0:
+            return False, ["iev_snapshots / iev_snapshot_history empty or missing"]
+        if n_hist == 0 and n_snap > 0:
+            notes.append("iev_snapshot_history missing; using iev_snapshots")
+        # thin calendar soft note
+        table = "iev_snapshot_history" if n_hist > 0 else "iev_snapshots"
+        n_dates = int(
+            conn.execute(f"SELECT COUNT(DISTINCT date) AS n FROM {table}").fetchone()["n"]
+        )
+        if n_dates < 5:
+            notes.append(f"thin IEV calendar: {n_dates} distinct dates")
+    return True, notes
+
+
 def _select_rows(rows: Sequence[PanelRow], idx: Sequence[int]) -> list[PanelRow]:
     return [rows[i] for i in idx]
 
@@ -78,13 +116,17 @@ def _select_rows(rows: Sequence[PanelRow], idx: Sequence[int]) -> list[PanelRow]
 def prepare_accum_panel(
     db_path: Path | str,
     policy_id: str = "screener.accum.score_weights",
-    protocol_id: str = "accum_path_v1",
+    protocol_id: str | None = None,
 ) -> AccumPanelPrep:
-    """Load policy, vet DB, build labeled panel. blocked set if not runnable."""
+    """Load policy, vet DB, build labeled panel. blocked set if not runnable.
+
+    Dispatches on policy.panel_kind. protocol_id defaults to policy.protocol_id.
+    """
     path = Path(db_path)
     try:
         policy = load_policy(policy_id)
-        protocol = get_protocol(protocol_id)
+        pid = protocol_id or policy.protocol_id
+        protocol = get_protocol(pid)
     except KeyError as exc:
         return AccumPanelPrep(
             policy=None,
@@ -94,22 +136,46 @@ def prepare_accum_panel(
             blocked=ChallengeStatus.BLOCKED_POLICY,
         )
 
-    ok, vet_notes = _vet_for_accum(path, protocol)
-    if not ok:
+    if policy.panel_kind == "iev_rank":
+        ok, vet_notes = _vet_for_pre_open_iev(path, protocol)
+        if not ok:
+            return AccumPanelPrep(
+                policy=policy,
+                protocol=protocol,
+                rows=[],
+                notes=vet_notes,
+                blocked=ChallengeStatus.BLOCKED_DATA,
+            )
+        rows, panel_notes = build_iev_panel(
+            path,
+            policy,
+            primary_horizon=protocol.primary_horizon,
+        )
+    elif policy.panel_kind == "accum_components":
+        ok, vet_notes = _vet_for_accum(path, protocol)
+        if not ok:
+            return AccumPanelPrep(
+                policy=policy,
+                protocol=protocol,
+                rows=[],
+                notes=vet_notes,
+                blocked=ChallengeStatus.BLOCKED_DATA,
+            )
+        rows, panel_notes = build_panel(
+            path,
+            policy,
+            horizons=protocol.horizons_report,
+            primary_horizon=protocol.primary_horizon,
+        )
+    else:
         return AccumPanelPrep(
             policy=policy,
             protocol=protocol,
             rows=[],
-            notes=vet_notes,
-            blocked=ChallengeStatus.BLOCKED_DATA,
+            notes=[f"unsupported panel_kind={policy.panel_kind!r}"],
+            blocked=ChallengeStatus.BLOCKED_POLICY,
         )
 
-    rows, panel_notes = build_panel(
-        path,
-        policy,
-        horizons=protocol.horizons_report,
-        primary_horizon=protocol.primary_horizon,
-    )
     notes = list(vet_notes) + list(panel_notes)
     if len(rows) < protocol.min_n_total:
         notes.append(
@@ -129,6 +195,15 @@ def prepare_accum_panel(
         notes=notes,
         blocked=None,
     )
+
+
+def prepare_for_policy(
+    db_path: Path | str,
+    policy_id: str,
+    protocol_id: str | None = None,
+) -> AccumPanelPrep:
+    """Alias: prep dispatch for any registered policy."""
+    return prepare_accum_panel(db_path, policy_id, protocol_id)
 
 
 def _horizon_ics(
@@ -195,7 +270,7 @@ def run_policy_challenge(
     *,
     against: str = "ridge_reweight",
     baseline: str = "production",
-    protocol_id: str = "accum_path_v1",
+    protocol_id: str | None = None,
     write_artifact: bool = True,
     artifacts_dir: Path | None = None,
 ) -> ChallengeResult:
@@ -205,13 +280,17 @@ def run_policy_challenge(
     if baseline not in ("production",):
         baseline = "production"
 
-    prep = prepare_accum_panel(path, policy_id, protocol_id)
+    prep = prepare_for_policy(path, policy_id, protocol_id)
     if prep.blocked is not None or prep.policy is None or prep.protocol is None:
         st = prep.blocked or ChallengeStatus.BLOCKED_DATA
         return ChallengeResult(
             status=st,
             policy_id=policy_id if prep.policy is None else prep.policy.policy_id,
-            protocol_id=protocol_id if prep.protocol is None else prep.protocol.protocol_id,
+            protocol_id=(
+                (protocol_id or "")
+                if prep.protocol is None
+                else prep.protocol.protocol_id
+            ),
             baseline_id=baseline,
             against_id=against,
             policy_hash="" if prep.policy is None else prep.policy.hash,
@@ -285,7 +364,14 @@ def run_policy_challenge(
                 notes=[f"unknown against={against}"],
             )
 
-        y = [r.excess[protocol.primary_horizon] for r in test]
+        ph = protocol.primary_horizon
+        y = [r.excess[ph] for r in test if ph in r.excess]
+        # align scores if any row missing primary (should not happen after panel filter)
+        if len(y) != len(test):
+            base_s = [s for r, s in zip(test, base_s, strict=True) if ph in r.excess]
+            ag_s = [s for r, s in zip(test, ag_s, strict=True) if ph in r.excess]
+            test = [r for r in test if ph in r.excess]
+            y = [r.excess[ph] for r in test]
         ic_b = ic_safe(base_s, y)
         ic_a = ic_safe(ag_s, y)
         fold_metrics.append(
@@ -390,27 +476,35 @@ def _format_lines(
     def fmt(x: float | None) -> str:
         return f"{x:+.4f}" if x is not None else "n/a"
 
+    label_blurb = protocol.label
+    if protocol.primary_horizon == 0:
+        h_primary_txt = "same-session open→close (H=0 sentinel)"
+    else:
+        h_primary_txt = f"H={protocol.primary_horizon}"
+
     lines = [
         "=== POLICY CHALLENGE (ADR-002) ===",
         f"Policy:   {policy.policy_id}  hash={policy.hash}",
-        f"Protocol: {protocol.protocol_id}  primary_H={protocol.primary_horizon}  "
+        f"Protocol: {protocol.protocol_id}  primary={h_primary_txt}  "
         f"report_H={list(protocol.horizons_report)}",
+        f"Label:    {label_blurb}",
         f"Baseline: production   Against: {against}",
         f"Panel n:  {n_rows}   Folds: {len(fold_metrics)}",
         f"Status:   {status.value}",
         "",
-        f"Primary rank IC @ H={protocol.primary_horizon} (mean OOS folds):",
+        f"Primary rank IC @ {h_primary_txt} (mean OOS folds):",
         f"  production: {fmt(mean_b)}",
         f"  {against}:  {fmt(mean_a)}",
         "",
-        "Horizon table (pooled OOS rank IC, excess vs IHSG):",
+        "Horizon table (pooled OOS rank IC):",
     ]
     base_h = horizon_metrics.get("baseline") or {}
     ag_h = horizon_metrics.get("against") or {}
     for h in protocol.horizons_report:
         mark = "  <- primary" if h == protocol.primary_horizon else ""
+        hlab = "open→close" if h == 0 else str(h)
         lines.append(
-            f"  H={h:>2}:  production={fmt(base_h.get(str(h)))}  "
+            f"  H={hlab:>10}:  production={fmt(base_h.get(str(h)))}  "
             f"{against}={fmt(ag_h.get(str(h)))}{mark}"
         )
     lines.append("")
@@ -446,11 +540,17 @@ def _format_summary(
     def fmt(x: float | None) -> str:
         return f"{x:+.4f}" if x is not None else "n/a"
 
+    htxt = (
+        "same-session open→close"
+        if protocol.primary_horizon == 0
+        else f"H={protocol.primary_horizon}"
+    )
     lines = [
         f"# Challenge: {policy.policy_id}",
         "",
         f"- **Status:** {status.value}",
-        f"- **Protocol:** {protocol.protocol_id} (primary H={protocol.primary_horizon})",
+        f"- **Protocol:** {protocol.protocol_id} (primary {htxt})",
+        f"- **Label:** {protocol.label}",
         f"- **Baseline:** production (`{policy.hash}`)",
         f"- **Against:** {against}",
         f"- **Primary IC:** production={fmt(mean_b)} · {against}={fmt(mean_a)}",
@@ -461,8 +561,9 @@ def _format_summary(
     base_h = horizon_metrics.get("baseline") or {}
     ag_h = horizon_metrics.get("against") or {}
     for h in protocol.horizons_report:
+        hlab = "open→close" if h == 0 else str(h)
         lines.append(
-            f"- H={h}: production={fmt(base_h.get(str(h)))}, "
+            f"- H={hlab}: production={fmt(base_h.get(str(h)))}, "
             f"{against}={fmt(ag_h.get(str(h)))}"
         )
     lines.extend(["", "## Notes", ""])

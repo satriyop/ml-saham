@@ -323,6 +323,22 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                     "2024-06-01",
                 ),
             )
+            # multi-date IEV for pre-open ADR-002 challenge (same-session open→close)
+            for di in range(0, min_bars - 5, max(1, (min_bars - 5) // 20)):
+                d_iev = (start + timedelta(days=di)).isoformat()
+                conn.execute(
+                    "INSERT INTO iev_snapshots VALUES (?,?,?,?,?,?,?)",
+                    (
+                        d_iev,
+                        t,
+                        100.0 + si * 0.5 + di * 0.01,
+                        si + 1,
+                        99.0 + si + (di % 3) * 0.1,
+                        f"{d_iev}T08:50:00",
+                        0,
+                    ),
+                )
+            # keep last as-of row dense
             conn.execute(
                 "INSERT INTO iev_snapshots VALUES (?,?,?,?,?,?,?)",
                 (iev_date, t, 100.0 + si * 0.5, si + 1, 99.0 + si, "2024-06-01", 0),

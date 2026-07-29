@@ -651,6 +651,10 @@ def challenge_list_cmd() -> None:
         "--against ridge_reweight[/dim]"
     )
     console.print(
+        "[dim]Run: ml-saham challenge run screener.pre_open.iev_rank "
+        "--against equal_sleeves[/dim]"
+    )
+    console.print(
         "[dim]Factor: ml-saham challenge factor screener.accum.score_weights "
         "--factor consistency[/dim]"
     )

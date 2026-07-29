@@ -44,12 +44,25 @@ class PolicySnapshot:
     components: tuple[ComponentWeight, ...]
     source: str = ""
     source_ref: str = ""
+    protocol_id: str = "accum_path_v1"
+    panel_kind: str = "accum_components"
+    score_kind: str = "weighted_sleeves"
 
     def enabled_components(self) -> tuple[ComponentWeight, ...]:
         return tuple(c for c in self.components if c.enabled and c.weight > 0)
 
     def weight_map(self) -> dict[str, float]:
         return {c.key: c.weight for c in self.enabled_components()}
+
+    def feature_keys(self) -> tuple[str, ...]:
+        """Non-primary feature sleeves (disabled zero-weight components, or all non-rank)."""
+        if self.score_kind == "rank_primary":
+            return tuple(
+                c.key
+                for c in self.components
+                if c.key != "official_rank_score"
+            )
+        return tuple(c.key for c in self.enabled_components())
 
 
 @dataclass(frozen=True)

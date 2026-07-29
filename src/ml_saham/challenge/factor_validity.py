@@ -116,7 +116,7 @@ def run_factor_challenge(
     policy_id: str = "screener.accum.score_weights",
     *,
     factor: str,
-    protocol_id: str = "accum_path_v1",
+    protocol_id: str | None = None,
     write_artifact: bool = True,
     artifacts_dir: Path | None = None,
 ) -> FactorChallengeResult:
@@ -125,7 +125,8 @@ def run_factor_challenge(
 
     try:
         policy_probe = load_policy(policy_id)
-        get_protocol(protocol_id)
+        proto_id = protocol_id or policy_probe.protocol_id
+        get_protocol(proto_id)
     except KeyError as exc:
         return FactorChallengeResult(
             verdict=FactorVerdict.BLOCKED_POLICY,
@@ -140,6 +141,25 @@ def run_factor_challenge(
             notes=[str(exc)],
         )
 
+    if policy_probe.panel_kind != "accum_components":
+        msg = (
+            f"factor validity track not supported for panel_kind="
+            f"{policy_probe.panel_kind!r} yet (policy={policy_probe.policy_id})"
+        )
+        return FactorChallengeResult(
+            verdict=FactorVerdict.BLOCKED_POLICY,
+            policy_id=policy_probe.policy_id,
+            protocol_id=policy_probe.protocol_id,
+            policy_hash=policy_probe.hash,
+            factor=factor_raw,
+            n_rows=0,
+            primary_horizon=get_protocol(policy_probe.protocol_id).primary_horizon,
+            lines=["BLOCKED_POLICY:", f"  - {msg}"],
+            summary_md=f"# Factor challenge BLOCKED_POLICY\n\n{msg}\n",
+            notes=[msg],
+        )
+
+    protocol_id = proto_id
     canon = resolve_factor_key(policy_probe, factor_raw)
     if canon is None:
         all_by = {c.key.lower(): c for c in policy_probe.components}
@@ -364,13 +384,45 @@ def run_factor_challenge_batch(
     db_path: Path | str,
     policy_id: str = "screener.accum.score_weights",
     *,
-    protocol_id: str = "accum_path_v1",
+    protocol_id: str | None = None,
     write_artifact: bool = True,
     artifacts_dir: Path | None = None,
 ) -> BatchFactorResult:
     """Run validity for every enabled sleeve; prep panel/folds once."""
     path = Path(db_path)
-    prep = prepare_accum_panel(path, policy_id, protocol_id)
+    try:
+        probe = load_policy(policy_id)
+    except KeyError as exc:
+        return BatchFactorResult(
+            policy_id=policy_id,
+            protocol_id=protocol_id or "",
+            policy_hash="",
+            n_rows=0,
+            primary_horizon=ACCUM_PATH_V1.primary_horizon,
+            results=[],
+            blocked=FactorVerdict.BLOCKED_POLICY,
+            lines=[f"BLOCKED_POLICY: {exc}"],
+            summary_md=f"# Factor batch BLOCKED_POLICY\n\n{exc}\n",
+            notes=[str(exc)],
+        )
+    if probe.panel_kind != "accum_components":
+        msg = (
+            f"factor validity track not supported for panel_kind="
+            f"{probe.panel_kind!r} yet"
+        )
+        return BatchFactorResult(
+            policy_id=probe.policy_id,
+            protocol_id=probe.protocol_id,
+            policy_hash=probe.hash,
+            n_rows=0,
+            primary_horizon=get_protocol(probe.protocol_id).primary_horizon,
+            results=[],
+            blocked=FactorVerdict.BLOCKED_POLICY,
+            lines=["BLOCKED_POLICY:", f"  - {msg}"],
+            summary_md=f"# Factor batch BLOCKED_POLICY\n\n{msg}\n",
+            notes=[msg],
+        )
+    prep = prepare_accum_panel(path, policy_id, protocol_id or probe.protocol_id)
     if prep.blocked is not None or prep.policy is None or prep.protocol is None:
         blocked = _status_to_factor_blocked(prep.blocked or ChallengeStatus.BLOCKED_DATA)
         lines = [

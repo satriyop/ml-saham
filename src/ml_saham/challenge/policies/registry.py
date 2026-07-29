@@ -12,6 +12,7 @@ from ml_saham.challenge.types import ComponentWeight, PolicySnapshot
 # policy_id → packaged resource filename
 _POLICY_FILES: dict[str, str] = {
     "screener.accum.score_weights": "accum_score_weights.v1.json",
+    "screener.pre_open.iev_rank": "pre_open_iev_rank.v1.json",
 }
 
 
@@ -19,23 +20,26 @@ def list_policy_ids() -> list[str]:
     return sorted(_POLICY_FILES)
 
 
+def _resolve_policy_id(policy_id: str) -> str:
+    if policy_id in _POLICY_FILES:
+        return policy_id
+    aliases = {k.split(".")[-1]: k for k in _POLICY_FILES}
+    for k in _POLICY_FILES:
+        if policy_id in (k, f"{k}.v1", k.replace("screener.", "")):
+            return k
+    if policy_id in aliases:
+        return aliases[policy_id]
+    # dotted tail match e.g. pre_open.iev_rank
+    for k in _POLICY_FILES:
+        if policy_id == k.removeprefix("screener.") or k.endswith(policy_id):
+            return k
+    known = ", ".join(list_policy_ids())
+    raise KeyError(f"Unknown policy_id {policy_id!r}. Known: {known}")
+
+
 @lru_cache(maxsize=16)
 def load_policy(policy_id: str) -> PolicySnapshot:
-    if policy_id not in _POLICY_FILES:
-        # allow bare name without path prefix aliases
-        aliases = {k.split(".")[-1]: k for k in _POLICY_FILES}
-        # also full match after stripping version
-        for k in _POLICY_FILES:
-            if policy_id in (k, f"{k}.v1", k.replace("screener.", "")):
-                policy_id = k
-                break
-        else:
-            if policy_id in aliases:
-                policy_id = aliases[policy_id]
-            else:
-                known = ", ".join(list_policy_ids())
-                raise KeyError(f"Unknown policy_id {policy_id!r}. Known: {known}")
-
+    policy_id = _resolve_policy_id(policy_id)
     name = _POLICY_FILES[policy_id]
     # Prefer filesystem next to this module (editable installs)
     here = Path(__file__).resolve().parent / name
@@ -63,4 +67,7 @@ def load_policy(policy_id: str) -> PolicySnapshot:
         components=comps,
         source=str(data.get("source") or ""),
         source_ref=str(data.get("source_ref") or ""),
+        protocol_id=str(data.get("protocol_id") or "accum_path_v1"),
+        panel_kind=str(data.get("panel_kind") or "accum_components"),
+        score_kind=str(data.get("score_kind") or "weighted_sleeves"),
     )
