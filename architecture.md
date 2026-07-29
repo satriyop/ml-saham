@@ -2,16 +2,19 @@
 
 Implementation shape for the personal IDX **challenge lab** (+ curriculum onboarding).  
 **Product axis (locked):** [ADR-001 — Challenge-first](./docs/adr/ADR-001-challenge-first-product-axis.md)  
+**Challenge system (design target):** [ADR-002 — Ideal Challenge System](./docs/adr/ADR-002-ideal-challenge-system.md)  
+Map: [engine_factor_map.md](./docs/engine_factor_map.md)  
 Curriculum: [chapters.md](./chapters.md) · UX: [ux.md](./ux.md) · Data: [data_contract.md](./data_contract.md) · Artifacts: [artifacts.md](./artifacts.md)
 
 ---
 
 ## Goals that constrain architecture
 
-1. **Challenge first** — audit `ai-saham` via `challenge` (engine rollup) and `compare` (single-factor vs ai-saham-style baseline); both use `run_compare` (ADR-001 §2).  
-2. **Learning second** — chapter modules teach problems so challenge/compare output is interpretable (`explore` / light `demo`).  
+1. **Challenge first** — policy tournaments + factor keep/drop under fixed protocols (ADR-001, **ADR-002**). Legacy chapter-loop is not the target design.  
+2. **Learning second** — chapter modules teach problems so audits are interpretable (`explore` / light `demo`).  
 3. Emit artifacts usable to tune `ai-saham` (**never auto-promote**).  
-4. Read real market data from `ai-saham` SQLite **or** a derived learning DB.
+4. Read real market data from `ai-saham` SQLite **or** a derived learning DB.  
+5. **Horizons:** align with ai-saham (accum primary **10** sessions; report **3** and **20** where applicable) — ADR-002 §4.
 
 ---
 

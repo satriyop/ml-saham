@@ -96,8 +96,9 @@ Without an explicit decision, agents and future work keep recentering “finish 
 ### Follow-ups
 
 - [x] Challenge acceptance checklist / CI with `.[ml]` — see [challenge_acceptance.md](../../challenge_acceptance.md) and `.github/workflows/ci.yml`.  
-- Per-engine scoreboard contracts (open).  
-- Whether `demo` should alias to single-factor challenge for mapped slugs (open).
+- [x] Ideal challenge system design — **[ADR-002](./ADR-002-ideal-challenge-system.md)** (replaces chapter-loop runner as design target).  
+- Migrate implementation to ADR-002 PolicySpec runner (open).  
+- Whether `demo` should alias to challenge inspect (open; ADR-002 prefers not).
 
 ---
 

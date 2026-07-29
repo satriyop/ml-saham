@@ -6,7 +6,8 @@ Primary job: stress-test **factors, weights, and engine policies** on real marke
 Secondary job: problem-centric ML chapters so those audits are understandable.
 
 Product axis (locked): **[ADR-001 — Challenge-first](./docs/adr/ADR-001-challenge-first-product-axis.md)**  
-Design: [architecture.md](./architecture.md) · [chapters.md](./chapters.md) · [ux.md](./ux.md)
+Challenge system (target): **[ADR-002 — Ideal Challenge System](./docs/adr/ADR-002-ideal-challenge-system.md)**  
+Design: [architecture.md](./architecture.md) · [engine_factor_map.md](./docs/engine_factor_map.md) · [chapters.md](./chapters.md) · [ux.md](./ux.md)
 
 ### Language (by product axis)
 
@@ -45,19 +46,24 @@ ml-saham doctor
 
 ## Challenge first (main path)
 
-Both primary commands are **related to `ai-saham`**, with different scope (ADR-001 §2):
+**Target design:** [ADR-002](./docs/adr/ADR-002-ideal-challenge-system.md) — policy tournaments + **factor keep/drop**, not curriculum slug dumps.  
+**Legacy CLI** below still works until migration; do not treat it as the long-term product.
 
-| Command | Product definition | Relation to `ai-saham` |
-|---------|-------------------|------------------------|
-| **`challenge`** | Multi-factor **engine audit** + rollup export | **For** engines: how is the stack doing? |
-| **`compare`** | **One-factor** baseline vs against experiment | **Against** ai-saham-style / static baselines: should we change *this* factor? |
+| Target command | Job |
+|----------------|-----|
+| `challenge run <policy>` | Production policy vs challengers (fixed protocol) |
+| `challenge inspect <policy>` | Deep single-policy lab (replaces muddy `compare`) |
+| `challenge factor …` | **Keep / demote / drop** — predictive validity + ablation |
+| `challenge engine <name>` | Portfolio of **policies** for that engine + rollup |
+| `vet` | Data-plane gate before any challenge |
 
-```text
-compare   = single-factor lab (challenge an ai-saham-style baseline)
-challenge = runs those compares in bulk for an engine / all factors
-```
+**Accum horizons (ai-saham):** report **3 / 10 / 20** sessions; **primary = 10** (`accum_10d` / swing path). See ADR-002 §4.
 
 Same data plane as `ai-saham` (read-only SQLite). **Never auto-promotes** configs.
+
+### Legacy CLI (until ADR-002 migration)
+
+Both related to `ai-saham` (ADR-001 §2):
 
 ### `challenge` — engine audit
 
