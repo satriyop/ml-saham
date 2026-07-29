@@ -42,7 +42,7 @@ app = typer.Typer(
 )
 challenge_app = typer.Typer(
     name="challenge",
-    help="ADR-002 policy challenges (run/list) + legacy batch audit.",
+    help="ADR-002 policy challenges (run/list/engine) + legacy batch audit.",
     no_args_is_help=True,
 )
 app.add_typer(challenge_app, name="challenge")
@@ -884,6 +884,120 @@ def challenge_run_cmd(
             "fold_metrics": result.fold_metrics,
             "weights": result.weights,
             "notes": result.notes,
+            "artifact_dir": str(result.artifact_dir) if result.artifact_dir else None,
+        }
+        export_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        console.print(f"\n[green]Saved JSON to {export_json}[/green]")
+    if export_md:
+        export_md.parent.mkdir(parents=True, exist_ok=True)
+        export_md.write_text(result.summary_md, encoding="utf-8")
+        console.print(f"[green]Saved Markdown to {export_md}[/green]")
+
+    raise typer.Exit(code=result.exit_code())
+
+
+@challenge_app.command("engine")
+def challenge_engine_cmd(
+    ctx: typer.Context,
+    name: str = typer.Argument(
+        "list",
+        help="Engine id (e.g. screener) or 'list' to show engines",
+    ),
+    scenario: Optional[str] = typer.Option(
+        None,
+        "--scenario",
+        help="ai-saham scenario filter: accum | pre-open (omit = all)",
+    ),
+    against: str = typer.Option(
+        "equal_sleeves",
+        "--against",
+        help="Shared challenger for all policies (default: equal_sleeves)",
+    ),
+    baseline: str = typer.Option(
+        "production",
+        "--baseline",
+        help="Baseline id (v1: production only)",
+    ),
+    export_json: Optional[Path] = typer.Option(
+        None,
+        "--export-json",
+        help="Write engine rollup JSON",
+    ),
+    export_md: Optional[Path] = typer.Option(
+        None,
+        "--export-md",
+        help="Write engine rollup markdown",
+    ),
+    no_artifact: bool = typer.Option(
+        False,
+        "--no-artifact",
+        help="Skip artifact pack under artifacts/challenge/engine/",
+    ),
+) -> None:
+    """ADR-002 engine portfolio: PolicySpecs rollup (not chapter-loop legacy)."""
+    from ml_saham.challenge.engines import list_engines, run_engine_portfolio
+
+    name_clean = name.strip().lower()
+    if name_clean in ("list", "ls", ""):
+        table = Table(title="Engines (ADR-002 PolicySpec portfolios)")
+        table.add_column("engine_id")
+        table.add_column("scenarios")
+        table.add_column("n_policies")
+        for e in list_engines():
+            table.add_row(
+                e["engine_id"],
+                ", ".join(e["scenarios"]),
+                str(e["n_policies"]),
+            )
+        console.print(table)
+        console.print(
+            "[dim]Run: ml-saham challenge engine screener "
+            "[--scenario accum|pre-open] --against equal_sleeves[/dim]"
+        )
+        console.print(
+            "[dim]Legacy chapter loop: ml-saham challenge legacy screener[/dim]"
+        )
+        raise typer.Exit(code=0)
+
+    db_path: Path = ctx.obj["db"]
+    arts = ctx.obj.get("artifacts_dir")
+    result = run_engine_portfolio(
+        db_path,
+        name_clean,
+        scenario=scenario,
+        against=against,
+        baseline=baseline,
+        write_artifact=not no_artifact,
+        artifacts_dir=Path(arts) if arts else None,
+    )
+    for line in result.lines:
+        console.print(line)
+
+    if export_json:
+        export_json.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "engine_id": result.engine_id,
+            "scenario_filter": result.scenario_filter,
+            "against_id": result.against_id,
+            "baseline_id": result.baseline_id,
+            "counts": result.counts,
+            "notes": result.notes,
+            "resolve_error": result.resolve_error,
+            "rows": [
+                {
+                    "scenario": r.scenario,
+                    "policy_id": r.policy_id,
+                    "protocol_id": r.protocol_id,
+                    "status": r.status,
+                    "n_rows": r.n_rows,
+                    "primary_horizon": r.primary_horizon,
+                    "primary_ic_baseline": r.primary_ic_baseline,
+                    "primary_ic_against": r.primary_ic_against,
+                    "notes": r.notes[-5:],
+                    "error": r.error,
+                }
+                for r in result.rows
+            ],
             "artifact_dir": str(result.artifact_dir) if result.artifact_dir else None,
         }
         export_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

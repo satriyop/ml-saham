@@ -308,7 +308,7 @@ Learning chapters may keep `run_compare` for pedagogy; **product challenge** mus
 - [x] Factor-validity CLI (`challenge factor`) — univariate + drop ablation, enabled sleeves only
 - [x] Second policy: **pre-open IEV rank** (`screener.pre_open.iev_rank`, protocol `pre_open_session_v1`, same-session open→close)
 - [x] Pre-open **observation** policy (`screener.pre_open.directional_score`, raw_score + features; data-tolerant BLOCKED when thin)
-- [ ] Engine portfolios on PolicySpecs only  
+- [x] Engine portfolio `challenge engine screener` (+ `--scenario accum|pre-open`) on PolicySpecs only
 - [ ] Retire chapter-loop challenge CLI (`challenge legacy`)  
 
 ---

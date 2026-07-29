@@ -74,5 +74,6 @@ Factors / evidence that exist or are growing in **ai-saham** but are **thin or m
 |---------|------|
 | `ml-saham doctor` / `doctor --deep` | Data coverage + integrity gates |
 | `ml-saham vet` | English data-integrity audit (challenge factor) |
-| `ml-saham challenge …` | Engine batch audit |
+| `ml-saham challenge engine screener [--scenario …]` | ADR-002 PolicySpec portfolio rollup |
+| `ml-saham challenge …` | Policy / factor / legacy batch |
 | `ml-saham compare <slug> …` | Single-factor vs ai-saham-style baseline |

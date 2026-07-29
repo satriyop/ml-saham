@@ -12,6 +12,7 @@ from ml_saham.artifacts.writer import resolve_artifacts_root
 from ml_saham.challenge.types import (
     BatchFactorResult,
     ChallengeResult,
+    EnginePortfolioResult,
     FactorChallengeResult,
 )
 
@@ -168,6 +169,69 @@ def write_batch_factor_artifact(
     )
     (out / "metrics.json").write_text(
         json.dumps({"factors": factors_payload}, indent=2) + "\n", encoding="utf-8"
+    )
+    (out / "summary.md").write_text(result.summary_md or "", encoding="utf-8")
+    result.artifact_dir = out
+    return out
+
+
+def write_engine_artifact(
+    result: EnginePortfolioResult,
+    *,
+    db_path: Path,
+    artifacts_root: Path | None = None,
+) -> Path:
+    root = resolve_artifacts_root(artifacts_root)
+    ts = datetime.now(tz=JAKARTA).strftime("%Y%m%d_%H%M%S")
+    out = root / "challenge" / "engine" / result.engine_id / ts
+    out.mkdir(parents=True, exist_ok=True)
+    rows_payload = [
+        {
+            "scenario": r.scenario,
+            "policy_id": r.policy_id,
+            "protocol_id": r.protocol_id,
+            "policy_hash": r.policy_hash,
+            "status": r.status,
+            "n_rows": r.n_rows,
+            "primary_horizon": r.primary_horizon,
+            "primary_ic_baseline": r.primary_ic_baseline,
+            "primary_ic_against": r.primary_ic_against,
+            "against_id": r.against_id,
+            "notes": r.notes[-5:],
+            "error": r.error,
+        }
+        for r in result.rows
+    ]
+    manifest = {
+        "schema_version": 2,
+        "mode": "challenge_engine",
+        "engine_id": result.engine_id,
+        "scenario_filter": result.scenario_filter,
+        "against_id": result.against_id,
+        "baseline_id": result.baseline_id,
+        "counts": result.counts,
+        "n_policies": len(result.rows),
+        "db_path": str(db_path),
+        "created_at": datetime.now(tz=JAKARTA).isoformat(),
+        "policies": [r.policy_id for r in result.rows],
+    }
+    (out / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    (out / "rollup.json").write_text(
+        json.dumps(
+            {
+                "engine_id": result.engine_id,
+                "scenario_filter": result.scenario_filter,
+                "against_id": result.against_id,
+                "counts": result.counts,
+                "notes": result.notes,
+                "rows": rows_payload,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
     )
     (out / "summary.md").write_text(result.summary_md or "", encoding="utf-8")
     result.artifact_dir = out

@@ -56,6 +56,7 @@ ml-saham doctor
 |---------|-----|
 | `challenge list` | List ADR-002 policy ids |
 | `challenge run <policy>` | Production policy vs challenger (fixed protocol) |
+| `challenge engine screener` | Screener PolicySpec portfolio (+ `--scenario accum\|pre-open`) |
 | `challenge factor … --factor X` / `--all` | Keep/demote/drop one factor, or batch table for all enabled sleeves |
 | `challenge legacy …` | Old chapter-loop batch (do not use for promotion) |
 | `vet` / `doctor --deep` | Data-plane gate |
@@ -71,6 +72,8 @@ ml-saham challenge run screener.accum.score_weights --against equal_sleeves
 ml-saham challenge run screener.accum.score_weights --against ridge_reweight
 ml-saham challenge run screener.pre_open.iev_rank --against equal_sleeves
 ml-saham challenge run screener.pre_open.directional_score --against equal_sleeves
+ml-saham challenge engine screener
+ml-saham challenge engine screener --scenario pre-open
 ml-saham challenge factor screener.accum.score_weights --list-factors
 ml-saham challenge factor screener.accum.score_weights --factor consistency
 ml-saham challenge factor screener.accum.score_weights --all

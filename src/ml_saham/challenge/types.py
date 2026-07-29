@@ -140,6 +140,47 @@ class FactorChallengeResult:
 
 
 @dataclass
+class EnginePolicyRow:
+    """One policy row inside an engine portfolio rollup."""
+
+    engine_id: str
+    scenario: str
+    policy_id: str
+    protocol_id: str
+    policy_hash: str
+    status: str  # ChallengeStatus.value or "ERROR"
+    n_rows: int
+    primary_horizon: int | None
+    primary_ic_baseline: float | None
+    primary_ic_against: float | None
+    against_id: str
+    notes: list[str] = field(default_factory=list)
+    error: str | None = None
+
+
+@dataclass
+class EnginePortfolioResult:
+    """ADR-002 engine portfolio rollup over PolicySpecs."""
+
+    engine_id: str
+    scenario_filter: str | None  # None = all
+    against_id: str
+    baseline_id: str
+    rows: list[EnginePolicyRow] = field(default_factory=list)
+    counts: dict[str, int] = field(default_factory=dict)
+    lines: list[str] = field(default_factory=list)
+    summary_md: str = ""
+    notes: list[str] = field(default_factory=list)
+    artifact_dir: Path | None = None
+    resolve_error: str | None = None  # unknown engine/scenario
+
+    def exit_code(self) -> int:
+        if self.resolve_error:
+            return 2
+        return 0
+
+
+@dataclass
 class BatchFactorResult:
     """Batch factor validity over all enabled sleeves (shared prep)."""
 
