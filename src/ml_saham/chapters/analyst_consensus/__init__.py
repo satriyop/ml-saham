@@ -22,7 +22,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  memberikan sinyal harga yang valid atau hanya trailing indicator?",
         "",
         "Opsi pendekatan",
-        "  1) FinBERT / NLP pada teks laporan (SOTA / default)",
+        "  1) FinBERT / NLP pada teks laporan (Default / default)",
         "  2) Naive average numeric rating (baseline / compare)",
         "",
         "Caveat",
@@ -64,7 +64,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         curr = float(r.get("current_price") or 0.0)
         upside = ((target - curr) / curr) if curr > 0 and target > 0 else 0.0
 
-        # Mock SOTA FinBERT / NLP Score
+        # Mock default FinBERT / NLP Score
         np.random.seed(hash(r["ticker"]) % (2**32))
         mock_finbert_score = min(max(buy_ratio + (upside * 0.5) + np.random.normal(0, 0.1), 0.0), 1.0)
 
@@ -89,9 +89,9 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     lines = [
         f"n_tickers={len(analyzed)}  source=analyst_cache",
-        ">>> SOTA FinBERT / NLP (Mocked on reports) <<<",
+        ">>> default FinBERT / NLP (Mocked on reports) <<<",
         "",
-        "Top SOTA Consensus names (FinBERT Sentiment):",
+        "Top default Consensus names (FinBERT Sentiment):",
     ]
 
     for a in analyzed[:10]:
@@ -111,11 +111,11 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "top_finbert_score": analyzed[0]["finbert_score"] if analyzed else 0.0,
     }
     return DemoResult(
-        title="Analyst consensus · FinBERT SOTA",
+        title="Analyst consensus · FinBERT default",
         lines=lines,
         metrics=metrics,
         model="finbert_nlp_sota",
-        summary_md="# Analyst consensus\n\nSOTA FinBERT implementation (mocked).\n",
+        summary_md="# Analyst consensus\n\nDefault FinBERT implementation (mocked).\n",
         scoreboard=False,
         scoreboard_kind="none",
         top_names=top_names,
@@ -157,16 +157,16 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
             "finbert_score": mock_finbert
         })
         
-    sota_top = sorted(analyzed, key=lambda x: x["finbert_score"], reverse=True)[:5]
+    against_top = sorted(analyzed, key=lambda x: x["finbert_score"], reverse=True)[:5]
     base_top = sorted(analyzed, key=lambda x: x["naive_rating"], reverse=True)[:5]
     
     lines = [
-        ">>> COMPARE SOTA (FinBERT/NLP) vs BASELINE (Naive Rating) <<<",
+        ">>> COMPARE default (FinBERT/NLP) vs BASELINE (Naive Rating) <<<",
         f"n_tickers={len(analyzed)}",
         "",
-        "SOTA (FinBERT Score) Top 5:"
+        "Default (FinBERT Score) Top 5:"
     ]
-    for a in sota_top:
+    for a in against_top:
         lines.append(f"  {a['ticker']:<6} FinBERT={a['finbert_score']:.2f}")
         
     lines.extend(["", "Baseline (Naive Rating) Top 5:"])
@@ -175,18 +175,18 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         
     lines.extend([
         "",
-        "SOTA (FinBERT) membaca konteks laporan secara mendalam,",
+        "Default (FinBERT) membaca konteks laporan secara mendalam,",
         "sementara baseline naif hanya menghitung rata-rata rekomendasi angka."
     ])
 
     return DemoResult(
-        title="Analyst consensus · SOTA vs Baseline",
+        title="Analyst consensus · Default vs Baseline",
         lines=lines,
         metrics={"n_tickers": len(analyzed)},
         model="finbert-nlp",
         summary_md=(
             "# Analyst Consensus Compare\n\n"
-            "Comparing SOTA (FinBERT/NLP) against Baseline (Naive numeric rating).\n"
+            "Comparing default (FinBERT/NLP) against Baseline (Naive numeric rating).\n"
         ),
         scoreboard=False,
         scoreboard_kind="none"

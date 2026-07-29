@@ -31,7 +31,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  Memprediksi waktu reaksi harga (Survival Analysis) — time-to-event.",
         "",
         "Opsi pendekatan",
-        "  1) XGBoost Survival Embeddings (SOTA/default) untuk prediksi time-to-event",
+        "  1) XGBoost Survival Embeddings (default) untuk prediksi time-to-event",
         "  2) Kaplan-Meier Estimator (baseline/compare)",
         "",
         "Caveat",
@@ -150,7 +150,7 @@ def _learned_scores(rows: list[dict], model_type: str = "xgboost") -> tuple[list
         return scores, "kaplan-meier", importances
 
     else:
-        # XGBoost SOTA
+        # XGBoost default
         try:
             import xgboost as xgb
 

@@ -32,7 +32,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  Menilai kualitas fundamental & akuntansi perusahaan.",
         "",
         "Opsi pendekatan",
-        "  1) LightGBM Classification pada sinyal Piotroski/Beneish (SOTA/default)",
+        "  1) LightGBM Classification pada sinyal Piotroski/Beneish (default)",
         "  2) Penjumlahan skor Piotroski F-Score (baseline/compare)",
         "",
         "Caveat",
@@ -151,13 +151,13 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     lines = [
         f"as_of={as_of}  n_tickers={len(tickers)}",
-        f"SOTA LightGBM Rank IC vs 5d fwd return: {ic:+.3f}",
+        f"Default LightGBM Rank IC vs 5d fwd return: {ic:+.3f}",
         f"LightGBM In-Sample Accuracy: {acc:.1%}",
         "",
-        "Top SOTA LightGBM Companies:",
+        "Top Default LightGBM Companies:",
     ]
     for t in top[:8]:
-        lines.append(f"  {t['ticker']:<6} SOTA_Prob={t['prob']:.2f}  fwd={t['fwd']:+.2%}")
+        lines.append(f"  {t['ticker']:<6} default_prob={t['prob']:.2f}  fwd={t['fwd']:+.2%}")
 
     metrics = {
         "as_of": as_of,
@@ -166,7 +166,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "model_accuracy": acc,
     }
     return DemoResult(
-        title="Financial quality · SOTA LightGBM",
+        title="Financial quality · Default LightGBM",
         lines=lines,
         metrics=metrics,
         model="lightgbm_classification",
@@ -186,7 +186,7 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
 
     as_of, tickers, f_scores, rets, f_details = _prepare_data(ctx)
 
-    # LightGBM (SOTA)
+    # LightGBM (default)
     X = np.array([f_details[t] for t in tickers])
     y = np.array([1 if r > 0 else 0 for r in rets])
 
@@ -202,8 +202,8 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
     else:
         preds_sota = np.zeros(len(tickers))
         
-    ic_sota = rank_ic(preds_sota.tolist(), rets)
-    acc_sota = float((clf.predict(X) == y).mean()) if len(set(y.tolist())) >= 2 else 0.5
+    ic_against = rank_ic(preds_sota.tolist(), rets)
+    acc_against = float((clf.predict(X) == y).mean()) if len(set(y.tolist())) >= 2 else 0.5
 
     # Piotroski F-Score Sum (Baseline)
     ic_baseline = rank_ic(f_scores, rets)
@@ -215,9 +215,9 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
     lines = [
         f"as_of={as_of}  n_tickers={len(tickers)}",
         "",
-        "[ SOTA: LightGBM Classification ]",
-        f"  Rank IC  : {ic_sota:+.3f}",
-        f"  Accuracy : {acc_sota:.1%}",
+        "[ Default: LightGBM Classification ]",
+        f"  Rank IC  : {ic_against:+.3f}",
+        f"  Accuracy : {acc_against:.1%}",
         "",
         "[ Baseline: Piotroski F-Score Sum ]",
         f"  Rank IC  : {ic_baseline:+.3f}",
@@ -229,19 +229,19 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
         "n_tickers": len(tickers),
     }
     compare = {
-        "sota_ic": ic_sota,
-        "sota_acc": acc_sota,
+        "against_ic": ic_against,
+        "against_acc": acc_against,
         "baseline_ic": ic_baseline,
         "baseline_acc": acc_baseline,
     }
 
     return CompareResult(
-        title="Financial quality · SOTA vs Baseline",
+        title="Financial quality · Default vs Baseline",
         lines=lines,
         metrics=metrics,
         compare=compare,
         model="lightgbm_vs_f_score",
-        summary_md=f"# Financial quality\n\nSOTA IC={ic_sota:+.3f} vs Baseline IC={ic_baseline:+.3f}.\n",
+        summary_md=f"# Financial quality\n\nDefault IC={ic_against:+.3f} vs Baseline IC={ic_baseline:+.3f}.\n",
         scoreboard=True,
     )
 

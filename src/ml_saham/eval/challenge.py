@@ -121,20 +121,23 @@ def _run_factor_challenge(chapter_ctx: ChapterContext, slugs: list[str]) -> dict
 
             compare_dict = getattr(res, "compare", None)
             if isinstance(compare_dict, dict) and compare_dict:
-                sota_metrics = compare_dict.get("sota_metrics") or compare_dict.get(
-                    "against", res.metrics
+                against_metrics = (
+                    compare_dict.get("against_metrics")
+                    or compare_dict.get("sota_metrics")  # legacy key
+                    or compare_dict.get("against")
+                    or res.metrics
                 )
                 baseline_metrics = compare_dict.get("baseline_metrics") or compare_dict.get(
                     "baseline", {}
                 )
             else:
-                sota_metrics = res.metrics
+                against_metrics = res.metrics
                 baseline_metrics = {}
 
             results[slug] = {
                 "title": res.title,
                 "model": res.model,
-                "sota_metrics": sota_metrics,
+                "against_metrics": against_metrics,
                 "baseline_metrics": baseline_metrics,
                 "summary": res.summary_md,
                 "ok": True,

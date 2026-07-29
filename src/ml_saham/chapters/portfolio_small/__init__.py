@@ -31,7 +31,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  Dari skor momentum → portofolio kecil: pengalokasian bobot (constraints & holdings).",
         "",
         "Opsi pendekatan",
-        "  SOTA (default): Hierarchical Risk Parity (HRP) / PyPortfolioOpt",
+        "  Default: Hierarchical Risk Parity (HRP) / PyPortfolioOpt",
         "  Baseline (compare): Equal-Weight atau Capped-Weight",
         "",
         "Caveat",
@@ -135,7 +135,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     lines = [
         f"as_of={as_of}  top_k={_TOP_K}  horizon=5d",
-        f"HRP risk-parity mean fwd:  {hrp_ret:+.2%}  (SOTA)",
+        f"HRP risk-parity mean fwd:  {hrp_ret:+.2%}  (default)",
     ]
     if bench is not None:
         lines.append(f"IHSG fwd 5d:               {bench:+.2%}")
@@ -162,12 +162,12 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         for t in top
     ]
     return DemoResult(
-        title="Portfolio small · HRP (SOTA)",
+        title="Portfolio small · HRP (default)",
         lines=lines,
         metrics=metrics,
         model="HRP",
         summary_md=(
-            f"# Portfolio small (SOTA)\n\nas_of={as_of}. "
+            f"# Portfolio small (default)\n\nas_of={as_of}. "
             f"HRP={hrp_ret:+.2%}.\n"
         ),
         scoreboard=True,
@@ -205,12 +205,12 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         f"as_of={as_of}  top_k={_TOP_K}  horizon=5d",
         f"Equal-weight mean fwd:     {eq_ret:+.2%} (Baseline)",
         f"Capped-weight mean fwd:    {cap_ret:+.2%}  (max {_MAX_W:.0%}/name)",
-        f"HRP risk-parity mean fwd:  {hrp_ret:+.2%} (SOTA)",
+        f"HRP risk-parity mean fwd:  {hrp_ret:+.2%} (default)",
     ]
     if bench is not None:
         lines.append(f"IHSG fwd 5d:               {bench:+.2%}")
     lines.append("")
-    lines.append("Top momentum names (Baseline vs SOTA weights):")
+    lines.append("Top momentum names (Baseline vs Default weights):")
     for t, w_eq, w_cap, w_hrp, r in zip(ranked, eq_w, cap_w, hrp_w, rets, strict=True):
         lines.append(
             f"  {t:<6} w_eq={w_eq:.1%} w_cap={w_cap:.1%}  w_hrp={w_hrp:.1%}  "

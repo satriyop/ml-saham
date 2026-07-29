@@ -32,7 +32,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  rotasi modal institusi lintas sektor sebelum pergerakan tren makro.",
         "",
         "Opsi pendekatan",
-        "  1) SOTA (default): Advance-Decline PCA",
+        "  1) Default: Advance-Decline PCA",
         "  2) Baseline (compare): equal-weight sector index",
         "",
         "Caveat",
@@ -101,7 +101,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         sector_breadth[sec] = n_above / len(st_list)
         sector_fwd[sec] = sum(fwd[t] for t in st_list) / len(st_list)
 
-    # Compute PCA Sector Breadth Factor across stocks (SOTA)
+    # Compute PCA Sector Breadth Factor across stocks (default)
     X_stock = []
     for t in tickers:
         sec = sector_map.get(t, "Other")
@@ -121,7 +121,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     lines = [
         f"as_of={as_of}  n_tickers={len(tickers)}  n_sectors={len(sector_tickers)}",
-        f"SOTA (Advance-Decline PCA) explained var: {explained_var:.1%}",
+        f"Default (Advance-Decline PCA) explained var: {explained_var:.1%}",
         f"Sector Breadth Rank IC vs 5d fwd return:          {ic:+.3f}",
         "",
         "Sector Market Participation (> SMA-20):",
@@ -139,7 +139,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "rank_ic_sector_breadth": ic,
     }
     return DemoResult(
-        title="Sector breadth · market participation index (SOTA)",
+        title="Sector breadth · market participation index (default)",
         lines=lines,
         metrics=metrics,
         model="pca_sector_breadth",
@@ -209,20 +209,20 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         # Baseline: equal-weight sector index proxy (using sector breadth)
         baseline_scores.append(b_val)
 
-    # SOTA: Advance-Decline PCA
+    # Default: Advance-Decline PCA
     pca = PCA(n_components=1, random_state=42)
-    sota_scores = pca.fit_transform(np.array(X_stock)).flatten().tolist()
+    against_scores = pca.fit_transform(np.array(X_stock)).flatten().tolist()
     explained_var = float(pca.explained_variance_ratio_[0])
 
     rets = maybe_haircut([fwd[t] for t in tickers], with_costs=ctx.with_costs)
-    ic_sota = rank_ic(sota_scores, rets)
+    ic_against = rank_ic(against_scores, rets)
     ic_base = rank_ic(baseline_scores, rets)
 
     lines = [
         f"as_of={as_of}  n_tickers={len(tickers)}",
         "",
-        "SOTA (Advance-Decline PCA):",
-        f"  Rank IC = {ic_sota:+.3f}",
+        "Default (Advance-Decline PCA):",
+        f"  Rank IC = {ic_against:+.3f}",
         f"  Explained variance = {explained_var:.1%}",
         "",
         "Baseline (equal-weight sector index):",
@@ -230,7 +230,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     ]
 
     metrics = {
-        "ic_sota": ic_sota,
+        "ic_against": ic_against,
         "ic_base": ic_base,
     }
     return DemoResult(
@@ -238,7 +238,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         lines=lines,
         metrics=metrics,
         model="compare",
-        summary_md=f"# Compare\n\nSOTA (PCA)={ic_sota:+.3f}, Base (Eq-W)={ic_base:+.3f}",
+        summary_md=f"# Compare\n\nDefault (PCA)={ic_against:+.3f}, Base (Eq-W)={ic_base:+.3f}",
         scoreboard=False,
     )
 

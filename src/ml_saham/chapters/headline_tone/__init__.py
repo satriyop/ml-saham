@@ -202,9 +202,9 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         f"Korpus: n={len(texts)} headline ID (pos/neg)",
         f"Train={len(Xtr)}  test={len(Xte)}",
         f"MultinomialNB (Baseline) accuracy:      {acc_nb:.3f}",
-        f"LogisticRegression (SOTA) accuracy:     {acc_lr:.3f}",
+        f"LogisticRegression (default) accuracy:     {acc_lr:.3f}",
         "",
-        "LogisticRegression (SOTA) menangkap bobot log-odds sentimen secara lebih baik",
+        "LogisticRegression (default) menangkap bobot log-odds sentimen secara lebih baik",
         "untuk kombinasi kata tertentu dibandingkan baseline Naive Bayes."
     ]
 
@@ -215,13 +215,13 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     }
 
     return DemoResult(
-        title="Headline tone · compare SOTA vs baseline",
+        title="Headline tone · compare default vs baseline",
         lines=lines,
         metrics=metrics,
         model="logistic-regression",
         summary_md=(
             "# Headline tone Compare\n\n"
-            f"LogisticRegression (SOTA) accuracy={acc_lr:.3f}\n"
+            f"LogisticRegression (default) accuracy={acc_lr:.3f}\n"
             f"MultinomialNB (Baseline) accuracy={acc_nb:.3f}\n"
         ),
         scoreboard=False,

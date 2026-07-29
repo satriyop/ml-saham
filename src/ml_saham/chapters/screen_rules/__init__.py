@@ -31,7 +31,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "",
         "Opsi pendekatan",
         "  1) Hand screen: threshold PE/ROE/PBV",
-        "  2) LightGBM Classifier (SOTA) pada label 'return di atas median'",
+        "  2) LightGBM Classifier (default) pada label 'return di atas median'",
         "  3) Bandingkan hit-list & rank IC (compare) vs DecisionTree",
         "",
         "Caveat",

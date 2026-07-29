@@ -22,7 +22,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  Kompresi volatilitas (Squeeze) mendahului pergerakan harga masif, namun breakout seringkali palsu.",
         "",
         "Opsi pendekatan",
-        "  1) SOTA (default): BB/KC Squeeze ML Predictor (ML classifier menggunakan sinyal Bollinger Bands & Keltner Channels)",
+        "  1) Default: BB/KC Squeeze ML Predictor (ML classifier menggunakan sinyal Bollinger Bands & Keltner Channels)",
         "  2) Baseline (compare): Fixed standard deviation (volatilitas harian di bawah threshold statis)",
         "",
         "Caveat",
@@ -151,7 +151,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     lines = [
         f"as_of={as_of}  samples={len(X_samples)}  train={len(Xtr)} test={len(Xte)}",
-        f"SOTA BB/KC Squeeze LightGBM Accuracy:  {acc:.1%}",
+        f"Default BB/KC Squeeze LightGBM Accuracy:  {acc:.1%}",
         f"Precision (Genuine Breakout):           {prec:.1%}",
         f"Recall (Breakout Capture Rate):         {rec:.1%}",
         "",
@@ -169,11 +169,11 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "feature_importances": imp_dict,
     }
     return DemoResult(
-        title="Volatility squeeze · SOTA BB/KC ML Predictor",
+        title="Volatility squeeze · Default BB/KC ML Predictor",
         lines=lines,
         metrics=metrics,
-        model="sota_bb_kc_squeeze_lgb",
-        summary_md=f"# Volatility squeeze (SOTA)\n\nAccuracy={acc:.1%}. Precision={prec:.1%}.\n",
+        model="default_bb_kc_squeeze_lgb",
+        summary_md=f"# Volatility squeeze (default)\n\nAccuracy={acc:.1%}. Precision={prec:.1%}.\n",
         scoreboard=False,
         scoreboard_kind="none",
     )
@@ -196,14 +196,14 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     
     Xtr, Xte, ytr, yte = train_test_split(X_arr, y_arr, test_size=0.3, random_state=42, stratify=use_stratify)
 
-    # 1. SOTA: LightGBM Predictor
+    # 1. Default: LightGBM Predictor
     lgb_clf = lgb.LGBMClassifier(n_estimators=50, max_depth=4, random_state=42, verbose=-1)
     lgb_clf.fit(Xtr, ytr)
-    sota_preds = lgb_clf.predict(Xte)
+    against_preds = lgb_clf.predict(Xte)
 
-    sota_acc = float(accuracy_score(yte, sota_preds))
-    sota_prec = float(precision_score(yte, sota_preds, zero_division=0))
-    sota_rec = float(recall_score(yte, sota_preds, zero_division=0))
+    against_acc = float(accuracy_score(yte, against_preds))
+    against_prec = float(precision_score(yte, against_preds, zero_division=0))
+    against_rec = float(recall_score(yte, against_preds, zero_division=0))
 
     # 2. Baseline: Fixed standard deviation threshold + volume surge
     # Features: X_arr = [..., vol_ratio (idx 4), ret1 (idx 5), std_c_pct (idx 6)]
@@ -227,17 +227,17 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     lines = [
         f"as_of={as_of}  samples={len(X_samples)}  test={len(Xte)}",
         "",
-        "--- SOTA: BB/KC Squeeze ML Predictor (LightGBM) ---",
-        f"Accuracy:  {sota_acc:.1%}",
-        f"Precision: {sota_prec:.1%}",
-        f"Recall:    {sota_rec:.1%}",
+        "--- Default: BB/KC Squeeze ML Predictor (LightGBM) ---",
+        f"Accuracy:  {against_acc:.1%}",
+        f"Precision: {against_prec:.1%}",
+        f"Recall:    {against_rec:.1%}",
         "",
         "--- Baseline: Fixed Standard Deviation Rule ---",
         f"Accuracy:  {base_acc:.1%}",
         f"Precision: {base_prec:.1%}",
         f"Recall:    {base_rec:.1%}",
         "",
-        "Kesimpulan: Model ML (SOTA) menggunakan interaksi non-linear antara Bollinger Bands",
+        "Kesimpulan: Model ML (default) menggunakan interaksi non-linear antara Bollinger Bands",
         "dan Keltner Channels, umumnya mencapai precision/recall lebih baik dibanding",
         "aturan fixed standard deviation yang kaku."
     ]
@@ -245,17 +245,17 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     metrics = {
         "as_of": as_of,
         "n_samples": len(X_samples),
-        "sota_accuracy": sota_acc,
-        "sota_precision": sota_prec,
+        "against_accuracy": against_acc,
+        "against_precision": against_prec,
         "base_accuracy": base_acc,
         "base_precision": base_prec,
     }
     return DemoResult(
-        title="Compare: SOTA BB/KC Squeeze vs Baseline Fixed StdDev",
+        title="Compare: Default BB/KC Squeeze vs Baseline Fixed StdDev",
         lines=lines,
         metrics=metrics,
         model="compare_volatility_squeeze",
-        summary_md=f"# Volatility squeeze (SOTA vs Baseline)\n\nSOTA Precision={sota_prec:.1%}, Baseline Precision={base_prec:.1%}.\n",
+        summary_md=f"# Volatility squeeze (Default vs Baseline)\n\nDefault Precision={against_prec:.1%}, Baseline Precision={base_prec:.1%}.\n",
         scoreboard=False,
         scoreboard_kind="none",
     )
@@ -265,5 +265,5 @@ def deepdive_text() -> str:
     return deepdive_stub(
         topic=META.slug,
         related="strategies/bb-squeeze di ai-saham",
-        bring_back="BB/KC Squeeze SOTA model + LightGBM precision",
+        bring_back="BB/KC Squeeze default model + LightGBM precision",
     )

@@ -26,7 +26,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "",
         "Pendekatan",
         "  • Baseline: Blokir statis / mutlak oleh ai-saham Risk Engine.",
-        "  • SOTA: Logistic Regression/XGBoost Classifier memprediksi Probabilitas Crash",
+        "  • Default: Logistic Regression/XGBoost Classifier memprediksi Probabilitas Crash",
         "    menggunakan status gate secara adaptif.",
         "",
         f"Lanjut:  ml-saham challenge engine --category risk --scenario accum --type gating",
@@ -137,58 +137,58 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     baseline_acc = (baseline_tp + baseline_tn) / len(y_arr) if len(y_arr) > 0 else 0
     baseline_precision = baseline_tp / (baseline_tp + baseline_fp) if (baseline_tp + baseline_fp) > 0 else 0
 
-    # 3. Train SOTA (Logistic Regression)
+    # 3. Train default (Logistic Regression)
     try:
         from sklearn.linear_model import LogisticRegression
         clf = LogisticRegression(random_state=42, class_weight='balanced')
         
         if len(set(y_arr)) > 1:
             clf.fit(X_arr, y_arr)
-            sota_preds = clf.predict(X_arr)
+            against_preds = clf.predict(X_arr)
             # Feature Importance / Koefisien
             importances = np.abs(clf.coef_[0])
             importances = (importances / importances.sum()) * 100
             imp_source = "LogReg Coef"
         else:
-            sota_preds = np.zeros_like(y_arr)
+            against_preds = np.zeros_like(y_arr)
             importances = np.zeros(len(feature_names))
             imp_source = "None"
             
     except ImportError:
-        sota_preds = np.zeros_like(y_arr)
+        against_preds = np.zeros_like(y_arr)
         importances = np.zeros(len(feature_names))
         imp_source = "None"
 
-    sota_tp = sum(1 for s, y in zip(sota_preds, y_arr) if s == 1 and y == 1)
-    sota_fp = sum(1 for s, y in zip(sota_preds, y_arr) if s == 1 and y == 0)
-    sota_tn = sum(1 for s, y in zip(sota_preds, y_arr) if s == 0 and y == 0)
-    sota_fn = sum(1 for s, y in zip(sota_preds, y_arr) if s == 0 and y == 1)
+    against_tp = sum(1 for s, y in zip(against_preds, y_arr) if s == 1 and y == 1)
+    against_fp = sum(1 for s, y in zip(against_preds, y_arr) if s == 1 and y == 0)
+    against_tn = sum(1 for s, y in zip(against_preds, y_arr) if s == 0 and y == 0)
+    against_fn = sum(1 for s, y in zip(against_preds, y_arr) if s == 0 and y == 1)
     
-    sota_acc = (sota_tp + sota_tn) / len(y_arr) if len(y_arr) > 0 else 0
-    sota_precision = sota_tp / (sota_tp + sota_fp) if (sota_tp + sota_fp) > 0 else 0
+    against_acc = (against_tp + against_tn) / len(y_arr) if len(y_arr) > 0 else 0
+    against_precision = against_tp / (against_tp + against_fp) if (against_tp + against_fp) > 0 else 0
 
     lines = [
         f"date={meta[0]['date']}  n_samples={len(meta)}  purpose={purpose}",
-        "Perbandingan Gating SOTA (LogReg) vs Baseline (AI-Saham Hard Gates)",
+        "Perbandingan Gating default (LogReg) vs Baseline (AI-Saham Hard Gates)",
         "",
         "=== Baseline (AI-Saham ASLI) ===",
         f"Accuracy : {baseline_acc:.1%}",
         f"Precision: {baseline_precision:.1%} (Kemampuan blokir yang benar-benar hindari crash)",
         f"False Positives: {baseline_fp} peluang profit terbuang sia-sia",
         "",
-        "=== SOTA (Machine Learning Soft Gates) ===",
-        f"Accuracy : {sota_acc:.1%}",
-        f"Precision: {sota_precision:.1%}",
-        f"False Positives: {sota_fp} peluang profit terbuang sia-sia",
+        "=== Default (Machine Learning Soft Gates) ===",
+        f"Accuracy : {against_acc:.1%}",
+        f"Precision: {against_precision:.1%}",
+        f"False Positives: {against_fp} peluang profit terbuang sia-sia",
         "",
         f"=== Analisis Kontribusi Gate ({imp_source}) ==="
     ]
     
     md_lines = [
         f"# Risk Engine Gating Compare ({purpose})\n",
-        "SOTA ML Soft Gates vs Baseline Hard Gates.\n",
+        "Default ML Soft Gates vs Baseline Hard Gates.\n",
         f"- **Baseline Precision (Keakuratan Blokir):** {baseline_precision:.1%}",
-        f"- **SOTA Precision (Keakuratan Blokir):** {sota_precision:.1%}\n",
+        f"- **Default Precision (Keakuratan Blokir):** {against_precision:.1%}\n",
         f"### Analisis Kontribusi Gate ({imp_source})",
     ]
 
@@ -201,7 +201,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     metrics = {
         "n_samples": len(meta),
         "baseline_accuracy": float(baseline_acc),
-        "sota_accuracy": float(sota_acc),
+        "against_accuracy": float(against_acc),
     }
 
     return DemoResult(

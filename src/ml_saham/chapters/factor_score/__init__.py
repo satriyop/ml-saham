@@ -39,7 +39,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • ownership (soft): z(institution_pct) bila tersedia",
         "",
         "Opsi pendekatan",
-        "  1) LightGBM + SHAP pada faktor → forward return (SOTA)",
+        "  1) LightGBM + SHAP pada faktor → forward return (default)",
         "  2) ElasticNet / Ridge (baseline linear)",
         "  3) Bandingkan LightGBM vs ElasticNet (compare)",
         "",

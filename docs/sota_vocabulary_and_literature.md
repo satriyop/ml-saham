@@ -76,7 +76,7 @@ These support **vocabulary cleanup** later, not paper citations as “we ship SO
 | Non-ML labeled SOTA | Polars pipeline vs pandas loops (Ch.19) |
 | Legacy CLI | `sota_metrics` keys in chapter-loop challenge output (transitional) |
 
-Suggested future wording (not done in this pass): curriculum **default / against** instead of **SOTA / baseline** where “SOTA” misleads.
+**Phase A done (2026-07-29):** curriculum UI copy uses **Default** (preferred arm) vs **Baseline**; metrics keys prefer `against_*` / `against_metrics`. Legacy CLI still accepts `sota_metrics` as alias. Discovery wording below kept for history.
 
 ---
 

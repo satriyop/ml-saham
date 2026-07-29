@@ -28,7 +28,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  Fit model pada masa lalu, uji di masa depan — tanpa shuffle leakage.",
         "",
         "Opsi pendekatan",
-        "  SOTA (default): LightGBM + Purged Time-Series Split (hindari overlap label).",
+        "  Default: LightGBM + Purged Time-Series Split (hindari overlap label).",
         "  Baseline (compare): ElasticNet + Standard Time-Series Split.",
         "",
         "Caveat",
@@ -183,7 +183,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         f"Test  rank IC (Purged):   {ic_te:+.3f}",
         f"Feature importances:      {coef_str}",
         "",
-        "Kesimpulan: Menggunakan SOTA (LightGBM) dengan Purged Time-Series Split",
+        "Kesimpulan: Menggunakan default (LightGBM) dengan Purged Time-Series Split",
         "memastikan evaluasi walk-forward bebas dari leakage.",
     ]
 
@@ -198,12 +198,12 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "model": "lightgbm",
     }
     return DemoResult(
-        title="Walk-forward · SOTA LightGBM + Purged Split",
+        title="Walk-forward · Default LightGBM + Purged Split",
         lines=lines,
         metrics=metrics,
         model="lightgbm",
         summary_md=(
-            f"# Walk-forward (SOTA)\n\nTrain IC={ic_tr:.3f}, test IC={ic_te:.3f}.\n"
+            f"# Walk-forward (default)\n\nTrain IC={ic_tr:.3f}, test IC={ic_te:.3f}.\n"
         ),
         scoreboard=True,
     )
@@ -238,7 +238,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     X_arr = np.array(Xo)
     y_arr = np.array(yo)
 
-    # 1) SOTA: LightGBM + Purged Time-Series Split
+    # 1) Default: LightGBM + Purged Time-Series Split
     split_raw = int(len(Xo) * 0.7)
     train_end_date = dates_o[split_raw]
     train_idx = [i for i in range(split_raw) if dates_o[i] < train_end_date]
@@ -249,9 +249,9 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     Xtr_purged, ytr_purged = X_arr[train_idx], y_arr[train_idx]
     Xte_purged, yte_purged = X_arr[test_idx], y_arr[test_idx]
     
-    sota_model = lgb.LGBMRegressor(n_estimators=50, random_state=42)
-    sota_model.fit(Xtr_purged, ytr_purged)
-    sota_ic = rank_ic(sota_model.predict(Xte_purged).tolist(), yte_purged.tolist())
+    against_model = lgb.LGBMRegressor(n_estimators=50, random_state=42)
+    against_model.fit(Xtr_purged, ytr_purged)
+    against_ic = rank_ic(against_model.predict(Xte_purged).tolist(), yte_purged.tolist())
 
     # 2) Baseline: ElasticNet + Standard TimeSeriesSplit (no purging)
     # Just simple split for comparison (equivalent to standard split)
@@ -261,18 +261,18 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
 
     lines = [
         "Perbandingan Walk-Forward:",
-        f"  SOTA (LightGBM + Purged Split): IC {sota_ic:+.3f}",
+        f"  default (LightGBM + Purged Split): IC {against_ic:+.3f}",
         f"  Baseline (ElasticNet + Standard Split): IC {base_ic:+.3f}",
         "",
-        "SOTA menggunakan Purged Split untuk menghilangkan bias leakage overlap H=5.",
+        "Default menggunakan Purged Split untuk menghilangkan bias leakage overlap H=5.",
     ]
 
     return DemoResult(
-        title="SOTA vs Baseline Walk-forward",
+        title="Default vs Baseline Walk-forward",
         lines=lines,
-        metrics={"sota_ic": sota_ic, "baseline_ic": base_ic},
+        metrics={"against_ic": against_ic, "baseline_ic": base_ic},
         model="lightgbm_vs_elasticnet",
-        summary_md=f"# Walk-forward Compare\nSOTA IC: {sota_ic:.3f} | Baseline IC: {base_ic:.3f}\n",
+        summary_md=f"# Walk-forward Compare\nDefault IC: {against_ic:.3f} | Baseline IC: {base_ic:.3f}\n",
         scoreboard=True,
     )
 

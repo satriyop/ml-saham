@@ -27,7 +27,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "",
         "Pendekatan",
         "  • Baseline: Skor akhir menggunakan configured_weight statis ai-saham.",
-        "  • SOTA: Skor dioptimasi ulang oleh Ridge Regression secara dinamis.",
+        "  • Default: Skor dioptimasi ulang oleh Ridge Regression secara dinamis.",
         "",
         f"Lanjut:  ml-saham challenge engine --category signal --scenario accum --type ensemble",
     ]
@@ -122,7 +122,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     # Baseline Rank IC
     baseline_ic = rank_ic(baseline_scores, y_arr.tolist())
 
-    # 3. Train SOTA (Ridge Regression non-negatif jika memungkinkan, atau sekadar Ridge)
+    # 3. Train default (Ridge Regression non-negatif jika memungkinkan, atau sekadar Ridge)
     try:
         from sklearn.linear_model import Ridge
         # Alpha cukup besar untuk stabilisasi
@@ -130,8 +130,8 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         
         if len(set(y_arr)) > 1:
             clf.fit(X_arr, y_arr)
-            sota_scores = clf.predict(X_arr)
-            sota_ic = rank_ic(sota_scores.tolist(), y_arr.tolist())
+            against_scores = clf.predict(X_arr)
+            against_ic = rank_ic(against_scores.tolist(), y_arr.tolist())
             
             # Ekstrak Bobot (koefisien)
             # Kita paksa positif dengan absolute lalu normalkan ke 100%
@@ -140,30 +140,30 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
                 importances = (importances / importances.sum()) * 100
             imp_source = "Ridge Coef"
         else:
-            sota_ic = 0.0
+            against_ic = 0.0
             importances = np.zeros(len(feature_names))
             imp_source = "None"
             
     except ImportError:
-        sota_ic = 0.0
+        against_ic = 0.0
         importances = np.zeros(len(feature_names))
         imp_source = "None"
 
     lines = [
         f"date={meta[0]['date']}  n_samples={len(meta)}  purpose={purpose}",
-        "Perbandingan Signal Ensemble SOTA (Ridge) vs Baseline (AI-Saham Weights)",
+        "Perbandingan Signal Ensemble default (Ridge) vs Baseline (AI-Saham Weights)",
         "",
         f"Baseline Rank IC : {baseline_ic:+.3f}",
-        f"SOTA Rank IC     : {sota_ic:+.3f}",
+        f"Default Rank IC     : {against_ic:+.3f}",
         "",
         f"=== Analisis Rekomendasi Bobot Sejati ({imp_source}) vs (AI-Saham) ==="
     ]
     
     md_lines = [
         f"# Signal Meta-Ensemble Compare ({purpose})\n",
-        "SOTA ML Dynamic Weights vs Baseline Static Weights.\n",
+        "Default ML Dynamic Weights vs Baseline Static Weights.\n",
         f"- **Baseline Rank IC:** {baseline_ic:+.3f}",
-        f"- **SOTA Rank IC:** {sota_ic:+.3f}\n",
+        f"- **Default Rank IC:** {against_ic:+.3f}\n",
         f"### Analisis Rekomendasi Bobot Sejati ({imp_source}) vs (ai-saham)",
     ]
 
@@ -177,7 +177,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     metrics = {
         "n_samples": len(meta),
         "baseline_ic": float(baseline_ic),
-        "sota_ic": float(sota_ic),
+        "against_ic": float(against_ic),
     }
 
     return DemoResult(

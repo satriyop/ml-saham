@@ -21,11 +21,11 @@ def explore_text(*, verbose: bool = False) -> str:
         "  Menantang aturan batas dan Raw Score Pre-Open.",
         "",
         "Opsi algoritma + caveat",
-        "  SOTA (default): XGBoost Classifier dari raw metrics",
+        "  Default: XGBoost Classifier dari raw metrics",
         "  Baseline (compare): Deterministic Decision Tree & Capping",
         "",
         "Caveat",
-        "  • SOTA menggunakan XGBoost classifier.",
+        "  • default menggunakan XGBoost classifier.",
         "  • Baseline menggunakan DT deterministik & aturan capping.",
         "",
         f"Lanjut:  ml-saham demo {META.slug}",
@@ -125,10 +125,10 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     lines = [
         f"date={latest_date}  n={len(day_rows)}  source=iev_snapshots",
-        "Model: SOTA (XGBoost Classifier)",
+        "Model: Default (XGBoost Classifier)",
         f"Pre-open order imbalance (IEV vs IEP avg) Top 15: {avg_imbalance:+.2%}",
         "",
-        "Top SOTA names:",
+        "Top default names:",
     ]
     for t in top[:10]:
         iev_txt = f"{t['iev']:.2f}"
@@ -152,14 +152,14 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         for t in top
     ]
     return DemoResult(
-        title="Pre-open heuristic · XGBoost Classifier (SOTA)",
+        title="Pre-open heuristic · XGBoost Classifier (default)",
         lines=lines,
         metrics=metrics,
         model="xgboost_classifier",
-        summary_md=f"# Pre-open heuristic SOTA\n\n{latest_date}: XGBoost raw metrics.\n",
+        summary_md=f"# Pre-open heuristic default\n\n{latest_date}: XGBoost raw metrics.\n",
         scoreboard=False,
         top_names=top,
-        extra_files={"sota_heuristic_top.csv": "\n".join(csv) + "\n"},
+        extra_files={"default_heuristic_top.csv": "\n".join(csv) + "\n"},
     )
 
 
@@ -227,7 +227,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     X_arr = np.array(X_list)
     y_arr = np.array(y_list)
 
-    # Train SOTA Model
+    # Train Default model
     try:
         import xgboost as xgb
         clf = xgb.XGBClassifier(
@@ -239,7 +239,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         )
         if len(set(y_list)) > 1:
             clf.fit(X_arr, y_arr)
-            sota_scores = clf.predict_proba(X_arr)[:, 1]
+            against_scores = clf.predict_proba(X_arr)[:, 1]
             
             # Feature Importance / SHAP Analysis
             try:
@@ -254,11 +254,11 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
                 importances = (gains / gains.sum()) * 100
                 imp_source = "Gain"
         else:
-            sota_scores = np.array(baseline_scores) / 100.0
+            against_scores = np.array(baseline_scores) / 100.0
             importances = np.zeros(len(feature_names))
             imp_source = "None"
     except (ImportError, ValueError, Exception):
-        sota_scores = np.array(baseline_scores) / 100.0
+        against_scores = np.array(baseline_scores) / 100.0
         importances = np.zeros(len(feature_names))
         imp_source = "None"
 
@@ -267,26 +267,26 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         from scipy.stats import spearmanr
         # Correlate baseline and sota with the target
         baseline_ic, _ = spearmanr(baseline_scores, y_arr)
-        sota_ic, _ = spearmanr(sota_scores, y_arr)
+        against_ic, _ = spearmanr(against_scores, y_arr)
     except ImportError:
         baseline_ic = 0.0
-        sota_ic = 0.0
+        against_ic = 0.0
 
     lines = [
         f"date={meta[0]['date']}  n_samples={len(meta)}  source=learning_observations",
-        "Perbandingan SOTA (XGBoost) vs Baseline (AI-Saham ASLI dari DB)",
+        "Perbandingan Default (XGBoost) vs Baseline (AI-Saham ASLI dari DB)",
         "",
         f"Baseline Rank IC : {baseline_ic:+.3f}",
-        f"SOTA Rank IC     : {sota_ic:+.3f}",
+        f"Default Rank IC     : {against_ic:+.3f}",
         "",
-        f"=== Analisis Kontribusi Faktor SOTA ({imp_source}) ==="
+        f"=== Analisis Kontribusi Faktor default ({imp_source}) ==="
     ]
     
     md_lines = [
         "# Pre-open heuristic Compare\n",
-        "SOTA XGBoost vs Baseline Asli.\n",
+        "Default XGBoost vs Baseline Asli.\n",
         f"- **Baseline Rank IC:** {baseline_ic:+.3f}",
-        f"- **SOTA Rank IC:** {sota_ic:+.3f}\n",
+        f"- **Default Rank IC:** {against_ic:+.3f}\n",
         f"### Analisis Kontribusi Faktor ({imp_source})",
     ]
     
@@ -299,7 +299,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
 
     metrics = {
         "n_samples": len(meta),
-        "sota_ic": float(sota_ic),
+        "against_ic": float(against_ic),
         "baseline_ic": float(baseline_ic),
     }
 
@@ -317,5 +317,5 @@ def deepdive_text() -> str:
     return deepdive_stub(
         topic=META.slug,
         related="iev_snapshots / pre-open heuristic",
-        bring_back="Heuristic vs SOTA",
+        bring_back="Heuristic vs default",
     )

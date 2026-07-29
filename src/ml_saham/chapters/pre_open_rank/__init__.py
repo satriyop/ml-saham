@@ -21,7 +21,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  Indikasi harga equilibrium volume (IEV) menjelang pembukaan — ranking intraday.",
         "",
         "Opsi algoritma + caveat",
-        "  SOTA (default): LightGBM lambdarank (learning to rank pre-open data)",
+        "  Default: LightGBM lambdarank (learning to rank pre-open data)",
         "  Baseline (compare): Naive sorting (urutkan berdasar IEV/IEP imbalance murni)",
         "",
         "Caveat",
@@ -114,11 +114,11 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     lines = [
         f"date={latest_date}  n={len(day_rows)}  source=iev_snapshots",
-        "Model: SOTA (LightGBM lambdarank)",
+        "Model: default (LightGBM lambdarank)",
         "Scoreboard: open_session (pre-open, bukan EOD long-only).",
         f"Pre-open order imbalance (IEV vs IEP avg) Top 15: {avg_imbalance:+.2%}",
         "",
-        "Top SOTA names:",
+        "Top default names:",
     ]
     for t in top[:10]:
         iev_txt = f"{t['iev']:.2f}"
@@ -140,15 +140,15 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         f"{t['date']},{t['orig_rank']},{t['ticker']},{t['iev']},{t['score']}" for t in top
     ]
     return DemoResult(
-        title="Pre-open rank · LightGBM lambdarank (SOTA)",
+        title="Pre-open rank · LightGBM lambdarank (default)",
         lines=lines,
         metrics=metrics,
         model="lgbm_lambdarank",
-        summary_md=f"# Pre-open rank SOTA\n\n{latest_date}: top IEV names ranked by LightGBM.\n",
+        summary_md=f"# Pre-open rank default\n\n{latest_date}: top IEV names ranked by LightGBM.\n",
         scoreboard=True,
         scoreboard_kind="open_session",
         top_names=top,
-        extra_files={"iev_sota_top.csv": "\n".join(csv) + "\n"},
+        extra_files={"iev_against_top.csv": "\n".join(csv) + "\n"},
     )
 
 
@@ -179,7 +179,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         imbalance = (iev_f / iep_f - 1.0) if iep_f > 0 else 0.0
         meta.append({"ticker": r["ticker"], "iev": iev_f, "iep": iep_f, "imbalance": imbalance, "orig_rank": rank_i})
 
-    # SOTA
+    # default
     X = [[m["iev"], m["iep"], m["imbalance"]] for m in meta]
     y = [max(0, 100 - min(m["orig_rank"], 100)) for m in meta]
     
@@ -197,34 +197,34 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
             min_child_samples=1,
         )
         ranker.fit(X_arr, y_arr, group=[len(X_arr)])
-        sota_scores = ranker.predict(X_arr)
+        against_scores = ranker.predict(X_arr)
     except (ImportError, ValueError, Exception):
-        sota_scores = [m["imbalance"] * 2.0 - (m["orig_rank"] / 100.0) for m in meta]
+        against_scores = [m["imbalance"] * 2.0 - (m["orig_rank"] / 100.0) for m in meta]
         
     for i, m in enumerate(meta):
-        m["sota_score"] = float(sota_scores[i])
+        m["against_score"] = float(against_scores[i])
         m["baseline_score"] = m["imbalance"]
         
-    sota_sorted = sorted(meta, key=lambda x: x["sota_score"], reverse=True)
+    against_sorted = sorted(meta, key=lambda x: x["against_score"], reverse=True)
     baseline_sorted = sorted(meta, key=lambda x: x["baseline_score"], reverse=True)
     
-    sota_top = sota_sorted[:10]
+    against_top = against_sorted[:10]
     baseline_top = baseline_sorted[:10]
     
-    sota_avg_imb = sum(x["imbalance"] for x in sota_top) / len(sota_top) if sota_top else 0.0
+    against_avg_imb = sum(x["imbalance"] for x in against_top) / len(against_top) if against_top else 0.0
     base_avg_imb = sum(x["imbalance"] for x in baseline_top) / len(baseline_top) if baseline_top else 0.0
 
     lines = [
         f"date={latest_date}  n={len(meta)}  source=iev_snapshots",
-        "Perbandingan: SOTA (LightGBM lambdarank) vs Baseline (Naive sorting)",
+        "Perbandingan: default (LightGBM lambdarank) vs Baseline (Naive sorting)",
         "",
         f"Baseline Top 10 Avg Imbalance: {base_avg_imb:+.2%}",
-        f"SOTA Top 10 Avg Imbalance: {sota_avg_imb:+.2%}",
+        f"Default Top 10 Avg Imbalance: {against_avg_imb:+.2%}",
         "",
-        "Top SOTA names:",
+        "Top default names:",
     ]
-    for t in sota_top:
-        lines.append(f"  {t['ticker']:<6}  IEV={t['iev']:.2f}  imb={t['imbalance']:+.2%}  score={t['sota_score']:.3f}")
+    for t in against_top:
+        lines.append(f"  {t['ticker']:<6}  IEV={t['iev']:.2f}  imb={t['imbalance']:+.2%}  score={t['against_score']:.3f}")
 
     lines.append("")
     lines.append("Top Baseline names:")
@@ -234,7 +234,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     metrics = {
         "date": latest_date,
         "n": len(meta),
-        "sota_avg_imbalance": sota_avg_imb,
+        "against_avg_imbalance": against_avg_imb,
         "baseline_avg_imbalance": base_avg_imb,
     }
     
@@ -243,7 +243,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         lines=lines,
         metrics=metrics,
         model="compare",
-        summary_md=f"# Pre-open rank Compare\n\nSOTA vs Baseline for {latest_date}.\n",
+        summary_md=f"# Pre-open rank Compare\n\nDefault vs Baseline for {latest_date}.\n",
         scoreboard=True,
         scoreboard_kind="open_session",
     )

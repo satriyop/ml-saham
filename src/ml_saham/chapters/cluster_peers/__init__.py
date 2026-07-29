@@ -195,7 +195,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         metrics=metrics,
         model=f"hdbscan_umap_k{n_clusters}",
         summary_md=(
-            f"# Cluster peers (SOTA)\n\nk={n_clusters} (HDBSCAN on UMAP), window={window}.\n"
+            f"# Cluster peers (default)\n\nk={n_clusters} (HDBSCAN on UMAP), window={window}.\n"
         ),
         scoreboard=True,
         extra_files={"top_names.csv": "\n".join(csv) + "\n"},
@@ -271,7 +271,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         "--- Baseline (k-means) ---",
         f"k={n_clusters_km}, Silhouette={sil_km:+.3f}",
         "",
-        "--- SOTA (HDBSCAN + UMAP) ---",
+        "--- Default (HDBSCAN + UMAP) ---",
         f"k={n_clusters_hdb} (tanpa noise), Silhouette={sil_hdb:+.3f}",
     ]
 

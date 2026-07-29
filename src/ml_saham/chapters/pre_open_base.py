@@ -130,20 +130,20 @@ def fetch_and_evaluate_pre_open(
     
     baseline_ic = rank_ic(b_list, y_list)
     
-    # Train SOTA (XGBoost)
+    # Train Default (XGBoost)
     try:
         from xgboost import XGBRegressor
         clf = XGBRegressor(n_estimators=10, max_depth=2, learning_rate=0.05, random_state=42)
         if len(set(y_list)) > 1:
             clf.fit(X_arr, y_arr)
-            sota_scores = clf.predict(X_arr)
-            sota_ic = rank_ic(sota_scores.tolist(), y_list)
+            against_scores = clf.predict(X_arr)
+            against_ic = rank_ic(against_scores.tolist(), y_list)
             
             importances = clf.feature_importances_
             if importances.sum() > 0:
                 importances = (importances / importances.sum()) * 100
         else:
-            sota_ic = 0.0
+            against_ic = 0.0
             importances = np.zeros(len(feature_keys))
     except ImportError:
         try:
@@ -151,13 +151,13 @@ def fetch_and_evaluate_pre_open(
             from lightgbm import LGBMRegressor
             clf = LGBMRegressor(n_estimators=50, max_depth=3, learning_rate=0.05, random_state=42)
             clf.fit(X_arr, y_arr)
-            sota_scores = clf.predict(X_arr)
-            sota_ic = rank_ic(sota_scores.tolist(), y_list)
+            against_scores = clf.predict(X_arr)
+            against_ic = rank_ic(against_scores.tolist(), y_list)
             importances = clf.feature_importances_
             if importances.sum() > 0:
                 importances = (importances / importances.sum()) * 100
         except ImportError:
-            sota_ic = 0.0
+            against_ic = 0.0
             importances = np.zeros(len(feature_keys))
 
     return {
@@ -165,7 +165,7 @@ def fetch_and_evaluate_pre_open(
         "n_samples": len(meta),
         "latest_date": meta[0]["date"] if meta else "UNKNOWN",
         "baseline_ic": baseline_ic,
-        "sota_ic": sota_ic,
+        "against_ic": against_ic,
         "features": feature_keys,
         "importances": importances.tolist(),
     }

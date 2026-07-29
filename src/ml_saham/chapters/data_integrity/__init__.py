@@ -27,7 +27,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "",
         "Opsi pendekatan",
         "  1) Coverage doctor (tabel ada/tidak) — baseline kasar",
-        "  2) Integrity score (overlap tanggal, observation counts, PIT snapshots) — SOTA lab",
+        "  2) Integrity score (overlap tanggal, observation counts, PIT snapshots) — default lab",
         "",
         "Caveat",
         "  • Ini bukan model harga; ini gerbang kepercayaan sebelum challenge engine",
@@ -120,7 +120,7 @@ def run_compare(ctx: ChapterContext, **kwargs) -> CompareResult:
     compare = {
         "baseline": {"id": "coverage", "score": coverage_ok},
         "against": {"id": "integrity", "score": integrity},
-        "sota_metrics": {
+        "against_metrics": {
             "integrity_score": integrity,
             "n_ok": score["n_ok"],
             "n_partial": score["n_partial"],

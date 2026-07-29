@@ -34,10 +34,10 @@ def explore_text(*, verbose: bool = False) -> str:
         "  Dividen, stock split, rights — peristiwa korporasi mengubah return path.",
         "",
         "Opsi algoritma",
-        "  SOTA (default): Event-driven Random Forest/XGBoost",
+        "  Default: Event-driven Random Forest/XGBoost",
         "    Model membaca tipe event dan return historis untuk memprediksi reaksi CAR.",
         "  Baseline (compare): Mean-reversion dummy",
-        "    Asumsi mean reversion sederhana atau baseline konstan vs SOTA.",
+        "    Asumsi mean reversion sederhana atau baseline konstan vs default.",
         "",
         "Caveat",
         "  • ex_date adjustment bisa belum sempurna di harga",
@@ -159,10 +159,10 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
             s["score"] = all_preds[i]
             
         test_mse = mean_squared_error(y_test, preds)
-        lines.append(f"SOTA: RandomForestRegressor (Test MSE={test_mse:.6f})")
-        model_name = "sota_rf"
+        lines.append(f"Default: RandomForestRegressor (Test MSE={test_mse:.6f})")
+        model_name = "default_rf"
     else:
-        lines.append("SOTA: Sklearn not available, using dummy scoring.")
+        lines.append("Default: Sklearn not available, using dummy scoring.")
         for s in scored:
             s["score"] = s["car"] + random.uniform(-0.01, 0.01)
         model_name = "fallback"
@@ -178,11 +178,11 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     }
     
     return DemoResult(
-        title="Corp events · SOTA Random Forest",
+        title="Corp events · Default Random Forest",
         lines=lines,
         metrics=metrics,
         model=model_name,
-        summary_md=f"# Corp events (SOTA)\n\n{len(scored)} events evaluated.\n",
+        summary_md=f"# Corp events (default)\n\n{len(scored)} events evaluated.\n",
         scoreboard=True,
         top_names=top,
     )
@@ -200,7 +200,7 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
     X_train, X_test = X[:split], X[split:]
     y_train, y_test = y[:split], y[split:]
     
-    # SOTA
+    # default
     rf = RandomForestRegressor(n_estimators=100, random_state=42)
     rf.fit(X_train, y_train)
     rf_preds = rf.predict(X_test)
@@ -215,7 +215,7 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
     lines = [
         "Comparing Models for Corp Events (CAR prediction):",
         "",
-        f"1. SOTA (RandomForest): Test MSE = {rf_mse:.6f}",
+        f"1. Default (RandomForest): Test MSE = {rf_mse:.6f}",
         f"2. Baseline (Mean Dummy): Test MSE = {dummy_mse:.6f}",
         "",
         "RandomForest utilizes event features to predict abnormal returns,",
@@ -223,17 +223,17 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
     ]
     
     metrics = {
-        "sota_mse": float(rf_mse),
+        "against_mse": float(rf_mse),
         "baseline_mse": float(dummy_mse),
-        "win": "SOTA" if rf_mse < dummy_mse else "Baseline",
+        "win": "Default" if rf_mse < dummy_mse else "Baseline",
     }
     
     return CompareResult(
-        title="SOTA vs Mean-reversion dummy",
+        title="Default vs Mean-reversion dummy",
         lines=lines,
         metrics=metrics,
         winner=metrics["win"],
-        summary_md=f"# Compare Corp Events\n\nSOTA MSE: {rf_mse:.6f}\nBaseline MSE: {dummy_mse:.6f}\n",
+        summary_md=f"# Compare Corp Events\n\nDefault MSE: {rf_mse:.6f}\nBaseline MSE: {dummy_mse:.6f}\n",
     )
 
 

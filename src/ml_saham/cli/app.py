@@ -1089,12 +1089,14 @@ def challenge_legacy_cmd(
                 console.print(f"\n[bold green]✅ {title}[/bold green] ([cyan]{k}[/cyan])")
                 if "model" in v:
                     console.print(f"   [dim]Model:[/dim] {v['model']}")
-                sota = v.get("sota_metrics", {})
+                against_m = v.get("against_metrics") or v.get("sota_metrics") or {}
                 baseline_m = v.get("baseline_metrics", {})
-                if sota or baseline_m:
+                if against_m or baseline_m:
                     console.print("   [dim]Metrics:[/dim]")
-                    if sota:
-                        console.print(f"     [bold blue]SOTA:[/bold blue] {sota}")
+                    if against_m:
+                        console.print(
+                            f"     [bold blue]Against / default:[/bold blue] {against_m}"
+                        )
                     if baseline_m:
                         console.print(f"     [bold blue]Baseline:[/bold blue] {baseline_m}")
                 summary = v.get("summary")

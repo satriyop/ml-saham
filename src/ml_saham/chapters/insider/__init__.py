@@ -31,7 +31,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "",
         "Opsi pendekatan",
         "  1) Baseline (compare): Aturan simple net BUY−SELL shares dalam lookback → rank",
-        "  2) SOTA (default): Logistic Regression pada fitur net + count events",
+        "  2) Default: Logistic Regression pada fitur net + count events",
         "  3) Bandingkan rank IC vs forward return (jujur, n sering kecil)",
         "",
         "Caveat",
@@ -157,7 +157,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         f"as_of={as_of}  lookback_start={lookback_start}  n={len(tickers)}",
         f"Cache: total={stats['total']} usable={stats['usable']} "
         f"absurd_scrubbed≈{stats['absurd']}",
-        f"SOTA Model ({model_name}) rank IC: {ic_model:+.3f}  (in-sample)",
+        f"Default model ({model_name}) rank IC: {ic_model:+.3f}  (in-sample)",
     ]
     if coef_dict:
         coef_str = ", ".join(f"{k}:{v:+.3f}" for k, v in coef_dict.items())
@@ -187,7 +187,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         for t in top
     ]
     return DemoResult(
-        title="Insider · SOTA Logistic Regression",
+        title="Insider · Default Logistic Regression",
         lines=lines,
         metrics=metrics,
         model=model_name,
@@ -248,7 +248,7 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
         "--- Baseline: Insider Net Shares Rule ---",
         f"Rank IC: {ic_rule:+.3f}",
         "",
-        f"--- SOTA: {model_name.capitalize()} ---",
+        f"--- Default: {model_name.capitalize()} ---",
         f"Rank IC: {ic_model:+.3f}",
     ]
 
@@ -257,7 +257,7 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
         lines.append(f"Weights: {coef_str}")
 
     return CompareResult(
-        title="Insider · SOTA vs Baseline",
+        title="Insider · Default vs Baseline",
         lines=lines,
         metrics={
             "as_of": as_of,
@@ -265,12 +265,12 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
         },
         compare={
             "baseline_ic": ic_rule,
-            "sota_ic": ic_model,
+            "against_ic": ic_model,
         },
         model=model_name,
         summary_md=(
             f"# Insider Compare\n\n"
-            f"Baseline IC={ic_rule:.3f}, SOTA IC={ic_model:.3f}\n"
+            f"Baseline IC={ic_rule:.3f}, default IC={ic_model:.3f}\n"
         ),
         scoreboard=True,
     )

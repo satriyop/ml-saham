@@ -34,7 +34,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  Riset ujung-ke-ujung: ingest → model → report.",
         "",
         "Opsi algoritma + caveat",
-        "  1) SOTA (default): Vectorized Polars pipeline (Sangat cepat, zero-copy, memori efisien)",
+        "  1) Default: Vectorized Polars pipeline (Sangat cepat, zero-copy, memori efisien)",
         "  2) Baseline (compare): Pandas loop (Lebih lambat, rentan error index, boros memori)",
         "",
         "Caveat",
@@ -60,7 +60,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         if not as_of:
             raise ChapterDataError("Tidak cukup history untuk as_of.")
         
-        # SOTA: Vectorized Polars Pipeline
+        # Default: Vectorized Polars Pipeline
         candles = load_candles(conn, uni + ["IHSG"])
         if not candles:
             raise ChapterDataError("Data candles kosong.")
@@ -115,12 +115,12 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "horizon_days": 5,
         "cpcv_purged_validation": True,
         "p_cscv_overfit_probability": p_cscv,
-        "notes": "SOTA Vectorized Polars Pipeline demo — extend with value/quality from fundies.",
+        "notes": "Default vectorized Polars Pipeline demo — extend with value/quality from fundies.",
     }
 
     lines = [
         f"as_of={as_of}  n={len(tickers)}  horizon=5d",
-        f"Pipeline step 1: SOTA Polars Pipeline (vectorized)",
+        f"Pipeline step 1: Default Polars Pipeline (vectorized)",
         f"Pipeline step 2: features={', '.join(FEATURES)}",
         f"Pipeline step 3: momentum z-score rank IC={ic:+.3f}",
         f"Pipeline step 4: Purged Cross-Validation (CPCV P_CSCV overfit prob): {p_cscv:.1%}",
@@ -148,12 +148,12 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "features": FEATURES,
     }
     return DemoResult(
-        title="Research pipeline · SOTA Polars Pipeline",
+        title="Research pipeline · Default Polars Pipeline",
         lines=lines,
         metrics=metrics,
         model="polars_pipeline",
         summary_md=(
-            f"# Research pipeline (SOTA Polars)\n\nas_of={as_of}. IC={ic:.3f}. "
+            f"# Research pipeline (Default Polars)\n\nas_of={as_of}. IC={ic:.3f}. "
             f"Features: {', '.join(FEATURES)}.\n"
         ),
         scoreboard=True,
@@ -179,7 +179,7 @@ def run_compare(ctx: ChapterContext, **kwargs) -> CompareResult:
         if not candles:
             raise ChapterDataError("Data candles kosong.")
 
-    # 1) SOTA: Vectorized Polars
+    # 1) Default: Vectorized Polars
     t0 = time.time()
     df_pl = pl.DataFrame(candles)
     df_pl = df_pl.with_columns([
@@ -211,15 +211,15 @@ def run_compare(ctx: ChapterContext, **kwargs) -> CompareResult:
     t_pandas = time.time() - t0
 
     lines = [
-        "SOTA vs Baseline:",
-        "  SOTA (default)    : Vectorized Polars pipeline",
+        "Default vs Baseline:",
+        "  Default    : Vectorized Polars pipeline",
         "  Baseline (compare): Pandas loop (groupby apply)",
         "",
         f"Universe size : {len(uni)} emiten",
         f"Total rows    : {len(candles)} candles",
         f"As-of Date    : {as_of}",
         "",
-        "Hasil SOTA (Polars):",
+        "Hasil Default (Polars):",
         f"  Ditemukan   : {n_pl} emiten valid",
         f"  Waktu Proses: {t_polars * 1000:.1f} ms",
         "",
@@ -245,7 +245,7 @@ def run_compare(ctx: ChapterContext, **kwargs) -> CompareResult:
         summary_md=(
             f"# Research pipeline compare\n\nPolars {speedup:.1f}x vs pandas on as_of={as_of}.\n"
         ),
-        winner="SOTA (Vectorized Polars)",
+        winner="Default (Vectorized Polars)",
         winner_reason=(
             f"Mengeksekusi perhitungan {speedup:.1f}x lebih cepat dibandingkan pandas iterasi."
         ),

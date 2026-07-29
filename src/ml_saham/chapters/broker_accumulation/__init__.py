@@ -27,7 +27,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  dan Indeks Gini Konsentrasi Kepemilikan (institusi vs ritel).",
         "",
         "Opsi pendekatan",
-        "  • SOTA (Default): LightGBM classification (memprediksi probabilitas akumulasi dari fitur distribusi broker & kepemilikan)",
+        "  • default (Default): LightGBM classification (memprediksi probabilitas akumulasi dari fitur distribusi broker & kepemilikan)",
         "  • Baseline (Compare): Top-5 broker sum rule (rasio konsentrasi top-5 broker vs total)",
         "",
         "Caveat",
@@ -153,7 +153,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     lines = [
         f"n_tickers={len(combined)}  broker_rows={len(b_rows)}  shareholding_rows={len(s_rows)}",
-        "SOTA Model: LightGBM Classification (Probabilitas Akumulasi)",
+        "Default model: LightGBM Classification (Probabilitas Akumulasi)",
         "",
         "Top Akumulasi berdasarkan Prediksi LightGBM:",
     ]
@@ -170,11 +170,11 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "top_accumulation": combined[:10],
     }
     return DemoResult(
-        title="Broker accumulation · SOTA LightGBM Classification",
+        title="Broker accumulation · Default LightGBM Classification",
         lines=lines,
         metrics=metrics,
         model="lightgbm_broker_accumulation",
-        summary_md=f"# Broker accumulation\n\nAnalyzed {len(combined)} tickers using SOTA LightGBM classifier.\n",
+        summary_md=f"# Broker accumulation\n\nAnalyzed {len(combined)} tickers using Default LightGBM classifier.\n",
         scoreboard=True,
         scoreboard_kind="long_only",
         top_names=combined[:10],
@@ -198,40 +198,40 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     # Predict 1 if top5_ratio > 0.55 else 0
     baseline_preds = [1 if c["top5_ratio"] > 0.55 else 0 for c in combined]
 
-    # SOTA: LightGBM
+    # Default: LightGBM
     lgb = LGBMClassifier(n_estimators=50, random_state=42)
     X_arr, y_arr = np.array(X_samples), np.array(y_samples)
     
     if len(X_samples) >= 5 and len(set(y_samples)) > 1:
         lgb.fit(X_arr, y_arr)
-        sota_preds = lgb.predict(X_arr)
+        against_preds = lgb.predict(X_arr)
         
         baseline_acc = accuracy_score(y_arr, baseline_preds)
-        sota_acc = accuracy_score(y_arr, sota_preds)
+        against_acc = accuracy_score(y_arr, against_preds)
     else:
         baseline_acc = 0.0
-        sota_acc = 0.0
+        against_acc = 0.0
 
     lines = [
         "Perbandingan Model Akumulasi Broker:",
-        "  • SOTA: LightGBM Classification",
+        "  • Default: LightGBM Classification",
         "  • Baseline: Top-5 Broker Sum Rule",
         "",
         f"Jumlah Sampel Ticker: {len(combined)}",
         f"Akurasi Baseline: {baseline_acc:.1%}",
-        f"Akurasi SOTA (LightGBM): {sota_acc:.1%}",
+        f"Akurasi default (LightGBM): {against_acc:.1%}",
         "",
         "Keterangan: LightGBM dapat menangkap interaksi antara Gini kepemilikan dan rasio broker."
     ]
 
     metrics = {
         "baseline_accuracy": baseline_acc,
-        "sota_accuracy": sota_acc,
+        "against_accuracy": against_acc,
         "n_samples": len(combined),
     }
 
     return DemoResult(
-        title="Compare SOTA vs Baseline: Broker Accumulation",
+        title="Compare Default vs Baseline: Broker Accumulation",
         lines=lines,
         metrics=metrics,
         model="lightgbm_vs_rule",

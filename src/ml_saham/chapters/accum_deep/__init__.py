@@ -99,26 +99,26 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     
     baseline_ic = rank_ic(baseline_scores, y_arr.tolist())
 
-    # Train SOTA (LightGBM Regression)
+    # Train default (LightGBM Regression)
     try:
         from lightgbm import LGBMRegressor
         clf = LGBMRegressor(n_estimators=100, max_depth=5, learning_rate=0.05, random_state=42)
         
         if len(set(y_arr)) > 1:
             clf.fit(X_arr, y_arr)
-            sota_scores = clf.predict(X_arr)
-            sota_ic = rank_ic(sota_scores.tolist(), y_arr.tolist())
+            against_scores = clf.predict(X_arr)
+            against_ic = rank_ic(against_scores.tolist(), y_arr.tolist())
             
             importances = clf.feature_importances_
             if importances.sum() > 0:
                 importances = (importances / importances.sum()) * 100
             imp_source = "LGBM Gain"
         else:
-            sota_ic = 0.0
+            against_ic = 0.0
             importances = np.zeros(len(feature_names))
             imp_source = "None"
     except ImportError:
-        sota_ic = 0.0
+        against_ic = 0.0
         importances = np.zeros(len(feature_names))
         imp_source = "None"
 
@@ -127,7 +127,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         "Deep Fingerprint Mining (Mencari Holy Grail dari 100+ Fitur)",
         "",
         f"Baseline Rank IC : {baseline_ic:+.3f}",
-        f"SOTA Rank IC     : {sota_ic:+.3f}",
+        f"Default Rank IC     : {against_ic:+.3f}",
         "",
         f"=== Top 10 Fitur Pembawa Cuan Tersembunyi ({imp_source}) ==="
     ]
@@ -136,7 +136,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         f"# Deep Fingerprint Mining Compare\n",
         f"Menambang {len(feature_names)} fitur rahasia di `sub_signal_fingerprint` menggunakan AI.\n",
         f"- **Baseline Rank IC:** {baseline_ic:+.3f}",
-        f"- **SOTA Rank IC:** {sota_ic:+.3f}\n",
+        f"- **Default Rank IC:** {against_ic:+.3f}\n",
         f"### TOP 10 Fitur Holy Grail ({imp_source})",
     ]
 
@@ -151,7 +151,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     return DemoResult(
         title="Deep Fingerprint Mining \u00b7 XGBoost pada 100+ Fitur",
         lines=lines,
-        metrics={"n_samples": len(meta), "baseline_ic": float(baseline_ic), "sota_ic": float(sota_ic)},
+        metrics={"n_samples": len(meta), "baseline_ic": float(baseline_ic), "against_ic": float(against_ic)},
         model="lgbm_deep_mining",
         summary_md="\n".join(md_lines) + "\n",
         scoreboard=False,

@@ -25,7 +25,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  dan Ch.1 (spike harga kotor). Di sini: anomali price–volume saja.",
         "",
         "Opsi pendekatan",
-        "  1) Autoencoders (Reconstruction Loss) [SOTA/default]",
+        "  1) Autoencoders (Reconstruction Loss) [default]",
         "  2) Multivariate IsolationForest [baseline/compare]",
         "",
         "Caveat",
@@ -208,7 +208,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     only_if = if_flags - ae_flags
     
     lines = [
-        "Comparing Autoencoder (SOTA) vs IsolationForest (Baseline)",
+        "Comparing Autoencoder (default) vs IsolationForest (Baseline)",
         f"Universe sample: {len(by_t)}  feature rows: {len(feats)}",
         "",
         f"Autoencoder Anomalies : {len(ae_flags)}",

@@ -1,4 +1,4 @@
-"""Ch.16 Earnings surprise — SOTA architecture."""
+"""Ch.16 Earnings surprise — default architecture."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  EPS surprise vs ekspektasi — apakah rank-nya prediktif return berikutnya?",
         "",
         "Opsi pendekatan",
-        "  1) LightGBM (default) untuk memprediksi post-earnings drift (SOTA)",
+        "  1) LightGBM (default) untuk memprediksi post-earnings drift (default)",
         "  2) Naive PE screen (compare) sebagai baseline filter murah",
         "",
         "Caveat",
@@ -208,7 +208,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         for i in order[:10]
     ]
     return DemoResult(
-        title="Earnings surprise · LightGBM (SOTA)",
+        title="Earnings surprise · LightGBM (default)",
         lines=lines,
         metrics={
             **bundle,

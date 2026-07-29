@@ -1,4 +1,4 @@
-"""Ch.30 Ichimoku cloud — SOTA (CNN/RNN) vs Baseline crossover."""
+"""Ch.30 Ichimoku cloud — default (CNN/RNN) vs Baseline crossover."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  merupakan awal tren bullish berkelanjutan atau sekadar false breakout.",
         "",
         "Opsi pendekatan",
-        "  1) SOTA (default): CNN/RNN pada Ichimoku tensor (memodelkan pola 2D/sekuensial dari awan dan garis)",
+        "  1) Default: CNN/RNN pada Ichimoku tensor (memodelkan pola 2D/sekuensial dari awan dan garis)",
         "  2) Baseline (compare): Aturan crossover sederhana (Tenkan-sen cross Kijun-sen, harga di atas Kumo)",
         "",
         "Caveat",
@@ -49,7 +49,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     if not candles:
         raise ChapterDataError("Data candles kosong.")
 
-    # Mocking the CNN/RNN behavior for the demo since it's SOTA and computationally heavy
+    # Mocking the CNN/RNN behavior for the demo since it's default and computationally heavy
     acc = 0.782
     prec = 0.815
     rec = 0.741
@@ -59,7 +59,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "Membangun Ichimoku tensor (CNN/RNN input shape: [N, Seq, Channels])...",
         "Melatih model CNN/RNN (Mock)...",
         "",
-        f"CNN/RNN SOTA Accuracy: {acc:.1%}",
+        f"CNN/RNN default Accuracy: {acc:.1%}",
         f"Precision (Genuine Breakout):       {prec:.1%}",
         f"Recall (Cloud Capture Rate):        {rec:.1%}",
         "",
@@ -76,11 +76,11 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "recall": rec,
     }
     return DemoResult(
-        title="Ichimoku cloud · CNN/RNN SOTA",
+        title="Ichimoku cloud · CNN/RNN default",
         lines=lines,
         metrics=metrics,
         model="cnn_rnn_ichimoku",
-        summary_md=f"# Ichimoku cloud (SOTA)\n\nAccuracy={acc:.1%}. Precision={prec:.1%}.\n",
+        summary_md=f"# Ichimoku cloud (default)\n\nAccuracy={acc:.1%}. Precision={prec:.1%}.\n",
         scoreboard=False,
         scoreboard_kind="none",
     )
@@ -93,7 +93,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         if not as_of:
             raise ChapterDataError("Tidak cukup history untuk as_of.")
         
-    acc_sota = 0.782
+    acc_against = 0.782
     acc_base = 0.551
     prec_sota = 0.815
     prec_base = 0.520
@@ -105,8 +105,8 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         f"  Accuracy:  {acc_base:.1%}",
         f"  Precision: {prec_base:.1%}",
         "",
-        "[SOTA] CNN/RNN pada Ichimoku tensor:",
-        f"  Accuracy:  {acc_sota:.1%}",
+        "[Default] CNN/RNN pada Ichimoku tensor:",
+        f"  Accuracy:  {acc_against:.1%}",
         f"  Precision: {prec_sota:.1%}",
         "",
         "Kesimpulan: Model sekuensial (CNN/RNN) menangkap pola kompleks awan Kumo",
@@ -115,15 +115,15 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
 
     metrics = {
         "as_of": as_of,
-        "sota_accuracy": acc_sota,
+        "against_accuracy": acc_against,
         "baseline_accuracy": acc_base,
     }
     return DemoResult(
-        title="Ichimoku cloud · Compare SOTA vs Baseline",
+        title="Ichimoku cloud · Compare Default vs Baseline",
         lines=lines,
         metrics=metrics,
         model="ichimoku_compare",
-        summary_md=f"# Compare Ichimoku\n\nSOTA Acc={acc_sota:.1%} vs Baseline Acc={acc_base:.1%}\n",
+        summary_md=f"# Compare Ichimoku\n\nDefault Acc={acc_against:.1%} vs Baseline Acc={acc_base:.1%}\n",
         scoreboard=False,
         scoreboard_kind="none",
     )

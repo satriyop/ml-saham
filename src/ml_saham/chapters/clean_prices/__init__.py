@@ -159,7 +159,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         csv_lines.append(f"{f['ticker']},{f['date']},{f['return']:.6f},{f['reason']}")
 
     return DemoResult(
-        title="Clean prices · SOTA anomaly flags (MAD/LOF)",
+        title="Clean prices · Default anomaly flags (MAD/LOF)",
         lines=lines,
         metrics=metrics,
         model=model_used,

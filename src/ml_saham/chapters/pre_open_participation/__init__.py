@@ -30,10 +30,10 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     
     lines = [
         f"date={res['latest_date']}  n_samples={res['n_samples']}",
-        "Perbandingan Modul Partisipasi (Spoofing) SOTA vs Baseline",
+        "Perbandingan Modul Partisipasi (Spoofing) Default vs Baseline",
         "",
         f"Baseline Rank IC : {res['baseline_ic']:+.3f}",
-        f"SOTA Rank IC     : {res['sota_ic']:+.3f}",
+        f"Default Rank IC     : {res['against_ic']:+.3f}",
         "",
         "=== Analisis Bobot Pengaruh (XGBoost) ==="
     ]
@@ -41,7 +41,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     md_lines = [
         "# Modul Partisipasi (Spoofing) Compare\n",
         "- **Baseline Rank IC:** " + f"{res['baseline_ic']:+.3f}",
-        "- **SOTA Rank IC:** " + f"{res['sota_ic']:+.3f}\n",
+        "- **Default Rank IC:** " + f"{res['against_ic']:+.3f}\n",
         "### Analisis Bobot Pengaruh",
     ]
 
@@ -53,7 +53,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     return DemoResult(
         title="Pre-Open \u00b7 Participation Audit",
         lines=lines,
-        metrics={"n_samples": res["n_samples"], "baseline_ic": float(res["baseline_ic"]), "sota_ic": float(res["sota_ic"])},
+        metrics={"n_samples": res["n_samples"], "baseline_ic": float(res["baseline_ic"]), "against_ic": float(res["against_ic"])},
         model="xgboost_participation",
         summary_md="\n".join(md_lines) + "\n",
         scoreboard=False,

@@ -1,4 +1,4 @@
-"""Ch.27 Relative strength — Mansfield RS vs IHSG benchmark momentum SOTA."""
+"""Ch.27 Relative strength — Mansfield RS vs IHSG benchmark momentum default."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  Untuk memisahkan kenaikan harga riil dari kenaikan yang sekadar mengekor pasar.",
         "",
         "Opsi pendekatan",
-        "  1) SOTA (default): LSTM / ML on relative returns",
+        "  1) Default: LSTM / ML on relative returns",
         "  2) Baseline (compare): simple momentum ratio (Mansfield RS)",
         "",
         "Caveat",
@@ -114,7 +114,7 @@ def _baseline_scores(rows: list[dict]) -> list[float]:
     return [r["rs_mansfield"] for r in rows]
 
 
-def _sota_scores(rows: list[dict]) -> tuple[list[float], str]:
+def _against_scores(rows: list[dict]) -> tuple[list[float], str]:
     try:
         import numpy as np
         from sklearn.neural_network import MLPRegressor
@@ -124,7 +124,7 @@ def _sota_scores(rows: list[dict]) -> tuple[list[float], str]:
     X = np.array([r["rs_seq"] for r in rows])
     y = np.array([r["fwd"] for r in rows])
     
-    # MLP as ML on relative returns (representing SOTA LSTM / ML)
+    # MLP as ML on relative returns (representing default LSTM / ML)
     model = MLPRegressor(hidden_layer_sizes=(10, 5), max_iter=500, random_state=42)
     model.fit(X, y)
     scores = model.predict(X).tolist()
@@ -135,7 +135,7 @@ def _sota_scores(rows: list[dict]) -> tuple[list[float], str]:
 def run_demo(ctx: ChapterContext) -> DemoResult:
     as_of, rows, bench = _panel(ctx)
     
-    scores, model_name = _sota_scores(rows)
+    scores, model_name = _against_scores(rows)
     rets = maybe_haircut([r["fwd"] for r in rows], with_costs=ctx.with_costs)
     ic = rank_ic(scores, rets)
 
@@ -147,29 +147,29 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     lines = [
         f"as_of={as_of}  n_tickers={len(rows)}  benchmark=IHSG",
-        f"SOTA ML RS Rank IC vs 5d fwd return: {ic:+.3f}",
+        f"Default ML RS Rank IC vs 5d fwd return: {ic:+.3f}",
     ]
     if bench is not None:
         lines.append(f"IHSG fwd 5d return: {bench:+.2%}")
 
     lines.extend([
         "",
-        "Top SOTA ML Relative Strength names vs IHSG:",
+        "Top Default ML Relative Strength names vs IHSG:",
     ])
 
     for t in top[:8]:
         lines.append(
-            f"  {t['ticker']:<6} SOTA_score={t['score']:+6.4f}  fwd={t['fwd']:+.2%}"
+            f"  {t['ticker']:<6} default_score={t['score']:+6.4f}  fwd={t['fwd']:+.2%}"
         )
 
     metrics = {
         "as_of": as_of,
         "n_tickers": len(rows),
-        "rank_ic_sota": ic,
+        "rank_ic_against": ic,
         "benchmark_return": bench,
     }
     return DemoResult(
-        title="Relative strength · SOTA ML on relative returns",
+        title="Relative strength · Default ML on relative returns",
         lines=lines,
         metrics=metrics,
         model=model_name,
@@ -185,12 +185,12 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
     
     base_scores = _baseline_scores(rows)
     if "ml" in baseline:
-        base_scores, _ = _sota_scores(rows)
+        base_scores, _ = _against_scores(rows)
         
     ag_scores = _baseline_scores(rows)
     model_against = "rs"
     if "ml" in against:
-        ag_scores, model_against = _sota_scores(rows)
+        ag_scores, model_against = _against_scores(rows)
         
     rets = maybe_haircut([r["fwd"] for r in rows], with_costs=ctx.with_costs)
     

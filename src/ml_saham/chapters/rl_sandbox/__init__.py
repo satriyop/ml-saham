@@ -32,7 +32,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  Keputusan berurutan (RL) menarik — tapi di IDX butuh sandbox dulu.",
         "",
         "Opsi pendekatan (sandbox)",
-        "  1) SOTA (default): Proximal Policy Optimization (PPO) via RLlib",
+        "  1) Default: Proximal Policy Optimization (PPO) via RLlib",
         "  2) Baseline (compare): Tabular Q-learning",
         "  3) Reward = daily return historis (replay)",
         "",
@@ -164,7 +164,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         f"model=PPO (mock)  steps={_N_STEPS}  reward=daily_return replay",
         f"Policy Entropy: {policy_entropy:.3f} / {max_entropy:.3f} bits",
         "",
-        f"Cumulative reward (PPO SOTA): {cum_ppo:+.2%}",
+        f"Cumulative reward (PPO default): {cum_ppo:+.2%}",
         "",
         "Learned arm logits:",
     ]
@@ -195,7 +195,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         model="ppo_mock",
         summary_md=(
             "# RL sandbox\n\n"
-            "SOTA PPO on daily returns. NOT production RL.\n"
+            "Default PPO on daily returns. NOT production RL.\n"
             f"PPO cum={cum_ppo:+.2%}.\n"
         ),
         scoreboard=False,
@@ -224,7 +224,7 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
         f"Arms: {', '.join(tickers)}",
         f"steps={_N_STEPS}",
         "",
-        f"Cumulative reward (SOTA PPO):           {cum_ppo:+.2%}",
+        f"Cumulative reward (Default PPO):           {cum_ppo:+.2%}",
         f"Cumulative reward (Baseline Q-learning): {cum_q:+.2%}",
         "",
         "Kesimpulan: PPO belajar lebih efisien dibanding Tabular Q-learning.",
@@ -240,7 +240,7 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
         lines=lines,
         metrics=metrics,
         compare={
-            "sota_reward": cum_ppo,
+            "against_reward": cum_ppo,
             "baseline_reward": cum_q,
             "winner": "PPO" if cum_ppo >= cum_q else "Q-learning",
         },

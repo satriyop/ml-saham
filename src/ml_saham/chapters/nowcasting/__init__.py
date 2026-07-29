@@ -26,7 +26,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "",
         "Opsi pendekatan",
         "  1) Baseline: OLS (Ordinary Least Squares) Regresi linear biasa.",
-        "  2) SOTA: MIDAS (Mixed-Data Sampling) Regression atau LSTM untuk time-series.",
+        "  2) Default: MIDAS (Mixed-Data Sampling) Regression atau LSTM untuk time-series.",
         "",
         "Caveat",
         "  • Data kuartalan memiliki lag laporan (sampai 1-2 bulan).",
@@ -40,8 +40,8 @@ def explore_text(*, verbose: bool = False) -> str:
             [
                 "",
                 "Detail (--verbose)",
-                "  • Demo menggunakan simulasi LSTM/MLP (SOTA) untuk nowcasting.",
-                "  • Compare membandingkan OLS vs LSTM/MIDAS SOTA.",
+                "  • Demo menggunakan simulasi LSTM/MLP (default) untuk nowcasting.",
+                "  • Compare membandingkan OLS vs LSTM/MIDAS default.",
             ]
         )
     return "\n".join(lines)
@@ -59,11 +59,11 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     funds_by_t = {f["ticker"]: f for f in funds}
 
-    model_used = "LSTM (Simulated SOTA)"
+    model_used = "LSTM (Simulated default)"
     lines = [
         f"Universe sample: {len(by_t)} tickers",
         "Mempersiapkan data fundamental vs fitur harga harian (Mixed-Frequency)...",
-        "Melatih model nowcasting (SOTA: LSTM / MIDAS)...",
+        "Melatih model nowcasting (Default: LSTM / MIDAS)...",
         "",
     ]
 
@@ -114,7 +114,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         csv_lines.append(f"{f['ticker']},{f['target_pe']:.2f},{f['pred_pe']:.2f},{f['error']:.2f}")
 
     return DemoResult(
-        title="Nowcasting SOTA (LSTM / MIDAS)",
+        title="Nowcasting default (LSTM / MIDAS)",
         lines=lines,
         metrics=metrics,
         model=model_used,
@@ -134,7 +134,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         uni = ctx.universe or resolve_universe(conn, limit=25)
         candles = load_candles(conn, uni)
 
-    lines = ["Comparing OLS (Baseline) vs LSTM (SOTA) untuk Nowcasting", ""]
+    lines = ["Comparing OLS (Baseline) vs LSTM (default) untuk Nowcasting", ""]
     metrics = {}
 
     try:
@@ -147,8 +147,8 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         mae_lstm = 1.68
 
         lines.append(f"OLS MAE  : {mae_ols:.2f} (Baseline)")
-        lines.append(f"LSTM MAE : {mae_lstm:.2f} (SOTA)")
-        lines.append("SOTA menunjukkan perbaikan signifikan dalam menangkap non-linearitas runtun waktu harian.")
+        lines.append(f"LSTM MAE : {mae_lstm:.2f} (default)")
+        lines.append("Default menunjukkan perbaikan signifikan dalam menangkap non-linearitas runtun waktu harian.")
 
         metrics = {
             "mae_ols": mae_ols,
@@ -159,7 +159,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         lines.append("Sklearn tidak tersedia.")
 
     return DemoResult(
-        title="Comparison: OLS vs SOTA LSTM",
+        title="Comparison: OLS vs default LSTM",
         lines=lines,
         metrics=metrics,
         model="OLS vs LSTM",

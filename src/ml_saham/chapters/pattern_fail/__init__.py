@@ -24,7 +24,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  tapi sering jadi lab kegagalan: mudah overfit, pertanyaan salah.",
         "",
         "Opsi pendekatan (failure lab)",
-        "  1) Fitur return 1–5 hari + volume → LightGBM (SOTA)",
+        "  1) Fitur return 1–5 hari + volume → LightGBM (default)",
         "  2) Bandingkan akurasi ke 50% coin-flip baseline (compare)",
         "  3) Sadari framing lebih baik ada di chapter berikutnya",
         "",

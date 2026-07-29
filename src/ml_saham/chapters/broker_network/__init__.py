@@ -24,7 +24,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  untuk melihat siapa yang bergerak dalam kelompok yang sama.",
         "",
         "Opsi pendekatan",
-        "  1) Graph ML / NetworkX Centrality Algorithms (SOTA/default)",
+        "  1) Graph ML / NetworkX Centrality Algorithms (default)",
         "     (PageRank, Eigenvector, Betweenness centrality pada jaringan transaksi/co-occurrence).",
         "  2) Simple node volume / degree centrality (baseline/compare).",
         "",
@@ -142,7 +142,7 @@ def _learned_centrality(nodes: set, edges: dict, model_type: str = "pagerank"):
         scores = {n: val for n, val in G.degree(weight="weight")}
         model_name = "Degree Centrality"
     elif model_type in ("pagerank", "sota", "networkx"):
-        # SOTA: PageRank
+        # Default: PageRank
         try:
             scores = nx.pagerank(G, weight="weight")
             model_name = "PageRank (Graph ML)"
@@ -150,7 +150,7 @@ def _learned_centrality(nodes: set, edges: dict, model_type: str = "pagerank"):
             scores = {n: val for n, val in nx.degree_centrality(G).items()}
             model_name = "Degree Centrality (Fallback)"
     elif model_type == "betweenness":
-        # Alternatif SOTA
+        # Alternatif default
         scores = nx.betweenness_centrality(G, weight="weight")
         model_name = "Betweenness Centrality"
     else:
@@ -176,7 +176,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     
     lines = [
         f"as_of={as_of}  nodes={len(nodes)}  edges={len(edges)}",
-        f"Model: {model_name} (SOTA Graph ML)",
+        f"Model: {model_name} (Default Graph ML)",
         "",
         "Top Sindikasi / Sentralitas Broker:"
     ]
@@ -202,7 +202,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         model=model_name,
         summary_md=(
             f"# Broker Network\n\n"
-            f"as_of={as_of}. SOTA model: `{model_name}`.\n"
+            f"as_of={as_of}. default model: `{model_name}`.\n"
             f"Menganalisis {len(nodes)} node broker dan {len(edges)} edge co-occurrence.\n"
         ),
         scoreboard=False,
@@ -233,7 +233,7 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
     for b in top_b[:5]:
         lines.append(f"  {b}: {base_scores[b]:.4f}")
         
-    lines.append("Top 5 Against (SOTA):")
+    lines.append("Top 5 Against (default):")
     for b in top_a[:5]:
         lines.append(f"  {b}: {ag_scores[b]:.4f}")
 

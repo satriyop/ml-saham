@@ -29,11 +29,11 @@ def explore_text(*, verbose: bool = False) -> str:
         "",
         "Masalah",
         "  Mengukur risiko kebangkrutan & distress keuangan menggunakan fitur rasio keuangan.",
-        "  Model SOTA belajar threshold nonlinear dari fitur (XGBoost), sedangkan baseline menggunakan",
+        "  Default model belajar threshold nonlinear dari fitur (XGBoost), sedangkan baseline menggunakan",
         "  cut-off statis Altman Z-Score.",
         "",
         "Opsi pendekatan",
-        "  1) XGBoost pada komponen Altman Z-Score (SOTA / Default)",
+        "  1) XGBoost pada komponen Altman Z-Score (Default)",
         "  2) Altman Z-Score threshold (Z' < 1.1) (Baseline / Compare)",
         "",
         "Caveat",
@@ -169,13 +169,13 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         f"Risk Zone Distribution: Safe(Z'>2.9)={safe_count}  Grey(1.1-2.9)={grey_count}  Distress(Z'<1.1)={distress_count}",
         f"XGBoost Feature Importances: {imp_str}",
         "",
-        "Top Score (XGBoost SOTA):",
+        "Top Score (XGBoost default):",
     ]
 
     for t in top[:8]:
         zone_str = "Safe" if t["z_score"] > 2.9 else ("Grey" if t["z_score"] >= 1.1 else "Distress")
         lines.append(
-            f"  {t['ticker']:<6} SOTA_score={t['score']:+.3f}  Z'-Score={t['z_score']:+6.2f}  Zone={zone_str:<8}  fwd={t['fwd']:+.2%}"
+            f"  {t['ticker']:<6} default_score={t['score']:+.3f}  Z'-Score={t['z_score']:+6.2f}  Zone={zone_str:<8}  fwd={t['fwd']:+.2%}"
         )
 
     metrics = {

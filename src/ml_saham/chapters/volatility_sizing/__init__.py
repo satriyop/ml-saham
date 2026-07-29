@@ -27,7 +27,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "",
         "Pendekatan",
         "  • Baseline: Multiplier statis dari ai-saham (volatility_size_multiplier_at_signal).",
-        "  • SOTA: Multiplier dinamis yang dioptimasi oleh Ridge Regression / Kelly",
+        "  • Default: Multiplier dinamis yang dioptimasi oleh Ridge Regression / Kelly",
         "    menggunakan fitur ATR dan volatilitas.",
         "",
         f"Lanjut:  ml-saham challenge engine --category risk --scenario accum --type sizing",
@@ -125,63 +125,63 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         std_ret_base = 1e-9
     sharpe_base = mean_ret_base / std_ret_base
 
-    # 4. Train SOTA (Ridge Regression)
+    # 4. Train default (Ridge Regression)
     try:
         from sklearn.linear_model import Ridge
         clf = Ridge(alpha=1.0, random_state=42)
         
         if len(set(y_arr)) > 1:
             clf.fit(X_arr, y_arr)
-            # SOTA Sizing (normalisasi ke 0.0 - 1.0)
-            raw_sota = clf.predict(X_arr)
+            # default Sizing (normalisasi ke 0.0 - 1.0)
+            raw_against = clf.predict(X_arr)
             # Simple MinMax scaling ke 0.0 - 1.0 sebagai multiplier
-            min_val = np.min(raw_sota)
-            max_val = np.max(raw_sota)
+            min_val = np.min(raw_against)
+            max_val = np.max(raw_against)
             if max_val > min_val:
-                sota_sizing = (raw_sota - min_val) / (max_val - min_val)
+                against_sizing = (raw_against - min_val) / (max_val - min_val)
             else:
-                sota_sizing = np.ones_like(y_arr)
+                against_sizing = np.ones_like(y_arr)
             
             importances = np.abs(clf.coef_)
             importances = (importances / importances.sum()) * 100
             imp_source = "Ridge Coef"
         else:
-            sota_sizing = np.ones_like(y_arr)
+            against_sizing = np.ones_like(y_arr)
             importances = np.zeros(len(feature_names))
             imp_source = "None"
             
     except ImportError:
-        sota_sizing = np.ones_like(y_arr)
+        against_sizing = np.ones_like(y_arr)
         importances = np.zeros(len(feature_names))
         imp_source = "None"
 
-    sota_returns = y_arr * sota_sizing
-    mean_ret_sota = np.mean(sota_returns)
-    std_ret_sota = np.std(sota_returns)
-    if std_ret_sota == 0:
-        std_ret_sota = 1e-9
-    sharpe_sota = mean_ret_sota / std_ret_sota
+    against_returns = y_arr * against_sizing
+    mean_ret_against = np.mean(against_returns)
+    std_ret_against = np.std(against_returns)
+    if std_ret_against == 0:
+        std_ret_against = 1e-9
+    sharpe_against = mean_ret_against / std_ret_against
 
     lines = [
         f"date={meta[0]['date']}  n_samples={len(meta)}  purpose={purpose}",
-        "Perbandingan Sizing SOTA (Ridge) vs Baseline (AI-Saham Statis)",
+        "Perbandingan Sizing default (Ridge) vs Baseline (AI-Saham Statis)",
         "",
         "=== Baseline (AI-Saham ASLI) ===",
         f"Rata-rata Multiplier: {np.mean(baseline_sizing):.2f}",
         f"Sharpe Ratio Proksi : {sharpe_base:.3f}",
         "",
-        "=== SOTA (Machine Learning Dynamic Sizing) ===",
-        f"Rata-rata Multiplier: {np.mean(sota_sizing):.2f}",
-        f"Sharpe Ratio Proksi : {sharpe_sota:.3f}",
+        "=== Default (Machine Learning Dynamic Sizing) ===",
+        f"Rata-rata Multiplier: {np.mean(against_sizing):.2f}",
+        f"Sharpe Ratio Proksi : {sharpe_against:.3f}",
         "",
         f"=== Analisis Kontribusi Fitur Sizing ({imp_source}) ==="
     ]
     
     md_lines = [
         f"# Risk Engine Sizing Compare ({purpose})\n",
-        "SOTA ML Dynamic Sizing vs Baseline Static Multiplier.\n",
+        "Default ML Dynamic Sizing vs Baseline Static Multiplier.\n",
         f"- **Baseline Sharpe Proksi:** {sharpe_base:.3f}",
-        f"- **SOTA Sharpe Proksi:** {sharpe_sota:.3f}\n",
+        f"- **Default Sharpe Proksi:** {sharpe_against:.3f}\n",
         f"### Analisis Kontribusi Sizing ({imp_source})",
     ]
 
@@ -194,7 +194,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     metrics = {
         "n_samples": len(meta),
         "baseline_sharpe": float(sharpe_base),
-        "sota_sharpe": float(sharpe_sota),
+        "against_sharpe": float(sharpe_against),
     }
 
     return DemoResult(

@@ -32,7 +32,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  dan Rasio PEG (Price/Earnings-to-Growth) untuk menemukan saham undervalue tumbuh cepat.",
         "",
         "Opsi pendekatan",
-        "  1) Random Forest pada multiple valuasi (SOTA / default)",
+        "  1) Random Forest pada multiple valuasi (Default / default)",
         "  2) Historical mean PE / Forward PE konvensional (Baseline / compare)",
         "",
         "Caveat",
@@ -108,7 +108,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     X = np.array([[a["fwd_pe"], a["fwd_eps"], a["curr_price"]] for a in analyzed])
     y = np.array(rets)
 
-    # SOTA: Random Forest
+    # Default: Random Forest
     rf = RandomForestRegressor(n_estimators=50, random_state=42)
     rf.fit(X, y)
     preds = rf.predict(X)
@@ -123,14 +123,14 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     lines = [
         f"as_of={as_of}  n_tickers={len(analyzed)}  source=forward_estimates_cache",
-        f"Random Forest (SOTA) Rank IC vs 5d fwd return: {ic:+.3f}",
+        f"Random Forest (default) Rank IC vs 5d fwd return: {ic:+.3f}",
     ]
     if bench is not None:
         lines.append(f"IHSG fwd 5d return: {bench:+.2%}")
 
     lines.extend([
         "",
-        "Top SOTA Model Picks:",
+        "Top Default model Picks:",
     ])
 
     for a in analyzed[:8]:
@@ -146,11 +146,11 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     metrics = {
         "as_of": as_of,
         "n_tickers": len(analyzed),
-        "rank_ic_sota": ic,
+        "rank_ic_against": ic,
         "benchmark_return": bench,
     }
     return DemoResult(
-        title="Forward valuation · SOTA Random Forest",
+        title="Forward valuation · Default Random Forest",
         lines=lines,
         metrics=metrics,
         model="rf_forward_valuation",
@@ -174,15 +174,15 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
     baseline_scores = [-a["fwd_pe"] for a in analyzed]
     ic_base = rank_ic(baseline_scores, rets)
 
-    # SOTA: Random Forest
+    # Default: Random Forest
     X = np.array([[a["fwd_pe"], a["fwd_eps"], a["curr_price"]] for a in analyzed])
     y = np.array(rets)
 
     rf = RandomForestRegressor(n_estimators=50, random_state=42)
     rf.fit(X, y)
-    sota_preds = rf.predict(X)
+    against_preds = rf.predict(X)
 
-    ic_sota = rank_ic(sota_preds.tolist(), rets)
+    ic_against = rank_ic(against_preds.tolist(), rets)
 
     lines = [
         f"as_of={as_of}  n_tickers={len(analyzed)}  source=forward_estimates_cache",
@@ -190,32 +190,32 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
         "Baseline (Forward PE):",
         f"  Rank IC: {ic_base:+.3f}",
         "",
-        "SOTA (Random Forest on Multiples):",
-        f"  Rank IC: {ic_sota:+.3f}",
+        "Default (Random Forest on Multiples):",
+        f"  Rank IC: {ic_against:+.3f}",
         "",
     ]
-    if ic_sota > ic_base:
-        lines.append("Kesimpulan: SOTA lebih baik daripada Baseline.")
+    if ic_against > ic_base:
+        lines.append("Kesimpulan: default lebih baik daripada Baseline.")
     else:
-        lines.append("Kesimpulan: Baseline lebih baik atau setara SOTA.")
+        lines.append("Kesimpulan: Baseline lebih baik atau setara default.")
 
     metrics = {
         "as_of": as_of,
         "n_tickers": len(analyzed),
         "rank_ic_base": ic_base,
-        "rank_ic_sota": ic_sota,
+        "rank_ic_against": ic_against,
     }
     
     return CompareResult(
-        title="Forward valuation · SOTA vs Baseline",
+        title="Forward valuation · Default vs Baseline",
         lines=lines,
         metrics=metrics,
         compare={
             "baseline_ic": ic_base,
-            "sota_ic": ic_sota,
+            "against_ic": ic_against,
         },
         model="rf_forward_valuation_compare",
-        summary_md=f"# Forward valuation\n\nSOTA IC={ic_sota:+.3f} vs Base IC={ic_base:+.3f}\n",
+        summary_md=f"# Forward valuation\n\nDefault IC={ic_against:+.3f} vs Base IC={ic_base:+.3f}\n",
         scoreboard=True,
     )
 

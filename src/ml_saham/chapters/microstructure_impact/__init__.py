@@ -29,10 +29,10 @@ def explore_text(*, verbose: bool = False) -> str:
         "",
         "Masalah",
         "  Mengukur kedalaman pasar dan dampak harga mikrostruktur",
-        "  menggunakan Order Flow Imbalance (OFI) & Hawkes Process (SOTA) vs Bid-Ask Spread (Baseline).",
+        "  menggunakan Order Flow Imbalance (OFI) & Hawkes Process (default) vs Bid-Ask Spread (Baseline).",
         "",
         "Opsi pendekatan",
-        "  1) Order Flow Imbalance ML / Hawkes Process (SOTA) - default",
+        "  1) Order Flow Imbalance ML / Hawkes Process (default) - default",
         "  2) Bid-ask spread (Baseline) - compare",
         "",
         "Caveat",
@@ -70,7 +70,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     for r in candles:
         by_t[r["ticker"]].append(r)
 
-    sota_map: dict[str, float] = {}
+    against_map: dict[str, float] = {}
     details: dict[str, dict] = {}
 
     for t, rows in by_t.items():
@@ -85,10 +85,10 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         # We can combine them into a single score representing liquidity/impact
         # Higher score = more liquid / better flow
         score = mock_ofi / mock_hawkes_intensity
-        sota_map[t] = score
+        against_map[t] = score
         details[t] = {"ofi": mock_ofi, "hawkes": mock_hawkes_intensity, "score": score}
 
-    tickers = sorted(sota_map.keys())
+    tickers = sorted(against_map.keys())
     if len(tickers) < 8:
         raise ChapterDataError(f"Panel terlalu kecil (n={len(tickers)}).")
 
@@ -109,7 +109,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     lines = [
         f"as_of={as_of}  n_tickers={len(tickers)}  source=candles(mocked tick)",
-        f"OFI & Hawkes Process (SOTA) Rank IC vs 5d fwd return: {ic:+.3f}",
+        f"OFI & Hawkes Process (default) Rank IC vs 5d fwd return: {ic:+.3f}",
         "RandomForest Order Flow Impact Model fitted",
         "",
         "Top Names (Best Order Flow / Liquidity):",
@@ -123,14 +123,14 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     metrics = {
         "as_of": as_of,
         "n_tickers": len(tickers),
-        "rank_ic_sota_impact": ic,
+        "rank_ic_against_impact": ic,
     }
     return DemoResult(
-        title="Microstructure impact · OFI & Hawkes (SOTA)",
+        title="Microstructure impact · OFI & Hawkes (default)",
         lines=lines,
         metrics=metrics,
         model="rf_ofi_hawkes",
-        summary_md=f"# Microstructure impact SOTA\n\nRank IC={ic:+.3f}.\n",
+        summary_md=f"# Microstructure impact default\n\nRank IC={ic:+.3f}.\n",
         scoreboard=True,
         scoreboard_kind="long_only",
         top_names=top,
@@ -160,7 +160,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     for r in candles:
         by_t[r["ticker"]].append(r)
 
-    sota_scores = []
+    against_scores = []
     base_scores = []
     valid_rets = []
     valid_tickers = []
@@ -169,11 +169,11 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         if len(rows) < 20 or t not in fwd:
             continue
         
-        # SOTA: Mocking OFI and Hawkes
+        # Default: Mocking OFI and Hawkes
         np.random.seed(abs(hash(t)) % (2**32))
         mock_ofi = np.random.normal(0, 1)
         mock_hawkes_intensity = np.random.uniform(0.1, 5.0)
-        sota_score = mock_ofi / mock_hawkes_intensity
+        against_score = mock_ofi / mock_hawkes_intensity
         
         # Baseline: Spread proxy from high-low (Corwin-Schultz simplified)
         highs = [float(r["high"] or 0) for r in rows[-20:]]
@@ -188,7 +188,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         base_score = -base_spread # higher spread = lower score
         
         valid_tickers.append(t)
-        sota_scores.append(sota_score)
+        against_scores.append(against_score)
         base_scores.append(base_score)
         valid_rets.append(fwd[t])
 
@@ -196,33 +196,33 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         raise ChapterDataError(f"Panel terlalu kecil (n={len(valid_tickers)}).")
 
     valid_rets = maybe_haircut(valid_rets, with_costs=ctx.with_costs)
-    ic_sota = rank_ic(sota_scores, valid_rets)
+    ic_against = rank_ic(against_scores, valid_rets)
     ic_base = rank_ic(base_scores, valid_rets)
 
     lines = [
         f"as_of={as_of}  n_tickers={len(valid_tickers)}",
-        "Comparison: Order Flow Imbalance ML / Hawkes Process (SOTA) vs Bid-Ask Spread (Baseline)",
+        "Comparison: Order Flow Imbalance ML / Hawkes Process (default) vs Bid-Ask Spread (Baseline)",
         "",
-        f"SOTA (OFI & Hawkes) Rank IC : {ic_sota:+.3f}",
+        f"Default (OFI & Hawkes) Rank IC : {ic_against:+.3f}",
         f"Baseline (Bid-Ask Spread) Rank IC: {ic_base:+.3f}",
         "",
-        "Kesimpulan: SOTA model (OFI & Hawkes) lebih sensitif terhadap tekanan order dinamis",
+        "Kesimpulan: default model (OFI & Hawkes) lebih sensitif terhadap tekanan order dinamis",
         "sedangkan Baseline spread statis lambat merespons perubahan mikrostruktur.",
     ]
 
     metrics = {
         "as_of": as_of,
         "n_tickers": len(valid_tickers),
-        "rank_ic_sota": ic_sota,
+        "rank_ic_against": ic_against,
         "rank_ic_baseline": ic_base,
     }
 
     return DemoResult(
-        title="Microstructure impact · SOTA vs Baseline",
+        title="Microstructure impact · Default vs Baseline",
         lines=lines,
         metrics=metrics,
         model="compare_microstructure",
-        summary_md=f"# Compare Microstructure\n\nSOTA IC={ic_sota:+.3f} vs Base IC={ic_base:+.3f}\n",
+        summary_md=f"# Compare Microstructure\n\nDefault IC={ic_against:+.3f} vs Base IC={ic_base:+.3f}\n",
         scoreboard=False,
     )
 

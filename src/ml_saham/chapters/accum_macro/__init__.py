@@ -92,44 +92,44 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     # Baseline Rank IC
     baseline_ic = rank_ic(baseline_scores, y_arr.tolist())
 
-    # Train SOTA Macro-Ensemble (Ridge Regression)
+    # Train default Macro-Ensemble (Ridge Regression)
     try:
         from sklearn.linear_model import Ridge
         clf = Ridge(alpha=10.0, random_state=42)
         
         if len(set(y_arr)) > 1:
             clf.fit(X_arr, y_arr)
-            sota_scores = clf.predict(X_arr)
-            sota_ic = rank_ic(sota_scores.tolist(), y_arr.tolist())
+            against_scores = clf.predict(X_arr)
+            against_ic = rank_ic(against_scores.tolist(), y_arr.tolist())
             
             importances = np.abs(clf.coef_)
             if importances.sum() > 0:
                 importances = (importances / importances.sum()) * 100
             imp_source = "Ridge Coef"
         else:
-            sota_ic = 0.0
+            against_ic = 0.0
             importances = np.zeros(len(feature_names))
             imp_source = "None"
     except ImportError:
-        sota_ic = 0.0
+        against_ic = 0.0
         importances = np.zeros(len(feature_names))
         imp_source = "None"
 
     lines = [
         f"date={meta[0]['date']}  n_samples={len(meta)}",
-        "Perbandingan Screener Macro-Ensemble SOTA vs Baseline",
+        "Perbandingan Screener Macro-Ensemble Default vs Baseline",
         "",
         f"Baseline Rank IC : {baseline_ic:+.3f}",
-        f"SOTA Rank IC     : {sota_ic:+.3f}",
+        f"Default Rank IC     : {against_ic:+.3f}",
         "",
         f"=== Analisis Bobot Pengaruh ({imp_source}) ==="
     ]
     
     md_lines = [
         f"# Screener Macro-Ensemble Compare\n",
-        "SOTA ML Dynamic Weights vs Baseline (Signal x Market x Risk).\n",
+        "Default ML Dynamic Weights vs Baseline (Signal x Market x Risk).\n",
         f"- **Baseline Rank IC:** {baseline_ic:+.3f}",
-        f"- **SOTA Rank IC:** {sota_ic:+.3f}\n",
+        f"- **Default Rank IC:** {against_ic:+.3f}\n",
         f"### Analisis Bobot Pengaruh Pilar Utama ({imp_source})",
     ]
 
@@ -142,7 +142,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     return DemoResult(
         title="Screener Macro-Ensemble \u00b7 Compare Asli",
         lines=lines,
-        metrics={"n_samples": len(meta), "baseline_ic": float(baseline_ic), "sota_ic": float(sota_ic)},
+        metrics={"n_samples": len(meta), "baseline_ic": float(baseline_ic), "against_ic": float(against_ic)},
         model="macro_ensemble_ridge",
         summary_md="\n".join(md_lines) + "\n",
         scoreboard=False,

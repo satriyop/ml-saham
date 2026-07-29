@@ -1,4 +1,4 @@
-"""Ch.21 Seasonality drift — calendar month anomalies using SOTA models."""
+"""Ch.21 Seasonality drift — calendar month anomalies using default models."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  secara statistik signifikan, atau sekadar overfit histori?",
         "",
         "Opsi pendekatan",
-        "  1) SOTA (default): Model Prophet / NeuralProphet untuk dekomposisi sinyal musiman (yearly seasonality)",
+        "  1) Default: Model Prophet / NeuralProphet untuk dekomposisi sinyal musiman (yearly seasonality)",
         "  2) Baseline (compare): Rata-rata sederhana return berdasarkan bulan (naive month-of-year average)",
         "",
         "Caveat",
@@ -94,7 +94,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     lines = [
         f"Ticker: {ticker} (n={len(df_t)})",
-        "SOTA (Prophet) Yearly Seasonality Component:",
+        "Default (Prophet) Yearly Seasonality Component:",
         "",
         "Ranking rata-rata efek musiman bulanan:"
     ]
@@ -107,7 +107,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     }
 
     return DemoResult(
-        title="Seasonality drift · SOTA Prophet Demo",
+        title="Seasonality drift · Default Prophet Demo",
         lines=lines,
         metrics=metrics,
         model="prophet_seasonality",
@@ -156,7 +156,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     baseline_preds = test_df["month"].map(monthly_avg).fillna(0).values
     actual = test_df["return"].values
 
-    sota_name = "Ridge month dummies"
+    against_name = "Ridge month dummies"
     model_tag = "ridge_month_vs_naive"
     try:
         enc = OneHotEncoder(sparse_output=False, handle_unknown="ignore")
@@ -164,10 +164,10 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         X_test = enc.transform(test_df[["month"]])
         ridge = Ridge(alpha=1.0, random_state=42)
         ridge.fit(X_train, train_df["return"].values)
-        sota_preds = ridge.predict(X_test)
+        against_preds = ridge.predict(X_test)
     except Exception:
-        sota_preds = baseline_preds
-        sota_name = "fallback=baseline"
+        against_preds = baseline_preds
+        against_name = "fallback=baseline"
         model_tag = "seasonality_fallback"
 
     # Optional Prophet when installed and history is long enough
@@ -184,46 +184,46 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
                 yearly_seasonality=True, weekly_seasonality=False, daily_seasonality=False
             )
             model.fit(train_p)
-            sota_preds = model.predict(test_p)["yhat"].values
-            sota_name = "Prophet"
+            against_preds = model.predict(test_p)["yhat"].values
+            against_name = "Prophet"
             model_tag = "prophet_vs_naive"
         except Exception:
             pass
 
-    sota_rmse = float(np.sqrt(mean_squared_error(actual, sota_preds)))
+    against_rmse = float(np.sqrt(mean_squared_error(actual, against_preds)))
     base_rmse = float(np.sqrt(mean_squared_error(actual, baseline_preds)))
-    sota_mae = float(mean_absolute_error(actual, sota_preds))
+    against_mae = float(mean_absolute_error(actual, against_preds))
     base_mae = float(mean_absolute_error(actual, baseline_preds))
 
     lines = [
         f"Ticker: {ticker} (test n={test_n})",
         "",
-        f"SOTA ({sota_name}):",
-        f"  RMSE: {sota_rmse:.6f}",
-        f"  MAE:  {sota_mae:.6f}",
+        f"Default ({against_name}):",
+        f"  RMSE: {against_rmse:.6f}",
+        f"  MAE:  {against_mae:.6f}",
         "",
         "Baseline (Naive Month Avg):",
         f"  RMSE: {base_rmse:.6f}",
         f"  MAE:  {base_mae:.6f}",
         "",
-        f"Winner (RMSE): {'SOTA' if sota_rmse < base_rmse else 'Baseline'}",
+        f"Winner (RMSE): {'Default' if against_rmse < base_rmse else 'Baseline'}",
     ]
 
     metrics = {
-        "sota_rmse": sota_rmse,
+        "against_rmse": against_rmse,
         "base_rmse": base_rmse,
-        "sota_mae": sota_mae,
+        "against_mae": against_mae,
         "base_mae": base_mae,
-        "sota_model": sota_name,
+        "against_model": against_name,
     }
 
     return DemoResult(
-        title="Compare SOTA vs Baseline · Seasonality Drift",
+        title="Compare Default vs Baseline · Seasonality Drift",
         lines=lines,
         metrics=metrics,
         model=model_tag,
         summary_md=(
-            f"# Compare Seasonality\n\nSOTA ({sota_name}) RMSE: {sota_rmse:.4f} "
+            f"# Compare Seasonality\n\nDefault ({against_name}) RMSE: {against_rmse:.4f} "
             f"vs Baseline RMSE: {base_rmse:.4f}"
         ),
         scoreboard=False,

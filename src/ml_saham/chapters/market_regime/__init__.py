@@ -28,7 +28,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "",
         "Pendekatan",
         "  • Baseline: Klasifikasi rezim kaku dari ai-saham (market_context_snapshots).",
-        "  • SOTA: Machine Learning (Random Forest) mengolah data mentah VIX, EIDO, USD/IDR, dll.",
+        "  • Default: Machine Learning (Random Forest) mengolah data mentah VIX, EIDO, USD/IDR, dll.",
         "",
         f"Lanjut:  ml-saham challenge engine --category market --type regime",
     ]
@@ -129,57 +129,57 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     baseline_precision = baseline_tp / (baseline_tp + baseline_fp) if (baseline_tp + baseline_fp) > 0 else 0
     baseline_recall = baseline_tp / (baseline_tp + baseline_fn) if (baseline_tp + baseline_fn) > 0 else 0
 
-    # 3. Train SOTA (Random Forest)
+    # 3. Train default (Random Forest)
     try:
         from sklearn.ensemble import RandomForestClassifier
         clf = RandomForestClassifier(n_estimators=100, max_depth=3, random_state=42, class_weight='balanced')
         
         if len(set(y_arr)) > 1:
             clf.fit(X_arr, y_arr)
-            sota_preds = clf.predict(X_arr)
+            against_preds = clf.predict(X_arr)
             importances = clf.feature_importances_ * 100
             imp_source = "RF Imp"
         else:
-            sota_preds = np.zeros_like(y_arr)
+            against_preds = np.zeros_like(y_arr)
             importances = np.zeros(len(feature_names))
             imp_source = "None"
             
     except ImportError:
-        sota_preds = np.zeros_like(y_arr)
+        against_preds = np.zeros_like(y_arr)
         importances = np.zeros(len(feature_names))
         imp_source = "None"
 
-    sota_tp = sum(1 for s, y in zip(sota_preds, y_arr) if s == 1 and y == 1)
-    sota_fp = sum(1 for s, y in zip(sota_preds, y_arr) if s == 1 and y == 0)
-    sota_tn = sum(1 for s, y in zip(sota_preds, y_arr) if s == 0 and y == 0)
-    sota_fn = sum(1 for s, y in zip(sota_preds, y_arr) if s == 0 and y == 1)
+    against_tp = sum(1 for s, y in zip(against_preds, y_arr) if s == 1 and y == 1)
+    against_fp = sum(1 for s, y in zip(against_preds, y_arr) if s == 1 and y == 0)
+    against_tn = sum(1 for s, y in zip(against_preds, y_arr) if s == 0 and y == 0)
+    against_fn = sum(1 for s, y in zip(against_preds, y_arr) if s == 0 and y == 1)
     
-    sota_acc = (sota_tp + sota_tn) / len(y_arr) if len(y_arr) > 0 else 0
-    sota_precision = sota_tp / (sota_tp + sota_fp) if (sota_tp + sota_fp) > 0 else 0
-    sota_recall = sota_tp / (sota_tp + sota_fn) if (sota_tp + sota_fn) > 0 else 0
+    against_acc = (against_tp + against_tn) / len(y_arr) if len(y_arr) > 0 else 0
+    against_precision = against_tp / (against_tp + against_fp) if (against_tp + against_fp) > 0 else 0
+    against_recall = against_tp / (against_tp + against_fn) if (against_tp + against_fn) > 0 else 0
 
     lines = [
         f"n_samples={len(meta)}",
-        "Perbandingan Rezim SOTA (Random Forest) vs Baseline (AI-Saham Rule)",
+        "Perbandingan Rezim default (Random Forest) vs Baseline (AI-Saham Rule)",
         "",
         "=== Baseline (AI-Saham ASLI) ===",
         f"Accuracy  : {baseline_acc:.1%}",
         f"Precision : {baseline_precision:.1%} (Kemampuan menebak crash tanpa meleset)",
         f"Recall    : {baseline_recall:.1%} (Kemampuan menangkap SEMUA crash)",
         "",
-        "=== SOTA (Machine Learning Dynamic Regime) ===",
-        f"Accuracy  : {sota_acc:.1%}",
-        f"Precision : {sota_precision:.1%}",
-        f"Recall    : {sota_recall:.1%}",
+        "=== Default (Machine Learning Dynamic Regime) ===",
+        f"Accuracy  : {against_acc:.1%}",
+        f"Precision : {against_precision:.1%}",
+        f"Recall    : {against_recall:.1%}",
         "",
         f"=== Analisis Kontribusi Indikator Makro ({imp_source}) ==="
     ]
     
     md_lines = [
         f"# Market Regime Compare\n",
-        "SOTA ML Dynamic Regime vs Baseline Static Rule.\n",
+        "Default ML Dynamic Regime vs Baseline Static Rule.\n",
         f"- **Baseline Precision/Recall:** {baseline_precision:.1%} / {baseline_recall:.1%}",
-        f"- **SOTA Precision/Recall:** {sota_precision:.1%} / {sota_recall:.1%}\n",
+        f"- **Default Precision/Recall:** {against_precision:.1%} / {against_recall:.1%}\n",
         f"### Analisis Kontribusi Indikator Makro ({imp_source})",
     ]
 
@@ -192,7 +192,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     metrics = {
         "n_samples": len(meta),
         "baseline_accuracy": float(baseline_acc),
-        "sota_accuracy": float(sota_acc),
+        "against_accuracy": float(against_acc),
     }
 
     return DemoResult(

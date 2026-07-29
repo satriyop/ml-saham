@@ -33,7 +33,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  Di IDX, laba berbasis arus kas riil lebih sustain daripada akrual.",
         "",
         "Opsi algoritma",
-        "  1) LightGBM classification pada accruals dan cash flow (SOTA / default)",
+        "  1) LightGBM classification pada accruals dan cash flow (Default / default)",
         "  2) Simple accrual ratio rank (Baseline / compare)",
         "",
         "Caveat",
@@ -125,7 +125,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         f"as_of={as_of}  n_tickers={len(tickers)}  source=company_financials",
         f"LightGBM Classification Rank IC vs 5d fwd return: {ic:+.3f}",
         "",
-        "Top SOTA Predictions (High Probability of positive return):",
+        "Top default Predictions (High Probability of positive return):",
     ]
 
     for t in top[:8]:
@@ -139,7 +139,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "rank_ic_lgbm": ic,
     }
     return DemoResult(
-        title="Earnings quality · LightGBM (SOTA)",
+        title="Earnings quality · LightGBM (default)",
         lines=lines,
         metrics=metrics,
         model="lightgbm_classification",
@@ -208,39 +208,39 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     baseline_scores = [-details[t]["accrual_ratio"] for t in tickers]
     baseline_ic = rank_ic(baseline_scores, rets)
 
-    # SOTA: LightGBM classification
+    # Default: LightGBM classification
     lgbm = LGBMClassifier(n_estimators=10, max_depth=3, random_state=42, verbose=-1, min_child_samples=2)
     lgbm.fit(X, y)
-    sota_scores = lgbm.predict_proba(X)[:, 1].tolist()
-    sota_ic = rank_ic(sota_scores, rets)
+    against_scores = lgbm.predict_proba(X)[:, 1].tolist()
+    against_ic = rank_ic(against_scores, rets)
 
     lines = [
         f"as_of={as_of}  n_tickers={len(tickers)}",
         "Perbandingan Model Earnings Quality:",
-        f"  SOTA (LightGBM):           IC = {sota_ic:+.3f}",
+        f"  default (LightGBM):           IC = {against_ic:+.3f}",
         f"  Baseline (Accrual Ratio):  IC = {baseline_ic:+.3f}",
         "",
         "Kesimpulan:",
     ]
     
-    if sota_ic > baseline_ic:
-        lines.append("  Model SOTA (LightGBM) memberikan ranking yang lebih akurat.")
+    if against_ic > baseline_ic:
+        lines.append("  Default model (LightGBM) memberikan ranking yang lebih akurat.")
     else:
         lines.append("  Baseline (Accrual Ratio) menang pada batch ini.")
 
     metrics = {
         "as_of": as_of,
         "n_tickers": len(tickers),
-        "rank_ic_sota": sota_ic,
+        "rank_ic_against": against_ic,
         "rank_ic_baseline": baseline_ic,
     }
 
     return DemoResult(
-        title="Earnings quality · SOTA vs Baseline",
+        title="Earnings quality · Default vs Baseline",
         lines=lines,
         metrics=metrics,
         model="compare_lightgbm_accrual",
-        summary_md=f"# Compare\n\nSOTA IC: {sota_ic:+.3f}, Baseline IC: {baseline_ic:+.3f}\n",
+        summary_md=f"# Compare\n\nDefault IC: {against_ic:+.3f}, Baseline IC: {baseline_ic:+.3f}\n",
         scoreboard=False,
     )
 

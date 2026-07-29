@@ -1,4 +1,4 @@
-"""Ch.37 Accumulation Policy — SOTA vs Baseline."""
+"""Ch.37 Accumulation Policy — Default vs Baseline."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  Menentukan policy skor akumulasi terbaik dari berbagai komponen.",
         "",
         "Opsi pendekatan",
-        "  • SOTA: LightGBM Regression pada komponen-komponen akumulasi.",
+        "  • Default: LightGBM Regression pada komponen-komponen akumulasi.",
         "  • Baseline: Pembobotan manual 33.3% dari ScoreAccumUseCase.",
         "",
         f"Lanjut:  ml-saham demo {META.slug}",
@@ -36,7 +36,7 @@ def explore_text(*, verbose: bool = False) -> str:
 def _prep_data(ctx: ChapterContext):
     # Simulate some accum components data: component A, B, C
     # Baseline just averages them (33.3% each).
-    # SOTA learns a regression target (e.g., next day return).
+    # default learns a regression target (e.g., next day return).
     import random
 
     random.seed(42)
@@ -77,26 +77,26 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     preds = model.predict(X)
 
     for d, p in zip(data, preds, strict=True):
-        d["sota_score"] = p
+        d["against_score"] = p
 
-    data.sort(key=lambda d: d["sota_score"], reverse=True)
+    data.sort(key=lambda d: d["against_score"], reverse=True)
 
     lines = [
-        "SOTA Model: LightGBM Regression (Prediksi Target dari Komponen Akumulasi)",
+        "Default model: LightGBM Regression (Prediksi Target dari Komponen Akumulasi)",
         "",
         "Top Score berdasarkan Prediksi LightGBM:",
     ]
     for d in data[:8]:
         lines.append(
-            f"  {d['ticker']:<6} SOTA Score={d['sota_score']:.3f}  (A={d['comp_a']:.2f}, B={d['comp_b']:.2f}, C={d['comp_c']:.2f})"
+            f"  {d['ticker']:<6} default Score={d['against_score']:.3f}  (A={d['comp_a']:.2f}, B={d['comp_b']:.2f}, C={d['comp_c']:.2f})"
         )
 
     return DemoResult(
-        title="Accumulation Policy \u00b7 SOTA LightGBM Regression",
+        title="Accumulation Policy \u00b7 Default LightGBM Regression",
         lines=lines,
         metrics={"n_samples": len(data)},
         model="lightgbm_accum_policy",
-        summary_md="# Accumulation Policy\n\nSOTA LightGBM regression diimplementasikan.\n",
+        summary_md="# Accumulation Policy\n\nDefault LightGBM regression diimplementasikan.\n",
         scoreboard=True,
         scoreboard_kind="long_only",
         top_names=data[:10],
@@ -182,13 +182,13 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     X_arr = np.array(X_list)
     y_arr = np.array(y_list)
 
-    # Train SOTA Model (LightGBM)
+    # Train Default model (LightGBM)
     try:
         import lightgbm as lgb
         clf = lgb.LGBMRegressor(n_estimators=50, random_state=42)
         if len(set(y_list)) > 1:
             clf.fit(X_arr, y_arr)
-            sota_scores = clf.predict(X_arr)
+            against_scores = clf.predict(X_arr)
             
             # Feature Importance / SHAP Analysis
             try:
@@ -203,11 +203,11 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
                 importances = (gains / gains.sum()) * 100
                 imp_source = "Gain"
         else:
-            sota_scores = np.array(baseline_scores) / 100.0
+            against_scores = np.array(baseline_scores) / 100.0
             importances = np.zeros(len(feature_names))
             imp_source = "None"
     except (ImportError, ValueError, Exception):
-        sota_scores = np.array(baseline_scores) / 100.0
+        against_scores = np.array(baseline_scores) / 100.0
         importances = np.zeros(len(feature_names))
         imp_source = "None"
 
@@ -215,26 +215,26 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     try:
         from scipy.stats import spearmanr
         baseline_ic, _ = spearmanr(baseline_scores, y_arr)
-        sota_ic, _ = spearmanr(sota_scores, y_arr)
+        against_ic, _ = spearmanr(against_scores, y_arr)
     except ImportError:
         baseline_ic = 0.0
-        sota_ic = 0.0
+        against_ic = 0.0
 
     lines = [
         f"date={meta[0]['date']}  n_samples={len(meta)}  source=learning_observations",
-        "Perbandingan SOTA (LightGBM) vs Baseline (AI-Saham ASLI dari DB)",
+        "Perbandingan default (LightGBM) vs Baseline (AI-Saham ASLI dari DB)",
         "",
         f"Baseline Rank IC : {baseline_ic:+.3f}",
-        f"SOTA Rank IC     : {sota_ic:+.3f}",
+        f"Default Rank IC     : {against_ic:+.3f}",
         "",
-        f"=== Analisis Kontribusi Faktor SOTA ({imp_source}) ==="
+        f"=== Analisis Kontribusi Faktor default ({imp_source}) ==="
     ]
     
     md_lines = [
         "# Accumulation Policy Compare\n",
-        "SOTA LightGBM vs Baseline Asli.\n",
+        "Default LightGBM vs Baseline Asli.\n",
         f"- **Baseline Rank IC:** {baseline_ic:+.3f}",
-        f"- **SOTA Rank IC:** {sota_ic:+.3f}\n",
+        f"- **Default Rank IC:** {against_ic:+.3f}\n",
         f"### Analisis Kontribusi Faktor ({imp_source})",
     ]
     
@@ -246,7 +246,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
 
     metrics = {
         "n_samples": len(meta),
-        "sota_ic": float(sota_ic),
+        "against_ic": float(against_ic),
         "baseline_ic": float(baseline_ic),
     }
 
