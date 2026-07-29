@@ -67,7 +67,7 @@ Engine map: `src/ml_saham/eval/challenge.py` (`ENGINE_FACTORS`).
 |--------|----------------|
 | `screener` | Pre-open + accumulation factors |
 | `engine` | Signal / risk / market-context factors (`--category`, `--type`) |
-| `other` | Supporting labs (walk-forward, clusters, …) |
+| `other` | Supporting labs + **`data-integrity`** gate |
 | `all` | Full audit |
 
 ```bash
@@ -80,7 +80,15 @@ ml-saham challenge engine --category signal
 ml-saham challenge engine --category risk --type sizing
 ml-saham challenge engine --category market --type regime
 ml-saham challenge other
+
+# Data plane vet (before engine challenge)
+ml-saham doctor --deep
+ml-saham vet
+ml-saham compare data-integrity --baseline coverage --against integrity
 ```
+
+Engine → tables → slugs: [docs/engine_factor_map.md](./docs/engine_factor_map.md)  
+Curriculum gap example: **sector macro context** (ai-saham ADR-053) ≠ `sector-breadth` — candidate `sector-macro` (not shipped yet).
 
 ### `compare` — single-factor experiment
 

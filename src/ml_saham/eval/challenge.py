@@ -49,6 +49,7 @@ ENGINE_FACTORS = {
         "microstructure-impact",
     ],
     "other_aspects": [
+        "data-integrity",
         "cluster-peers",
         "broker-network",
         "volume-anomaly",
@@ -73,6 +74,7 @@ _COMPARE_KWARGS_BY_SLUG: dict[str, dict[str, str]] = {
     "financial-distress": {"baseline": "altman-z", "against": "xgboost"},
     "earnings-surprise": {"baseline": "naive_pe", "against": "lightgbm"},
     "survival-analysis": {"baseline": "kaplan-meier", "against": "ridge"},
+    "data-integrity": {"baseline": "coverage", "against": "integrity"},
 }
 
 

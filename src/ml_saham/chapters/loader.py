@@ -51,6 +51,7 @@ _SLUG_TO_MOD = {
     "pre-open-participation": "ml_saham.chapters.pre_open_participation",
     "pre-open-auction": "ml_saham.chapters.pre_open_auction",
     "pre-open-macro": "ml_saham.chapters.pre_open_macro",
+    "data-integrity": "ml_saham.chapters.data_integrity",
 }
 
 

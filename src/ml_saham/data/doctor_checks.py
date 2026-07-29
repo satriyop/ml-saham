@@ -63,8 +63,12 @@ class DoctorReport:
     phase2: TierReport = field(
         default_factory=lambda: TierReport(name="Phase-2 data", status="missing")
     )
+    integrity: TierReport = field(
+        default_factory=lambda: TierReport(name="Data integrity", status="missing")
+    )
     universe_tickers: list[str] = field(default_factory=list)
     remediation: list[str] = field(default_factory=list)
+    deep: bool = False
 
     @property
     def mvp_hard_ok(self) -> bool:
@@ -348,10 +352,133 @@ def _phase2_checks(conn) -> list[CheckItem]:
     return items
 
 
-def run_doctor(db_path: Path | str) -> DoctorReport:
+def _integrity_checks(conn, *, deep: bool) -> list[CheckItem]:
+    """Observation health + cross-table honesty (challenge data plane)."""
+    items: list[CheckItem] = []
+
+    # learning_observations by purpose
+    if table_exists(conn, "learning_observations"):
+        rows = conn.execute(
+            "SELECT purpose, COUNT(*) AS n FROM learning_observations GROUP BY purpose"
+        ).fetchall()
+        by_purpose = {str(r[0]): int(r[1]) for r in rows}
+        total = sum(by_purpose.values())
+        accum_n = by_purpose.get("ACCUMULATION_DISCOVERY", 0)
+        pre_n = by_purpose.get("PRE_OPEN_AUCTION_DIRECTION", 0)
+        if total == 0:
+            items.append(
+                CheckItem(
+                    "learning_observations",
+                    "missing",
+                    "table empty — challenge accum/pre-open will fail",
+                    hard=False,
+                )
+            )
+        elif accum_n < 20 and pre_n < 20:
+            items.append(
+                CheckItem(
+                    "learning_observations",
+                    "partial",
+                    f"rows={total} accum={accum_n} pre_open={pre_n} (thin for challenge)",
+                    hard=False,
+                )
+            )
+        else:
+            detail = f"rows={total} accum={accum_n} pre_open={pre_n}"
+            if deep and by_purpose:
+                bits = ", ".join(f"{k}={v}" for k, v in sorted(by_purpose.items())[:8])
+                detail += f" [{bits}]"
+            items.append(CheckItem("learning_observations", "ok", detail, hard=False))
+    else:
+        items.append(
+            CheckItem(
+                "learning_observations",
+                "missing",
+                "no table — engine challenge needs ai-saham observation capture",
+                hard=False,
+            )
+        )
+
+    items.append(
+        _check_table(
+            conn,
+            "market_context_snapshots",
+            required_cols={"as_of_date", "regime"},
+            hard=False,
+        )
+    )
+
+    cmin, cmax = candle_date_range(conn)
+    bmin, bmax = broker_summaries_date_range(conn)
+    if cmin and cmax and bmin and bmax:
+        # Overlap honesty: broker window should intersect candles
+        if bmax < cmin or bmin > cmax:
+            items.append(
+                CheckItem(
+                    "date_overlap",
+                    "partial",
+                    f"candles {cmin}..{cmax} vs broker {bmin}..{bmax} (no overlap)",
+                    hard=False,
+                )
+            )
+        else:
+            items.append(
+                CheckItem(
+                    "date_overlap",
+                    "ok",
+                    f"candles {cmin}..{cmax}; broker {bmin}..{bmax}",
+                    hard=False,
+                )
+            )
+    else:
+        items.append(
+            CheckItem(
+                "date_overlap",
+                "partial",
+                "cannot assess candle/broker date overlap",
+                hard=False,
+            )
+        )
+
+    if deep and table_exists(conn, "company_fundamentals"):
+        cols = table_columns(conn, "company_fundamentals")
+        if "fetched_date" in cols:
+            row = conn.execute(
+                "SELECT MIN(fetched_date), MAX(fetched_date), COUNT(DISTINCT fetched_date) "
+                "FROM company_fundamentals"
+            ).fetchone()
+            fmin, fmax, n_snap = (row[0], row[1], int(row[2] or 0)) if row else (None, None, 0)
+            status: Status = "ok" if n_snap >= 1 else "missing"
+            if n_snap == 1:
+                status = "partial"
+            items.append(
+                CheckItem(
+                    "fundamentals_pit",
+                    status,
+                    f"fetched_date {fmin}..{fmax} distinct_snapshots={n_snap}",
+                    hard=False,
+                )
+            )
+
+    if deep and has_ihsg(conn):
+        n = ticker_candle_count(conn, "IHSG")
+        items.append(
+            CheckItem(
+                "ihsg_depth",
+                "ok" if n >= 60 else "partial",
+                f"IHSG bars={n} (need ~60+ for regime/walk-forward comfort)",
+                hard=False,
+            )
+        )
+
+    return items
+
+
+def run_doctor(db_path: Path | str, *, deep: bool = False) -> DoctorReport:
     path = Path(db_path)
     empty_v11 = TierReport(name="v1.1 data", status="missing", items=[])
     empty_p2 = TierReport(name="Phase-2 data", status="missing", items=[])
+    empty_int = TierReport(name="Data integrity", status="missing", items=[])
     if not path.is_file():
         mvp = TierReport(name="MVP data", status="missing", items=[])
         return DoctorReport(
@@ -360,9 +487,11 @@ def run_doctor(db_path: Path | str) -> DoctorReport:
             mvp=mvp,
             v1_1=empty_v11,
             phase2=empty_p2,
+            integrity=empty_int,
+            deep=deep,
             remediation=[
-                "Set --db PATH atau env ML_SAHAM_DB.",
-                "Atau di ai-saham: saham fetch market --universe lq45",
+                "Set --db PATH or env ML_SAHAM_DB.",
+                "In ai-saham: saham fetch market --universe lq45",
             ],
         )
 
@@ -452,36 +581,44 @@ def run_doctor(db_path: Path | str) -> DoctorReport:
         phase2 = TierReport(name="Phase-2 data", status="missing", items=p2_items)
         phase2.recompute()
 
+        int_items = _integrity_checks(conn, deep=deep)
+        integrity = TierReport(name="Data integrity", status="missing", items=int_items)
+        integrity.recompute()
+
         remediation: list[str] = []
         if not mvp_hard_ok_items(items):
             remediation.append(
-                "Di ai-saham: saham fetch market --universe lq45 "
+                "In ai-saham: saham fetch market --universe lq45 "
                 "(candles + broker + enrichment)."
             )
         if not any(i.name == "IHSG" and i.status == "ok" for i in items):
             remediation.append(
-                "Pastikan IHSG ikut ter-fetch (fetch market selalu include benchmark)."
+                "Ensure IHSG is fetched (market fetch should include benchmark)."
             )
         if not universe:
             remediation.append(
-                "Universe kosong: cache lebih banyak ticker LQ45-like di candles."
+                "Empty universe: cache more LQ45-like tickers in candles."
             )
         if not all(i.status == "ok" for i in v11_items if i.hard):
             remediation.append(
-                "Untuk v1.1: pastikan stock_meta/sector terisi + "
-                "insider enrichment (insider_cache) di ai-saham."
+                "For v1.1: fill stock_meta/sector + insider_cache enrichment."
             )
             if any(
                 i.name == "insider_cache" and "absurd" in i.detail for i in v11_items
             ):
                 remediation.append(
-                    "Insider: scrub tanggal absurd (<1990) di chapter; "
-                    "re-fetch jika terlalu banyak placeholder."
+                    "Insider: scrub absurd dates (<1990); re-fetch placeholders."
                 )
         if not all(i.status == "ok" for i in p2_items if i.hard):
             remediation.append(
-                "Untuk phase-2: earnings_cache, corp actions, iev_snapshots, "
-                "signal_forward_labels di ai-saham."
+                "For phase-2: earnings_cache, corp actions, iev_snapshots, "
+                "signal_forward_labels."
+            )
+        if any(i.status != "ok" for i in int_items):
+            remediation.append(
+                "For challenge path: capture learning_observations "
+                "(accum + pre-open) and keep candle/broker windows aligned. "
+                "See: ml-saham vet | ml-saham compare data-integrity"
             )
 
         return DoctorReport(
@@ -490,8 +627,10 @@ def run_doctor(db_path: Path | str) -> DoctorReport:
             mvp=mvp,
             v1_1=v1_1,
             phase2=phase2,
+            integrity=integrity,
             universe_tickers=universe,
             remediation=remediation,
+            deep=deep,
         )
 
 
@@ -512,15 +651,19 @@ def _format_tier(lines: list[str], tier: TierReport) -> None:
 
 def format_doctor_report(report: DoctorReport) -> str:
     lines = [f"DB: {report.db_path}"]
+    if report.deep:
+        lines.append("Mode: deep integrity")
     if not report.db_exists:
         lines.append("MVP data: missing")
-        lines.append("  (file DB tidak ada)")
+        lines.append("  (DB file not found)")
         lines.append("v1.1 data: missing")
         lines.append("Phase-2 data: missing")
+        lines.append("Data integrity: missing")
     else:
         _format_tier(lines, report.mvp)
         _format_tier(lines, report.v1_1)
         _format_tier(lines, report.phase2)
+        _format_tier(lines, report.integrity)
         lines.append(
             f"Universe default: {len(report.universe_tickers)} tickers"
             + (
@@ -536,3 +679,21 @@ def format_doctor_report(report: DoctorReport) -> str:
         for r in report.remediation:
             lines.append(f"  - {r}")
     return "\n".join(lines)
+
+
+def integrity_score(report: DoctorReport) -> dict[str, float | int | str]:
+    """Numeric integrity summary for data-integrity challenge."""
+    items = report.integrity.items if report.db_exists else []
+    if not items:
+        return {"score": 0.0, "n_ok": 0, "n_total": 0, "status": "missing"}
+    n_ok = sum(1 for i in items if i.status == "ok")
+    n_partial = sum(1 for i in items if i.status == "partial")
+    n_total = len(items)
+    score = (n_ok + 0.5 * n_partial) / n_total if n_total else 0.0
+    return {
+        "score": round(score, 4),
+        "n_ok": n_ok,
+        "n_partial": n_partial,
+        "n_total": n_total,
+        "status": report.integrity.status,
+    }

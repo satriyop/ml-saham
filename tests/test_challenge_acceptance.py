@@ -144,3 +144,21 @@ def test_challenge_summary_helper(chapter_ctx: ChapterContext):
     summary = challenge_summary({"screener": res})
     assert summary["n_ok"] == summary["n_total"]
     assert summary["n_error"] == 0
+
+
+def test_data_integrity_in_engine_map_and_compare(chapter_ctx: ChapterContext):
+    assert "data-integrity" in ENGINE_FACTORS["other_aspects"]
+    mod = load_chapter("data-integrity")
+    result = mod.run_compare(chapter_ctx)
+    assert "integrity" in (result.metrics or {}) or "integrity_score" in (result.metrics or {})
+    assert result.title
+
+
+def test_vet_and_doctor_deep_cli(fixture_db: Path):
+    r = runner.invoke(app, ["--db", str(fixture_db), "doctor", "--deep"])
+    assert r.exit_code == 0, r.stdout
+    assert "Data integrity" in r.stdout
+
+    r2 = runner.invoke(app, ["--db", str(fixture_db), "vet"])
+    assert r2.exit_code == 0, r2.stdout
+    assert "DATA PLANE VET" in r2.stdout or "Data integrity" in r2.stdout

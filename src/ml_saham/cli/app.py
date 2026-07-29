@@ -746,11 +746,53 @@ def glossary_cmd(
 
 
 @app.command("doctor")
-def doctor_cmd(ctx: typer.Context) -> None:
-    """Cek DB path + kesiapan data MVP."""
+def doctor_cmd(
+    ctx: typer.Context,
+    deep: bool = typer.Option(
+        False,
+        "--deep",
+        help="Include data-integrity tier (observations, date overlap, PIT depth)",
+    ),
+) -> None:
+    """Check DB path + data tiers (+ optional integrity)."""
     db_path: Path = ctx.obj["db"]
-    report = run_doctor(db_path)
+    report = run_doctor(db_path, deep=deep)
     console.print(format_doctor_report(report))
+    if not report.mvp_hard_ok:
+        raise typer.Exit(code=1)
+
+
+@app.command("vet")
+def vet_cmd(
+    ctx: typer.Context,
+    as_of: Optional[str] = typer.Option(
+        None,
+        "--as-of",
+        help="as_of date (YYYY-MM-DD); optional",
+    ),
+) -> None:
+    """English data-integrity audit (challenge factor) before engine challenge."""
+    from ml_saham.chapters.loader import load_chapter
+
+    db_path: Path = ctx.obj["db"]
+    chapter_ctx = _build_ctx(ctx, with_costs=False, as_of=as_of)
+    console.print("[bold cyan]=== DATA PLANE VET (ai-saham) ===[/bold cyan]")
+    console.print(f"Database: {db_path}\n")
+
+    # Always show deep doctor integrity section
+    report = run_doctor(db_path, deep=True)
+    console.print(format_doctor_report(report))
+    console.print()
+
+    mod = load_chapter("data-integrity")
+    result = mod.run_compare(chapter_ctx)
+    console.print(f"[bold]{result.title}[/bold]")
+    for line in result.lines:
+        console.print(line)
+    if getattr(result, "winner", None):
+        console.print(f"\n[dim]Winner:[/dim] {result.winner}")
+
+    # Soft gate: exit 1 only if MVP hard fails; integrity thin → warning via report
     if not report.mvp_hard_ok:
         raise typer.Exit(code=1)
 

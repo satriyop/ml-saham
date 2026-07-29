@@ -32,9 +32,18 @@ Discussion context: early drafts in local `archive/` (gitignored).
 
 ---
 
-## Candidate problems (empty for now)
+## Candidate problems (from ai-saham factor inventory)
 
-_No additional scheduled candidates._ When adding one, write:
+See also: [docs/engine_factor_map.md](./docs/engine_factor_map.md).
+
+| Idea | Tier | Why | Data | Slot |
+|---|---|---|---|---|
+| **Sector macro context** (routed macros per sector group; ADR-053) | Hard | Distinct from peer breadth; may become score input later | macro series + sector group map; fingerprints `smc_*` | New challenge slug `sector-macro` under `market_context` when ready |
+| Insider as **engine-map** factor | Medium | Already a curriculum chapter; SignalEngine penalties | `insider_cache` | Add `insider` to `ENGINE_FACTORS` if batch audit desired |
+| Setup phase / readiness | Hard | Swing lens / phase gates | observation labels | Deepdive / later slug — not scheduled |
+| Source-field / reconciliation DQ | Medium | Trust of caches | DQ tables / contracts | Prefer `data-integrity` + doctor (shipped Ch.45) |
+
+When promoting a candidate, write:
 
 1. **Generic problem** (one sentence, IDX).  
 2. **Tier** (Simple / Medium / Hard / Complex).  
