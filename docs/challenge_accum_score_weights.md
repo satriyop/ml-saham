@@ -37,6 +37,12 @@ Mirrored from ai-saham `ScoreAccumUseCase.AccumScorePolicy` defaults. Hash is em
 | Split | time-ordered purged folds |
 | Outcomes | WIN / LOSE / INCONCLUSIVE / BLOCKED_DATA / BLOCKED_POLICY |
 
+## Decision memos
+
+| Date | Memo |
+|------|------|
+| 2026-07-29 | [Path A real-DB decision](./decisions/accum_score_weights_2026-07-29.md) — KEEP production; no promote |
+
 ## Never
 
 - Auto-promote weights into ai-saham  
