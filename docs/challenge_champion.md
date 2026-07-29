@@ -48,6 +48,10 @@ Requires `pip install -e ".[ml]"` (lightgbm + sklearn). Missing deps → **BLOCK
 - [ ] Memo written under `docs/decisions/` if considering ai-saham change
 - [ ] **Do not** auto-write ai-saham YAML
 
+## Smoke notes (maintainer DB)
+
+Real-DB runs may **LOSE** (learned model worse than production) or **BLOCKED_*** (thin train / missing deps). That is success of the product path — not a failed install. Fixture is the CI authority.
+
 ## Not this track
 
 - Factor KEEP/DEMOTE → `challenge factor`
