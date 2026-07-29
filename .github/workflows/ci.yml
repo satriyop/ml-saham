@@ -45,6 +45,9 @@ jobs:
       - name: ADR-002 engine portfolio tests
         run: pytest tests/test_challenge_engine.py -q --tb=short
 
+      - name: ADR-002 champion track tests
+        run: pytest tests/test_challenge_champion.py -q --tb=short
+
       - name: Challenge CLI smoke on fixture
         run: |
           python - <<'PY'

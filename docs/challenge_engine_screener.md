@@ -16,7 +16,8 @@ ml-saham challenge engine screener --scenario pre-open
 ml-saham challenge engine screener --against equal_sleeves --export-json /tmp/screener.json
 ```
 
-Default `--against` is **`equal_sleeves`** (shared across the portfolio).
+Default `--against` is **`equal_sleeves`** (shared across the portfolio).  
+**Champion opt-in:** `--against lgbm_reweight` or `elastic_net_reweight` runs the **champion** scorers on each policy (still production baseline; not the tune default).
 
 ## Vocabulary (ai-saham-aligned)
 

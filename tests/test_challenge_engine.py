@@ -148,3 +148,18 @@ def test_cli_bad_scenario(fixture_db: Path):
         ["--db", str(fixture_db), "challenge", "engine", "screener", "--scenario", "xyz"],
     )
     assert r.exit_code == 2
+
+
+def test_engine_champion_against_opt_in(fixture_db: Path):
+    """Engine may opt into champion against without changing default equal_sleeves."""
+    result = run_engine_portfolio(
+        fixture_db,
+        "screener",
+        scenario="accum",
+        against="lgbm_reweight",
+        write_artifact=False,
+    )
+    assert result.exit_code() == 0
+    assert result.against_id == "lgbm_reweight"
+    assert len(result.rows) == 1
+    assert result.rows[0].against_id == "lgbm_reweight"
