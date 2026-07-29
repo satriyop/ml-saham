@@ -1,0 +1,62 @@
+{
+  "policy_id": "screener.pre_open.directional_score",
+  "version": "v1",
+  "protocol_id": "pre_open_session_v1",
+  "panel_kind": "pre_open_observations",
+  "score_kind": "raw_score_primary",
+  "source": "ai-saham pre_open_directional_baseline.v1 (mirrored feature contract)",
+  "source_ref": "learning_observations PRE_OPEN_AUCTION_DIRECTION; signal.raw_score",
+  "max_score": 100.0,
+  "components": [
+    {
+      "key": "production_raw_score",
+      "aliases": ["raw_score", "score"],
+      "weight": 1.0,
+      "enabled": true,
+      "note": "Production baseline from signal.raw_score"
+    },
+    {
+      "key": "book_pressure",
+      "aliases": ["bid_offer_imbalance"],
+      "weight": 0.0,
+      "enabled": false
+    },
+    {
+      "key": "delta_iev_ratio",
+      "aliases": ["delta_iev"],
+      "weight": 0.0,
+      "enabled": false
+    },
+    {
+      "key": "iep_gap_pct",
+      "aliases": [],
+      "weight": 0.0,
+      "enabled": false
+    },
+    {
+      "key": "iev_intensity",
+      "aliases": [],
+      "weight": 0.0,
+      "enabled": false
+    },
+    {
+      "key": "spread_pct",
+      "aliases": [],
+      "weight": 0.0,
+      "enabled": false
+    },
+    {
+      "key": "opening_broker_backing_score",
+      "aliases": ["opening_broker_backing"],
+      "weight": 0.0,
+      "enabled": false
+    },
+    {
+      "key": "fvwap_discount_pct",
+      "aliases": ["fvwap_discount"],
+      "weight": 0.0,
+      "enabled": false
+    }
+  ],
+  "hash": "pod7e2c1a9b4f085"
+}

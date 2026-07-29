@@ -9,6 +9,7 @@ from ml_saham.challenge.artifacts import write_challenge_artifact
 from ml_saham.challenge.metrics import bottom_decile_mean, ic_safe, time_purged_folds
 from ml_saham.challenge.panel import PanelRow, build_panel
 from ml_saham.challenge.panel_iev import build_iev_panel
+from ml_saham.challenge.panel_pre_open_obs import build_pre_open_obs_panel
 from ml_saham.challenge.policies.registry import list_policy_ids, load_policy
 from ml_saham.challenge.protocols import ACCUM_PATH_V1, get_protocol
 from ml_saham.challenge.scorers import (
@@ -109,6 +110,38 @@ def _vet_for_pre_open_iev(db_path: Path, protocol: Protocol) -> tuple[bool, list
     return True, notes
 
 
+def _vet_for_pre_open_obs(db_path: Path, protocol: Protocol) -> tuple[bool, list[str]]:
+    del protocol
+    notes: list[str] = []
+    report = run_doctor(db_path, deep=False)
+    if not report.db_exists:
+        return False, ["DB file not found"]
+    if not report.mvp_hard_ok:
+        return False, ["MVP hard data checks failed — run ml-saham doctor"]
+    with db_connect(db_path) as conn:
+        if not has_ihsg(conn):
+            return False, ["IHSG candles required for open-path excess labels"]
+        if not table_exists(conn, "learning_observations"):
+            return False, ["learning_observations missing (need PRE_OPEN captures)"]
+        n = int(
+            conn.execute(
+                "SELECT COUNT(*) AS n FROM learning_observations "
+                "WHERE purpose = 'PRE_OPEN_AUCTION_DIRECTION' "
+                "OR purpose LIKE '%PRE_OPEN%'"
+            ).fetchone()["n"]
+        )
+        if n == 0:
+            return False, [
+                "no PRE_OPEN_AUCTION_DIRECTION rows in learning_observations "
+                "(product ready; wait for denser ai-saham captures)"
+            ]
+        if n < 80:
+            notes.append(
+                f"thin PRE_OPEN observations n={n} (tournament needs denser panel)"
+            )
+    return True, notes
+
+
 def _select_rows(rows: Sequence[PanelRow], idx: Sequence[int]) -> list[PanelRow]:
     return [rows[i] for i in idx]
 
@@ -147,6 +180,21 @@ def prepare_accum_panel(
                 blocked=ChallengeStatus.BLOCKED_DATA,
             )
         rows, panel_notes = build_iev_panel(
+            path,
+            policy,
+            primary_horizon=protocol.primary_horizon,
+        )
+    elif policy.panel_kind == "pre_open_observations":
+        ok, vet_notes = _vet_for_pre_open_obs(path, protocol)
+        if not ok:
+            return AccumPanelPrep(
+                policy=policy,
+                protocol=protocol,
+                rows=[],
+                notes=vet_notes,
+                blocked=ChallengeStatus.BLOCKED_DATA,
+            )
+        rows, panel_notes = build_pre_open_obs_panel(
             path,
             policy,
             primary_horizon=protocol.primary_horizon,

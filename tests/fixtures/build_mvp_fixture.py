@@ -511,6 +511,8 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                             "iev": 100.0 + si + i * 0.1,
                             "spread_pct": 0.001 + (seed % 5) / 1000.0,
                             "atr": 1.0 + (seed % 10) / 10.0,
+                            "opening_broker_backing_score": float(10 + (seed % 40)),
+                            "fvwap_discount_pct": ((seed % 25) - 12) / 10.0,
                         },
                         "trade_setup": {
                             "action": action,

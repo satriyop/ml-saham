@@ -39,6 +39,9 @@ jobs:
       - name: ADR-002 pre-open IEV rank tests
         run: pytest tests/test_challenge_pre_open_iev_rank.py -q --tb=short
 
+      - name: ADR-002 pre-open directional score tests
+        run: pytest tests/test_challenge_pre_open_directional_score.py -q --tb=short
+
       - name: Challenge CLI smoke on fixture
         run: |
           python - <<'PY'

@@ -50,6 +50,10 @@ If history has multiple `collected_at` per date, use the **largest** batch only 
 - Ridge mean IC higher but **tail gate** / fold mix → not a promotion case  
 - **Promotion:** NO  
 
+## Sibling
+
+Observation / raw_score track: [challenge_pre_open_directional_score.md](./challenge_pre_open_directional_score.md)
+
 ## Never
 
 - Auto-promote rank/feature weights into ai-saham  

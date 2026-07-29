@@ -55,12 +55,18 @@ class PolicySnapshot:
         return {c.key: c.weight for c in self.enabled_components()}
 
     def feature_keys(self) -> tuple[str, ...]:
-        """Non-primary feature sleeves (disabled zero-weight components, or all non-rank)."""
+        """Feature sleeves for equal/ridge challengers (exclude primary production score)."""
         if self.score_kind == "rank_primary":
             return tuple(
                 c.key
                 for c in self.components
                 if c.key != "official_rank_score"
+            )
+        if self.score_kind == "raw_score_primary":
+            return tuple(
+                c.key
+                for c in self.components
+                if c.key != "production_raw_score"
             )
         return tuple(c.key for c in self.enabled_components())
 

@@ -13,6 +13,7 @@ from ml_saham.challenge.types import ComponentWeight, PolicySnapshot
 _POLICY_FILES: dict[str, str] = {
     "screener.accum.score_weights": "accum_score_weights.v1.json",
     "screener.pre_open.iev_rank": "pre_open_iev_rank.v1.json",
+    "screener.pre_open.directional_score": "pre_open_directional_score.v1.json",
 }
 
 

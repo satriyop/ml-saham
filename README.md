@@ -49,7 +49,8 @@ ml-saham doctor
 **Design:** [ADR-002](./docs/adr/ADR-002-ideal-challenge-system.md).  
 **Shipped policy challenges:**  
 - Accum: [docs/challenge_accum_score_weights.md](./docs/challenge_accum_score_weights.md)  
-- Pre-open IEV: [docs/challenge_pre_open_iev_rank.md](./docs/challenge_pre_open_iev_rank.md)
+- Pre-open IEV rank: [docs/challenge_pre_open_iev_rank.md](./docs/challenge_pre_open_iev_rank.md)  
+- Pre-open observation / raw_score: [docs/challenge_pre_open_directional_score.md](./docs/challenge_pre_open_directional_score.md)
 
 | Command | Job |
 |---------|-----|
@@ -69,6 +70,7 @@ ml-saham challenge list
 ml-saham challenge run screener.accum.score_weights --against equal_sleeves
 ml-saham challenge run screener.accum.score_weights --against ridge_reweight
 ml-saham challenge run screener.pre_open.iev_rank --against equal_sleeves
+ml-saham challenge run screener.pre_open.directional_score --against equal_sleeves
 ml-saham challenge factor screener.accum.score_weights --list-factors
 ml-saham challenge factor screener.accum.score_weights --factor consistency
 ml-saham challenge factor screener.accum.score_weights --all

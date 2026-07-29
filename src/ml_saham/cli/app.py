@@ -655,6 +655,10 @@ def challenge_list_cmd() -> None:
         "--against equal_sleeves[/dim]"
     )
     console.print(
+        "[dim]Run: ml-saham challenge run screener.pre_open.directional_score "
+        "--against equal_sleeves[/dim]"
+    )
+    console.print(
         "[dim]Factor: ml-saham challenge factor screener.accum.score_weights "
         "--factor consistency[/dim]"
     )

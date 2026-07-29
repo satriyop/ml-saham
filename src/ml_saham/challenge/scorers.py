@@ -16,9 +16,11 @@ def enabled_keys(policy: PolicySnapshot) -> list[str]:
 
 
 def score_production(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[float]:
-    """Production score: weighted sleeves sum, or official rank for rank_primary."""
+    """Production score by score_kind."""
     if policy.score_kind == "rank_primary":
         return [float(r.components.get("official_rank_score", 0.0)) for r in rows]
+    if policy.score_kind == "raw_score_primary":
+        return [float(r.components.get("production_raw_score", 0.0)) for r in rows]
     keys = enabled_keys(policy)
     return [float(sum(r.components.get(k, 0.0) for k in keys)) for r in rows]
 
@@ -47,9 +49,9 @@ def score_equal_sleeves(rows: Sequence[PanelRow], policy: PolicySnapshot) -> lis
     """Equal contribution.
 
     weighted_sleeves: mean of component/weight fractions on enabled sleeves.
-    rank_primary: within-date z-score mean of feature keys (iev, iep, imbalance).
+    rank_primary / raw_score_primary: within-date z-score mean of feature_keys().
     """
-    if policy.score_kind == "rank_primary":
+    if policy.score_kind in ("rank_primary", "raw_score_primary"):
         return score_feature_equal_z(rows, policy)
 
     keys = enabled_keys(policy)
@@ -103,7 +105,7 @@ def score_ridge_reweight(
     primary_horizon: int,
 ) -> tuple[list[float], dict[str, float]]:
     """Fit Ridge on train components → excess@H; predict test. Returns scores + coef map."""
-    if policy.score_kind == "rank_primary":
+    if policy.score_kind in ("rank_primary", "raw_score_primary"):
         keys = list(policy.feature_keys())
     else:
         keys = enabled_keys(policy)
