@@ -1,24 +1,27 @@
 # ml-saham
 
-**Challenge lab** for personal IDX quant stack (`ai-saham`) — with a curriculum attached.
+**Challenge lab** for the personal IDX quant stack (`ai-saham`), with a curriculum attached.
 
-Primary job: stress-test **factors, weights, and engine policies** on real market data (read-only SQLite from `ai-saham`).  
-Secondary job: problem-centric ML chapters so those audits are understandable.
+| Priority | Job |
+|----------|-----|
+| **1. Challenge** | Stress-test **policies, factors, and screener scenarios** on real market data (read-only SQLite) |
+| **2. Learning** | Problem-centric ML chapters so those audits are understandable |
 
-Product axis (locked): **[ADR-001 — Challenge-first](./docs/adr/ADR-001-challenge-first-product-axis.md)**  
-Challenge system (target): **[ADR-002 — Ideal Challenge System](./docs/adr/ADR-002-ideal-challenge-system.md)**  
-Design: [architecture.md](./architecture.md) · [engine_factor_map.md](./docs/engine_factor_map.md) · [chapters.md](./chapters.md) · [ux.md](./ux.md)
+**Product map (start here):** [docs/challenge_product.md](./docs/challenge_product.md)  
+**ADRs:** [ADR-001 challenge-first](./docs/adr/ADR-001-challenge-first-product-axis.md) · [ADR-002 challenge system](./docs/adr/ADR-002-ideal-challenge-system.md)
 
-### Language (by product axis)
+Not investment advice. **Never auto-promotes** configs into `ai-saham`.
 
-| Axis | Surface | Learner-facing language |
-|------|---------|-------------------------|
-| **Challenge** (primary) | `challenge`, `compare`, engine audit reports/exports | **English** |
-| **Learning** (secondary) | `explore`, curriculum narrative, teaching caveats | **Indonesian** |
+---
 
-Commands, flags, topic slugs, and code stay English on both axes. See ADR-001 §6.
+## Language
 
-Not investment advice. Artifacts never auto-promote into `ai-saham`.
+| Axis | Surfaces | Learner-facing language |
+|------|----------|-------------------------|
+| **Challenge** (primary) | `challenge …`, `vet`, audit exports | **English** |
+| **Learning** (secondary) | `explore`, curriculum narrative | **Indonesian** |
+
+Commands, flags, slugs, and code stay English on both axes.
 
 ---
 
@@ -26,82 +29,92 @@ Not investment advice. Artifacts never auto-promote into `ai-saham`.
 
 ```bash
 cd ~/dev/ml-saham
-python3.11 -m venv .venv
+python3.11 -m venv .venv   # or 3.12
 source .venv/bin/activate
-pip install -e ".[ml]"    # challenge path (recommended)
-# pip install -e .        # core only: explore + light demos
+pip install -e ".[ml]"     # challenge path (recommended)
 ```
 
 ### Database
 
 Default: `~/dev/ai-saham/data/db/data.db`  
-Ingest stays in `ai-saham` (`saham fetch market`, …). `ml-saham` does not scrape providers.
+Ingest stays in `ai-saham`. `ml-saham` does not scrape providers or import ai-saham Python packages.
 
 ```bash
 export ML_SAHAM_DB=~/dev/ai-saham/data/db/data.db
-ml-saham doctor
+ml-saham doctor --deep
+ml-saham vet
 ```
 
 ---
 
-## Challenge first (main path)
+## Challenge product (main path)
 
-**Design:** [ADR-002](./docs/adr/ADR-002-ideal-challenge-system.md).  
-**Shipped policy challenges:**  
-- Accum: [docs/challenge_accum_score_weights.md](./docs/challenge_accum_score_weights.md)  
-- Pre-open IEV rank: [docs/challenge_pre_open_iev_rank.md](./docs/challenge_pre_open_iev_rank.md)  
-- Pre-open observation / raw_score: [docs/challenge_pre_open_directional_score.md](./docs/challenge_pre_open_directional_score.md)
+### Vocabulary (ai-saham-aligned)
+
+| Term | Meaning | Example |
+|------|---------|---------|
+| **Engine** | Stack audit group | `screener` |
+| **Scenario** | Screen path | `accum`, `pre-open` |
+| **Policy** | One PolicySpec tournament | `screener.accum.score_weights` |
+
+### Shipped catalog
+
+| Scenario | Policy | Protocol (primary) | Note |
+|----------|--------|--------------------|------|
+| `accum` | `screener.accum.score_weights` | `accum_path_v1` (**H=10**) | [docs](./docs/challenge_accum_score_weights.md) |
+| `pre-open` | `screener.pre_open.iev_rank` | `pre_open_session_v1` (open→close) | [docs](./docs/challenge_pre_open_iev_rank.md) |
+| `pre-open` | `screener.pre_open.directional_score` | `pre_open_session_v1` | [docs](./docs/challenge_pre_open_directional_score.md) |
+
+**Engine rollup:** [docs/challenge_engine_screener.md](./docs/challenge_engine_screener.md)  
+**Factor keep/demote (accum):** [docs/challenge_factor_validity.md](./docs/challenge_factor_validity.md)  
+**Full product doc:** [docs/challenge_product.md](./docs/challenge_product.md)
+
+### Commands
+
+```bash
+ml-saham challenge list
+ml-saham challenge engine list
+
+# One policy (prefer equal_sleeves for stable digs)
+ml-saham challenge run screener.accum.score_weights --against equal_sleeves
+ml-saham challenge run screener.pre_open.iev_rank --against equal_sleeves
+ml-saham challenge run screener.pre_open.directional_score --against equal_sleeves
+
+# Screener portfolio (all scenarios, or one)
+ml-saham challenge engine screener
+ml-saham challenge engine screener --scenario accum
+ml-saham challenge engine screener --scenario pre-open
+
+# Factor validity (accum sleeves)
+ml-saham challenge factor screener.accum.score_weights --all
+ml-saham challenge factor screener.accum.score_weights --factor consistency
+```
 
 | Command | Job |
 |---------|-----|
-| `challenge list` | List ADR-002 policy ids |
-| `challenge run <policy>` | Production policy vs challenger (fixed protocol) |
-| `challenge engine screener` | Screener PolicySpec portfolio (+ `--scenario accum\|pre-open`) |
-| `challenge factor … --factor X` / `--all` | Keep/demote/drop one factor, or batch table for all enabled sleeves |
-| `challenge legacy …` | Old chapter-loop batch (do not use for promotion) |
+| `challenge list` | Policy ids + protocols |
+| `challenge run <policy>` | Production vs challenger |
+| `challenge engine screener` | PolicySpec portfolio (`--scenario` optional) |
+| `challenge factor …` | KEEP / DEMOTE / DROP_CANDIDATE (accum) |
 | `vet` / `doctor --deep` | Data-plane gate |
-| `compare <slug>` | Curriculum / single-topic lab (not ADR-002 authority) |
+| `challenge legacy …` | Old chapter-loop batch — **not** promotion authority |
+| `compare <slug>` | Curriculum lab — **not** ADR-002 authority |
 
-**Accum horizons:** report **3 / 10 / 20** sessions; **primary = 10**. Never auto-promotes configs.
+Statuses: `WIN` · `LOSE` · `INCONCLUSIVE` · `BLOCKED_DATA` · `BLOCKED_POLICY` (first-class; thin data is honest, not a broken install).
 
-```bash
-ml-saham doctor --deep
-ml-saham vet
-ml-saham challenge list
-ml-saham challenge run screener.accum.score_weights --against equal_sleeves
-ml-saham challenge run screener.accum.score_weights --against ridge_reweight
-ml-saham challenge run screener.pre_open.iev_rank --against equal_sleeves
-ml-saham challenge run screener.pre_open.directional_score --against equal_sleeves
-ml-saham challenge engine screener
-ml-saham challenge engine screener --scenario pre-open
-ml-saham challenge factor screener.accum.score_weights --list-factors
-ml-saham challenge factor screener.accum.score_weights --factor consistency
-ml-saham challenge factor screener.accum.score_weights --all
-
-# Legacy batch only
-ml-saham challenge legacy all
-```
-
-Engine map: [docs/engine_factor_map.md](./docs/engine_factor_map.md) · Factor validity: [docs/challenge_factor_validity.md](./docs/challenge_factor_validity.md).
+Map: [docs/engine_factor_map.md](./docs/engine_factor_map.md) · Decision example: [docs/decisions/](./docs/decisions/).
 
 ---
 
 ## Learning second (onboarding)
 
-Use when you need the *problem framing* before reading a challenge report.
-
 ```bash
 ml-saham chapters
-ml-saham chapters --all
 ml-saham explore broker-flow --no-pager
-ml-saham demo clean-prices          # light illustration (not the audit spine)
-ml-saham deepdive broker-flow       # optional link notes → ai-saham
+ml-saham demo clean-prices
 ```
 
-Chapter numbers: **registry** SSOT (`src/ml_saham/chapters/registry.py`).  
-Curriculum list: [chapters.md](./chapters.md).
-
-Some engine chapters intentionally push you to `compare` / `challenge` instead of a soft `demo` — that is by design (ADR-001).
+Curriculum list: [chapters.md](./chapters.md). Registry SSOT: `src/ml_saham/chapters/registry.py`.
 
 ---
 
@@ -109,27 +122,18 @@ Some engine chapters intentionally push you to `compare` / `challenge` instead o
 
 | Item | Location |
 |------|----------|
-| Progress (curriculum) | `~/.ml-saham/progress.json` (`ML_SAHAM_HOME`) |
-| Artifacts | `./artifacts` or `ML_SAHAM_ARTIFACTS` / `--artifacts-dir` |
-| Doctor | `ml-saham doctor` — data tiers before demos/challenges |
-| Acceptance (challenge first) | [challenge_acceptance.md](./challenge_acceptance.md) |
-| Acceptance (curriculum, historical) | [mvp_acceptance.md](./mvp_acceptance.md) · [v1_1_acceptance.md](./v1_1_acceptance.md) · [phase2_acceptance.md](./phase2_acceptance.md) |
+| Progress (curriculum) | `~/.ml-saham/progress.json` |
+| Artifacts | `./artifacts` or `ML_SAHAM_ARTIFACTS` |
+| Challenge acceptance (historical fixture suite) | [challenge_acceptance.md](./challenge_acceptance.md) |
 
-Scoreboard default: long-only vs IHSG (gross + cost banner).  
-Ch.18 `pre-open-rank` uses an open-session scoreboard.
-
----
-
-## Architecture snapshot
+Hard rules: **no** ai-saham Python imports · **no** scrapers · **no** auto-promote.
 
 ```text
 ai-saham  →  fetch/enrich → SQLite
 ml-saham  →  read-only DB
-              ├─ challenge run <policy>  →  ADR-002 policy tournament (primary)
-              ├─ challenge legacy …      →  old chapter-loop batch
-              └─ explore / demo          →  curriculum onboarding
+              ├─ challenge run / engine / factor   →  ADR-002 (primary)
+              ├─ challenge legacy                  →  chapter-loop (legacy)
+              └─ explore / demo                    →  curriculum
 ```
 
-Hard rules: no `ai-saham` Python imports · no scrapers · no auto-promote of configs.
-
-ADRs: [docs/adr/](./docs/adr/)
+ADRs: [docs/adr/](./docs/adr/) · Architecture: [architecture.md](./architecture.md)
