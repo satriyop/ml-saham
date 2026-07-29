@@ -16,8 +16,9 @@ Not investment advice. **Never auto-promotes** configs into `ai-saham`.
 
 | Job | Where |
 |-----|--------|
-| Fetch, live screen/plan, **corpus** labels & book evaluate | **`ai-saham`** — `saham research accum …` |
+| Fetch, live screen/plan, **corpus** obs + path labels | **`ai-saham`** — `saham research accum capture\|labels\|status` |
 | Policy tournament, rank IC, factor KEEP·DEMOTE | **this repo** — `challenge run` / `challenge factor` |
+| ai-saham `research accum evaluate` | **Not required** — dropped product; see [BOUNDARY.md](./BOUNDARY.md) |
 
 `ml-saham` is **read-only** on ai-saham SQLite; no Python imports across repos; no scrapers.  
 Full ownership matrix and vocabulary: **[BOUNDARY.md](./BOUNDARY.md)** (mirror: `ai-saham/BOUNDARY.md`).
@@ -140,9 +141,9 @@ Hard rules: **no** ai-saham Python imports · **no** scrapers · **no** auto-pro
 Sibling contract: **[BOUNDARY.md](./BOUNDARY.md)**.
 
 ```text
-ai-saham  →  fetch/enrich → SQLite → corpus labels/evaluate (book)
+ai-saham  →  fetch/enrich → SQLite → corpus obs + path labels (no accum evaluate product)
 ml-saham  →  read-only DB
-              ├─ challenge run / engine / factor   →  ADR-002 (primary)
+              ├─ challenge run / engine / factor   →  ADR-002 scoring authority
               ├─ challenge legacy                  →  chapter-loop (legacy)
               └─ explore / demo                    →  curriculum
 ```

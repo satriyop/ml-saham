@@ -179,8 +179,11 @@ Owned by **ai-saham** ingest/research. Challenge may **join** for protocol **y**
 
 ### `learning_evaluations`
 
-Cohort / evaluate artifacts from ai-saham `research <scenario> evaluate`.  
-ai-saham-owned. Not required for ADR-002 `challenge run` panels today; doctor may report presence only.
+Historical / optional rows from ai-saham `research <scenario> evaluate`.
+
+**Accum product decision (2026-07-29):** ai-saham **dropped** accum cohort evaluate as a required pipeline step. Challenge **must not** depend on ACCUM `learning_evaluations`. Doctor may report table presence only (soft). See [BOUNDARY.md](./BOUNDARY.md).
+
+Pre-open may still write evaluations in ai-saham; still not an input to ADR-002 panels unless a protocol explicitly says so.
 
 ### Related caches (inputs, not label stores)
 

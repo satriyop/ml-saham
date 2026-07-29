@@ -4,8 +4,8 @@ Sibling contract so the two repos do **not** re-own each other’s jobs.
 
 | Repo | Role |
 |------|------|
-| **`ai-saham`** | Production engine + market ingest + **corpus authority** |
-| **`ml-saham` (this repo)** | Offline **challenge lab** + curriculum (read-only consumer) |
+| **`ai-saham`** | Production engine + market ingest + **corpus authority** (observations + path labels) |
+| **`ml-saham` (this repo)** | Offline **challenge lab** + curriculum — **owns accum scoring / policy evaluation** |
 
 Sibling path (maintainer default): `~/dev/ai-saham`  
 Full mirror of this contract: [`ai-saham/BOUNDARY.md`](../ai-saham/BOUNDARY.md) (if checked out next to this tree).
@@ -16,9 +16,46 @@ Full mirror of this contract: [`ai-saham/BOUNDARY.md`](../ai-saham/BOUNDARY.md) 
 
 | Ask | Answer in |
 |-----|-----------|
-| What did the **production book** do on path labels? | **`ai-saham`** — `research accum labels` / `evaluate` / `status` |
-| Should we **change** a production policy / factor weight? | **`ml-saham` (this repo)** — `challenge run` / `challenge factor` |
+| Capture decisions + path labels (3d/10d/20d)? | **`ai-saham`** — `research accum capture|backfill|labels|status` |
+| Score the accum book / stress policies / factors? | **this repo** — `challenge run` / `challenge factor` / engine |
 | Fetch / screen / plan / apply YAML | **`ai-saham` only** |
+
+---
+
+## Decision: drop ai-saham accum cohort evaluate
+
+**Status:** Accepted (product) — 2026-07-29  
+**Mirror:** `ai-saham/BOUNDARY.md` (same decision).
+
+### Why
+
+| Fact | Implication |
+|------|-------------|
+| This repo builds panels + metrics from `learning_observations` + `candles` | **Does not read** `learning_evaluations` for challenge scoring |
+| ai-saham `research accum evaluate` was a single global rollup of path labels | Not time-bounded; not an input to ADR-002 |
+| Duplicating “evaluation” in both repos confuses agents | One scoring authority for accum: **ml-saham challenge** |
+
+### What ml-saham must not depend on
+
+| Item | Rule |
+|------|------|
+| `saham research accum evaluate` | **Do not require** in doctor, challenge gates, docs, or acceptance |
+| ACCUM rows in `learning_evaluations` | **Optional / historical only** — soft doctor presence is fine; never treat as WIN/LOSE or IC source |
+| ai-saham multi-horizon evaluate automation | **Not a sibling dependency** |
+
+### What ml-saham still needs from ai-saham (accum)
+
+| Item | Use |
+|------|-----|
+| `learning_observations` | Features / score components |
+| `candles` (+ IHSG) | Protocol labels (excess @ H=3/10/20) |
+| `learning_outcome_labels` | Optional join only (future explicit protocol) — **not** default y |
+| Capture + labels cron in ai-saham | Keep corpus fresh |
+
+### Pre-open
+
+Unchanged: pre-open challenge protocols use IEV / pre-open observations + session excess.  
+ai-saham `research pre-open evaluate` is **not** required for ml-saham challenge either (same pattern: optional soft presence).
 
 ---
 
@@ -29,8 +66,8 @@ Full mirror of this contract: [`ai-saham/BOUNDARY.md`](../ai-saham/BOUNDARY.md) 
 | Market / broker / IEV fetch & cache | **write** | read |
 | Live screen / signal / risk / plan / TUI | **owns** | — |
 | `learning_observations` capture / backfill | **write** | **read** (features) |
-| `learning_outcome_labels` (`price_path.accum_*`, …) | **SSOT write** | do not redefine as SSOT |
-| `learning_evaluations` (cohort report card) | **SSOT write** | do not replace |
+| `learning_outcome_labels` (`price_path.accum_*`, …) | **SSOT write** | optional join; not default challenge y |
+| Accum **cohort evaluate** / ACCUM `learning_evaluations` | **dropped (legacy)** | **do not depend on** |
 | Policy tournament WIN / LOSE / rank IC / folds | — | **owns** |
 | Factor KEEP / DEMOTE / DROP_CANDIDATE | — | **owns** |
 | Curriculum explore / demo | light / optional | **primary onboarding** |
@@ -48,19 +85,19 @@ Hard rules (unchanged): **no** ai-saham Python imports · **no** scrapers · **n
 - Default DB: `~/dev/ai-saham/data/db/data.db` (`ML_SAHAM_DB` / `--db`).
 - This repo opens it **read-only** for challenge/curriculum.
 - **Only ai-saham migrates and writes** `learning_*` and market tables.
-- This repo writes **artifacts** under `./artifacts` (or `ML_SAHAM_ARTIFACTS`) and optional `~/.ml-saham/` progress / learning store — **not** into ai-saham learning tables.
+- This repo writes **artifacts** under `./artifacts` (or `ML_SAHAM_ARTIFACTS`) and optional `~/.ml-saham/` — **not** into ai-saham learning tables.
 
 ### How challenge uses the corpus today
 
 | Input | Source | Role |
 |-------|--------|------|
-| Features / score components | `learning_observations` (e.g. ACCUMULATION_DISCOVERY) | Extract production-like sleeves |
+| Features / score components | `learning_observations` | Extract production-like sleeves |
 | Protocol labels (default) | `candles` + IHSG | **Rebuild** excess return at H=3/10/20 (`accum_path_v1`) |
-| Corpus path labels | `learning_outcome_labels` | **Not** the default challenge SSOT (optional future protocol only) |
-| Book evaluate rows | `learning_evaluations` | **Do not** treat as challenge WIN/LOSE |
+| Corpus path labels | `learning_outcome_labels` | Not default challenge SSOT |
+| Book evaluate rows | `learning_evaluations` | **Ignore for product authority** (legacy / soft doctor only) |
 
 Horizons **3 / 10 / 20** (primary **10**) align with ai-saham ADR-056 **by number**.  
-Challenge excess labels and corpus SUCCESS/FAILURE labels are **different products** unless a protocol explicitly says otherwise.
+Challenge excess and corpus SUCCESS/FAILURE labels remain **different products** unless a protocol explicitly says otherwise.
 
 ---
 
@@ -69,10 +106,9 @@ Challenge excess labels and corpus SUCCESS/FAILURE labels are **different produc
 | Term | Means in **ai-saham** | Means in **ml-saham** |
 |------|----------------------|----------------------|
 | **label** | `learning_outcome_labels` row | Protocol panel target (often continuous excess) |
-| **evaluate** | `research … evaluate` book report | Prefer **`challenge run`** — not a synonym |
-| **readiness** / `OOS_DIAGNOSTIC_*` | Learning evaluation ceiling | N/A — use WIN / LOSE / INCONCLUSIVE / BLOCKED_* |
-| **WIN / LOSE** | N/A | Challenge verdict only |
-| **primary 10d / H=10** | `price_path.accum_10d.v1` | Protocol primary horizon for IC |
+| **evaluate (accum)** | **Dropped product** | Prefer **`challenge run`** |
+| **WIN / LOSE** | N/A for research accum | Challenge verdict only |
+| **primary 10d / H=10** | `price_path.accum_10d.v1` path label | Protocol primary horizon for IC |
 
 Curriculum `compare` / `challenge legacy` are **not** promotion authority (ADR-001 / ADR-002).
 
@@ -82,8 +118,8 @@ Curriculum `compare` / `challenge legacy` are **not** promotion authority (ADR-0
 
 - No market **ingest** or provider scrapers  
 - No **writes** to ai-saham `learning_*` or production YAML  
-- No claim that challenge excess IC **is** the corpus book grade  
-- No replacing `saham research accum evaluate` with `challenge run` in docs or agents  
+- No claim that challenge excess IC **is** the corpus path-label grade  
+- No **requiring** `saham research accum evaluate` as a pipeline step  
 - No import of `ai-saham` packages “for convenience”
 
 Optional later: a challenge protocol with `label_source=corpus` that **joins** `learning_outcome_labels` — must be **explicit** in the protocol id, never silent.
@@ -93,12 +129,13 @@ Optional later: a challenge protocol with `label_source=corpus` that **joins** `
 ## Operator flows
 
 ```text
-# Produce corpus (sibling)
+# Produce corpus (sibling) — required
 cd ~/dev/ai-saham
 saham research accum labels --all-label-contracts
-saham research accum evaluate
+saham research accum status
+# Do NOT require: saham research accum evaluate
 
-# Stress-test policy (this repo)
+# Stress-test policy (this repo) — scoring authority
 export ML_SAHAM_DB=~/dev/ai-saham/data/db/data.db
 ml-saham doctor --deep
 ml-saham vet
@@ -118,7 +155,7 @@ ml-saham challenge factor screener.accum.score_weights --all
 | Challenge product | [docs/challenge_product.md](./docs/challenge_product.md) |
 | Challenge system | [docs/adr/ADR-002-ideal-challenge-system.md](./docs/adr/ADR-002-ideal-challenge-system.md) |
 | Product axis | [docs/adr/ADR-001-challenge-first-product-axis.md](./docs/adr/ADR-001-challenge-first-product-axis.md) |
-| Data plane | [data_contract.md](./data_contract.md) (keep table names in sync with live ai-saham schema) |
+| Data plane | [data_contract.md](./data_contract.md) |
 | Architecture | [architecture.md](./architecture.md) |
 
 When this file and informal chat disagree, **this file + ADRs win**.
