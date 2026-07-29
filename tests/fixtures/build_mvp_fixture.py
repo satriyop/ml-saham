@@ -231,6 +231,8 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                 date TEXT, ticker TEXT, iev REAL, rank INT, iep REAL,
                 fetched_at TEXT, is_ncp_locked INT
             );
+            -- Fixture-only legacy table for curriculum walk_forward demos.
+            -- Live ai-saham: learning_outcome_labels (not this name).
             CREATE TABLE signal_forward_labels (
                 id INTEGER PRIMARY KEY,
                 ticker TEXT, signal_date TEXT, horizon INT,

@@ -12,6 +12,16 @@
 
 Not investment advice. **Never auto-promotes** configs into `ai-saham`.
 
+### Sibling boundary (`ai-saham`)
+
+| Job | Where |
+|-----|--------|
+| Fetch, live screen/plan, **corpus** labels & book evaluate | **`ai-saham`** — `saham research accum …` |
+| Policy tournament, rank IC, factor KEEP·DEMOTE | **this repo** — `challenge run` / `challenge factor` |
+
+`ml-saham` is **read-only** on ai-saham SQLite; no Python imports across repos; no scrapers.  
+Full ownership matrix and vocabulary: **[BOUNDARY.md](./BOUNDARY.md)** (mirror: `ai-saham/BOUNDARY.md`).
+
 ---
 
 ## Language
@@ -126,14 +136,15 @@ Curriculum list: [chapters.md](./chapters.md). Registry SSOT: `src/ml_saham/chap
 | Artifacts | `./artifacts` or `ML_SAHAM_ARTIFACTS` |
 | Challenge acceptance (historical fixture suite) | [challenge_acceptance.md](./challenge_acceptance.md) |
 
-Hard rules: **no** ai-saham Python imports · **no** scrapers · **no** auto-promote.
+Hard rules: **no** ai-saham Python imports · **no** scrapers · **no** auto-promote.  
+Sibling contract: **[BOUNDARY.md](./BOUNDARY.md)**.
 
 ```text
-ai-saham  →  fetch/enrich → SQLite
+ai-saham  →  fetch/enrich → SQLite → corpus labels/evaluate (book)
 ml-saham  →  read-only DB
               ├─ challenge run / engine / factor   →  ADR-002 (primary)
               ├─ challenge legacy                  →  chapter-loop (legacy)
               └─ explore / demo                    →  curriculum
 ```
 
-ADRs: [docs/adr/](./docs/adr/) · Architecture: [architecture.md](./architecture.md)
+ADRs: [docs/adr/](./docs/adr/) · Architecture: [architecture.md](./architecture.md) · Boundary: [BOUNDARY.md](./BOUNDARY.md)

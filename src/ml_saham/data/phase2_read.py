@@ -133,6 +133,13 @@ def load_forward_labels(
     horizon: int = 5,
     limit: int = 5000,
 ) -> list[dict[str, Any]]:
+    """Curriculum/fixture helper only.
+
+    Reads legacy table ``signal_forward_labels`` (often present only in the
+    MVP fixture). Live ai-saham stores corpus outcomes in
+    ``learning_outcome_labels``; ADR-002 challenge builds evaluation labels
+    from ``candles`` (protocol-owned). Soft-empty when the table is missing.
+    """
     if not table_exists(conn, "signal_forward_labels"):
         return []
     cols = table_columns(conn, "signal_forward_labels")

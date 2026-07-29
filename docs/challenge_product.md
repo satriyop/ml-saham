@@ -1,7 +1,8 @@
 # Challenge product (ml-saham)
 
 English overview of the **shipped** ADR-002 challenge lab.  
-Design intent: [ADR-001](./adr/ADR-001-challenge-first-product-axis.md) · [ADR-002](./adr/ADR-002-ideal-challenge-system.md).
+Design intent: [ADR-001](./adr/ADR-001-challenge-first-product-axis.md) · [ADR-002](./adr/ADR-002-ideal-challenge-system.md).  
+Sibling ownership vs ai-saham: **[BOUNDARY.md](../BOUNDARY.md)** (ingest/corpus labels vs challenge protocol labels).
 
 **Not investment advice. Never auto-promotes into `ai-saham`.**
 
@@ -143,6 +144,7 @@ That is intentional, not a failed install.
 | [challenge_factor_validity.md](./challenge_factor_validity.md) | Factor track |
 | [engine_factor_map.md](./engine_factor_map.md) | Engines ↔ tables ↔ policies |
 | [data_contract.md](../data_contract.md) | Live SQLite tables; **label ownership** (corpus = ai-saham, challenge **y** = protocol / artifacts only) |
+| [BOUNDARY.md](../BOUNDARY.md) | Repo split: what ai-saham vs ml-saham owns (mirror next to ai-saham) |
 | [adr/](./adr/) | Locked product decisions |
 
 ---
