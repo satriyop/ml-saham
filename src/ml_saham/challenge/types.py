@@ -16,6 +16,17 @@ class ChallengeStatus(str, Enum):
     BLOCKED_POLICY = "BLOCKED_POLICY"
 
 
+class FactorVerdict(str, Enum):
+    """Factor validity track (keep/drop) — not policy WIN/LOSE."""
+
+    KEEP = "KEEP"
+    DEMOTE = "DEMOTE"
+    DROP_CANDIDATE = "DROP_CANDIDATE"
+    INCONCLUSIVE = "INCONCLUSIVE"
+    BLOCKED_DATA = "BLOCKED_DATA"
+    BLOCKED_POLICY = "BLOCKED_POLICY"
+
+
 @dataclass(frozen=True)
 class ComponentWeight:
     key: str
@@ -78,5 +89,32 @@ class ChallengeResult:
 
     def exit_code(self) -> int:
         if self.status in (ChallengeStatus.BLOCKED_DATA, ChallengeStatus.BLOCKED_POLICY):
+            return 2
+        return 0
+
+
+@dataclass
+class FactorChallengeResult:
+    """Result of factor validity track (univariate + drop ablation)."""
+
+    verdict: FactorVerdict
+    policy_id: str
+    protocol_id: str
+    policy_hash: str
+    factor: str
+    n_rows: int
+    primary_horizon: int
+    mean_delta_ic: float | None = None  # full - drop (positive => factor helps)
+    mean_univariate_ic: float | None = None
+    fold_agree_positive_delta: float | None = None
+    horizon_metrics: dict[str, Any] = field(default_factory=dict)
+    fold_metrics: list[dict[str, Any]] = field(default_factory=list)
+    lines: list[str] = field(default_factory=list)
+    summary_md: str = ""
+    notes: list[str] = field(default_factory=list)
+    artifact_dir: Path | None = None
+
+    def exit_code(self) -> int:
+        if self.verdict in (FactorVerdict.BLOCKED_DATA, FactorVerdict.BLOCKED_POLICY):
             return 2
         return 0

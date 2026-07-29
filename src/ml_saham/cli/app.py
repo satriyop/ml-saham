@@ -650,6 +650,110 @@ def challenge_list_cmd() -> None:
         "[dim]Run: ml-saham challenge run screener.accum.score_weights "
         "--against ridge_reweight[/dim]"
     )
+    console.print(
+        "[dim]Factor: ml-saham challenge factor screener.accum.score_weights "
+        "--factor consistency[/dim]"
+    )
+
+
+@challenge_app.command("factor")
+def challenge_factor_cmd(
+    ctx: typer.Context,
+    policy_id: str = typer.Argument(
+        "screener.accum.score_weights",
+        help="Policy id (see: ml-saham challenge list)",
+    ),
+    factor: Optional[str] = typer.Option(
+        None,
+        "--factor",
+        "-f",
+        help="Enabled sleeve key or alias (e.g. consistency, cons, streak)",
+    ),
+    list_factors: bool = typer.Option(
+        False,
+        "--list-factors",
+        help="List enabled factors for the policy and exit",
+    ),
+    export_json: Optional[Path] = typer.Option(
+        None,
+        "--export-json",
+        help="Write full result JSON",
+    ),
+    export_md: Optional[Path] = typer.Option(
+        None,
+        "--export-md",
+        help="Write summary markdown",
+    ),
+    no_artifact: bool = typer.Option(
+        False,
+        "--no-artifact",
+        help="Skip artifact pack under artifacts/challenge/factor/",
+    ),
+) -> None:
+    """Factor validity: univariate IC + drop ablation → KEEP/DEMOTE/DROP_CANDIDATE."""
+    from ml_saham.challenge import list_enabled_factors, run_factor_challenge
+
+    if list_factors:
+        try:
+            rows = list_enabled_factors(policy_id)
+        except KeyError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=2) from None
+        table = Table(title=f"Enabled factors — {policy_id}")
+        table.add_column("key")
+        table.add_column("weight")
+        table.add_column("aliases")
+        for r in rows:
+            table.add_row(
+                str(r["key"]),
+                str(r["weight"]),
+                ", ".join(str(a) for a in (r.get("aliases") or [])),
+            )
+        console.print(table)
+        raise typer.Exit(code=0)
+
+    if not factor:
+        console.print("[red]Require --factor KEY (or use --list-factors).[/red]")
+        raise typer.Exit(code=2)
+
+    db_path: Path = ctx.obj["db"]
+    arts = ctx.obj.get("artifacts_dir")
+    result = run_factor_challenge(
+        db_path,
+        policy_id,
+        factor=factor,
+        write_artifact=not no_artifact,
+        artifacts_dir=Path(arts) if arts else None,
+    )
+    for line in result.lines:
+        console.print(line)
+
+    if export_json:
+        export_json.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "verdict": result.verdict.value,
+            "policy_id": result.policy_id,
+            "protocol_id": result.protocol_id,
+            "policy_hash": result.policy_hash,
+            "factor": result.factor,
+            "n_rows": result.n_rows,
+            "primary_horizon": result.primary_horizon,
+            "mean_delta_ic": result.mean_delta_ic,
+            "mean_univariate_ic": result.mean_univariate_ic,
+            "fold_agree_positive_delta": result.fold_agree_positive_delta,
+            "horizon_metrics": result.horizon_metrics,
+            "fold_metrics": result.fold_metrics,
+            "notes": result.notes,
+            "artifact_dir": str(result.artifact_dir) if result.artifact_dir else None,
+        }
+        export_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        console.print(f"\n[green]Saved JSON to {export_json}[/green]")
+    if export_md:
+        export_md.parent.mkdir(parents=True, exist_ok=True)
+        export_md.write_text(result.summary_md, encoding="utf-8")
+        console.print(f"[green]Saved Markdown to {export_md}[/green]")
+
+    raise typer.Exit(code=result.exit_code())
 
 
 @challenge_app.command("run")

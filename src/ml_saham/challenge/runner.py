@@ -15,10 +15,23 @@ from ml_saham.challenge.scorers import (
     score_production,
     score_ridge_reweight,
 )
+from dataclasses import dataclass
+
 from ml_saham.challenge.types import ChallengeResult, ChallengeStatus, PolicySnapshot, Protocol
 from ml_saham.data.aisaham_read import has_ihsg
 from ml_saham.data.aisaham_read import connect as db_connect
 from ml_saham.data.doctor_checks import run_doctor
+
+
+@dataclass
+class AccumPanelPrep:
+    """Shared prep for policy tournament and factor validity."""
+
+    policy: PolicySnapshot | None
+    protocol: Protocol | None
+    rows: list[PanelRow]
+    notes: list[str]
+    blocked: ChallengeStatus | None  # None if ready to score
 
 
 def list_policies() -> list[dict[str, str]]:
@@ -60,6 +73,62 @@ def _vet_for_accum(db_path: Path, protocol: Protocol) -> tuple[bool, list[str]]:
 
 def _select_rows(rows: Sequence[PanelRow], idx: Sequence[int]) -> list[PanelRow]:
     return [rows[i] for i in idx]
+
+
+def prepare_accum_panel(
+    db_path: Path | str,
+    policy_id: str = "screener.accum.score_weights",
+    protocol_id: str = "accum_path_v1",
+) -> AccumPanelPrep:
+    """Load policy, vet DB, build labeled panel. blocked set if not runnable."""
+    path = Path(db_path)
+    try:
+        policy = load_policy(policy_id)
+        protocol = get_protocol(protocol_id)
+    except KeyError as exc:
+        return AccumPanelPrep(
+            policy=None,
+            protocol=None,
+            rows=[],
+            notes=[str(exc)],
+            blocked=ChallengeStatus.BLOCKED_POLICY,
+        )
+
+    ok, vet_notes = _vet_for_accum(path, protocol)
+    if not ok:
+        return AccumPanelPrep(
+            policy=policy,
+            protocol=protocol,
+            rows=[],
+            notes=vet_notes,
+            blocked=ChallengeStatus.BLOCKED_DATA,
+        )
+
+    rows, panel_notes = build_panel(
+        path,
+        policy,
+        horizons=protocol.horizons_report,
+        primary_horizon=protocol.primary_horizon,
+    )
+    notes = list(vet_notes) + list(panel_notes)
+    if len(rows) < protocol.min_n_total:
+        notes.append(
+            f"panel too small n={len(rows)} < min_n_total={protocol.min_n_total}"
+        )
+        return AccumPanelPrep(
+            policy=policy,
+            protocol=protocol,
+            rows=rows,
+            notes=notes,
+            blocked=ChallengeStatus.BLOCKED_DATA,
+        )
+    return AccumPanelPrep(
+        policy=policy,
+        protocol=protocol,
+        rows=rows,
+        notes=notes,
+        blocked=None,
+    )
 
 
 def _horizon_ics(
@@ -134,66 +203,35 @@ def run_policy_challenge(
     against = against.strip().lower().replace("-", "_")
     baseline = baseline.strip().lower().replace("-", "_")
     if baseline not in ("production",):
-        # v1 only production baseline
         baseline = "production"
 
-    try:
-        policy = load_policy(policy_id)
-        protocol = get_protocol(protocol_id)
-    except KeyError as exc:
+    prep = prepare_accum_panel(path, policy_id, protocol_id)
+    if prep.blocked is not None or prep.policy is None or prep.protocol is None:
+        st = prep.blocked or ChallengeStatus.BLOCKED_DATA
         return ChallengeResult(
-            status=ChallengeStatus.BLOCKED_POLICY,
-            policy_id=policy_id,
-            protocol_id=protocol_id,
+            status=st,
+            policy_id=policy_id if prep.policy is None else prep.policy.policy_id,
+            protocol_id=protocol_id if prep.protocol is None else prep.protocol.protocol_id,
             baseline_id=baseline,
             against_id=against,
-            policy_hash="",
-            n_rows=0,
-            primary_horizon=ACCUM_PATH_V1.primary_horizon,
-            lines=[f"BLOCKED_POLICY: {exc}"],
-            summary_md=f"# Challenge blocked\n\n{exc}\n",
-            notes=[str(exc)],
+            policy_hash="" if prep.policy is None else prep.policy.hash,
+            n_rows=len(prep.rows),
+            primary_horizon=(
+                ACCUM_PATH_V1.primary_horizon
+                if prep.protocol is None
+                else prep.protocol.primary_horizon
+            ),
+            lines=[f"{st.value}:"] + [f"  - {n}" for n in prep.notes],
+            summary_md=f"# Challenge {st.value}\n\n"
+            + "\n".join(f"- {n}" for n in prep.notes)
+            + "\n",
+            notes=prep.notes,
         )
 
-    ok, vet_notes = _vet_for_accum(path, protocol)
-    if not ok:
-        return ChallengeResult(
-            status=ChallengeStatus.BLOCKED_DATA,
-            policy_id=policy.policy_id,
-            protocol_id=protocol.protocol_id,
-            baseline_id=baseline,
-            against_id=against,
-            policy_hash=policy.hash,
-            n_rows=0,
-            primary_horizon=protocol.primary_horizon,
-            lines=["BLOCKED_DATA:"] + [f"  - {n}" for n in vet_notes],
-            summary_md="# Challenge BLOCKED_DATA\n\n" + "\n".join(f"- {n}" for n in vet_notes) + "\n",
-            notes=vet_notes,
-        )
-
-    rows, panel_notes = build_panel(
-        path,
-        policy,
-        horizons=protocol.horizons_report,
-        primary_horizon=protocol.primary_horizon,
-    )
-    notes = list(vet_notes) + list(panel_notes)
-
-    if len(rows) < protocol.min_n_total:
-        msg = f"panel too small n={len(rows)} < min_n_total={protocol.min_n_total}"
-        return ChallengeResult(
-            status=ChallengeStatus.BLOCKED_DATA,
-            policy_id=policy.policy_id,
-            protocol_id=protocol.protocol_id,
-            baseline_id=baseline,
-            against_id=against,
-            policy_hash=policy.hash,
-            n_rows=len(rows),
-            primary_horizon=protocol.primary_horizon,
-            lines=["BLOCKED_DATA:", f"  - {msg}"] + [f"  - {n}" for n in notes],
-            summary_md=f"# Challenge BLOCKED_DATA\n\n{msg}\n",
-            notes=notes + [msg],
-        )
+    policy = prep.policy
+    protocol = prep.protocol
+    rows = prep.rows
+    notes = list(prep.notes)
 
     folds = time_purged_folds(rows, protocol)
     if not folds:

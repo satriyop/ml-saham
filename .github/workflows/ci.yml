@@ -33,6 +33,9 @@ jobs:
       - name: ADR-002 accum score-weights tests
         run: pytest tests/test_challenge_accum_score_weights.py -q --tb=short
 
+      - name: ADR-002 factor validity tests
+        run: pytest tests/test_challenge_factor_validity.py -q --tb=short
+
       - name: Challenge CLI smoke on fixture
         run: |
           python - <<'PY'

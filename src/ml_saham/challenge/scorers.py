@@ -20,6 +20,26 @@ def score_production(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[f
     return [float(sum(r.components.get(k, 0.0) for k in keys)) for r in rows]
 
 
+def score_production_drop(
+    rows: Sequence[PanelRow],
+    policy: PolicySnapshot,
+    factor_key: str,
+) -> list[float]:
+    """Production score with factor_key zeroed (ablation)."""
+    keys = enabled_keys(policy)
+    if factor_key not in keys:
+        raise KeyError(f"factor {factor_key!r} not in enabled production sleeves")
+    out: list[float] = []
+    for r in rows:
+        s = 0.0
+        for k in keys:
+            if k == factor_key:
+                continue
+            s += r.components.get(k, 0.0)
+        out.append(float(s))
+    return out
+
+
 def score_equal_sleeves(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[float]:
     """Equal contribution: mean of normalized component fractions."""
     keys = enabled_keys(policy)
