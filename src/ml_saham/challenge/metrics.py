@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -56,8 +57,20 @@ def time_purged_folds(rows: Sequence[PanelRow], protocol: Protocol) -> list[Fold
 
 
 def ic_safe(scores: Sequence[float], returns: Sequence[float]) -> float | None:
+    """Rank IC or None if undefined (constant scores, empty, non-finite)."""
     try:
-        return float(rank_ic(list(scores), list(returns)))
+        if len(scores) < 2 or len(scores) != len(returns):
+            return None
+        s = [float(x) for x in scores]
+        r = [float(x) for x in returns]
+        if max(s) - min(s) < 1e-12:
+            return None
+        if max(r) - min(r) < 1e-12:
+            return None
+        v = float(rank_ic(s, r))
+        if not math.isfinite(v):
+            return None
+        return v
     except Exception:
         return None
 

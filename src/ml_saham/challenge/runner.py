@@ -503,11 +503,15 @@ def run_policy_challenge(
     }
 
     prod_w = policy.weight_map()
+    if against.startswith("ridge") or is_champion_against(against):
+        against_w = dict(last_coefs) if last_coefs else {}
+    elif "equal" in against:
+        against_w = {k: 1.0 for k in prod_w}
+    else:
+        against_w = prod_w
     weights = {
         "production": prod_w,
-        "against": last_coefs if against.startswith("ridge") else (
-            {k: 1.0 for k in prod_w} if "equal" in against else prod_w
-        ),
+        "against": against_w,
         "against_id": against,
     }
 

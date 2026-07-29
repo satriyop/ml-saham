@@ -162,12 +162,15 @@ def test_score_champion_dispatch_unknown():
 
 
 def test_elastic_net_champion_accum(fixture_db: Path):
+    import math
+
     result = run_policy_challenge(
         fixture_db,
         "screener.accum.score_weights",
         against="elastic_net_reweight",
         write_artifact=False,
     )
+    assert result.against_id == "elastic_net_reweight"
     assert result.status in {
         ChallengeStatus.WIN,
         ChallengeStatus.LOSE,
@@ -175,12 +178,43 @@ def test_elastic_net_champion_accum(fixture_db: Path):
         ChallengeStatus.BLOCKED_DATA,
         ChallengeStatus.BLOCKED_POLICY,
     }
-    assert result.against_id == "elastic_net_reweight"
-    if result.status not in (
+    # Honest: never LOSE/WIN with nan IC; blocked or finite IC only
+    if result.status in (ChallengeStatus.BLOCKED_DATA, ChallengeStatus.BLOCKED_POLICY):
+        assert result.primary_ic_against is None or not math.isfinite(
+            float(result.primary_ic_against or 0)
+        ) or result.primary_ic_against is None
+        return
+    assert result.fold_metrics
+    assert result.primary_ic_against is not None
+    assert math.isfinite(result.primary_ic_against)
+    assert result.primary_ic_baseline is not None
+    assert math.isfinite(result.primary_ic_baseline)
+    # weights.against must be scorer meta, not a copy of production weights
+    prod_w = result.weights.get("production") or {}
+    ag_w = result.weights.get("against") or {}
+    assert ag_w, "champion must export against weights/importances"
+    assert ag_w != prod_w
+
+
+def test_lgbm_champion_weights_not_production(fixture_db: Path):
+    import math
+
+    result = run_policy_challenge(
+        fixture_db,
+        "screener.accum.score_weights",
+        against="lgbm_reweight",
+        write_artifact=False,
+    )
+    if result.status in (
         ChallengeStatus.BLOCKED_DATA,
         ChallengeStatus.BLOCKED_POLICY,
     ):
-        assert result.fold_metrics
+        return
+    assert result.primary_ic_against is not None
+    assert math.isfinite(result.primary_ic_against)
+    prod_w = result.weights.get("production") or {}
+    ag_w = result.weights.get("against") or {}
+    assert ag_w and ag_w != prod_w
 
 
 def test_champion_pre_open_iev_or_block(fixture_db: Path):

@@ -119,7 +119,11 @@ def score_lgbm_reweight(
         verbosity=-1,
     )
     model.fit(Xs, y_tr[m_tr])
-    pred = model.predict(scaler.transform(X_te))
+    pred = np.asarray(model.predict(scaler.transform(X_te)), dtype=float)
+    if float(np.std(pred)) < 1e-12:
+        return None, {}, (
+            "champion lgbm_reweight: constant predictions (degenerate fit)"
+        )
     # importance as pseudo-coefs for report
     imp = getattr(model, "feature_importances_", None)
     meta: dict[str, float] = {}
@@ -170,9 +174,15 @@ def score_elastic_net_reweight(
 
     scaler = StandardScaler()
     Xs = scaler.fit_transform(X_tr[m_tr])
-    model = ElasticNet(alpha=0.1, l1_ratio=0.5, random_state=42, max_iter=5000)
+    # Mild regularization so coefs are not all shrunk to zero on small panels
+    model = ElasticNet(alpha=0.01, l1_ratio=0.15, random_state=42, max_iter=10000)
     model.fit(Xs, y_tr[m_tr])
-    pred = model.predict(scaler.transform(X_te))
+    pred = np.asarray(model.predict(scaler.transform(X_te)), dtype=float)
+    if float(np.std(pred)) < 1e-12 or float(np.max(np.abs(model.coef_))) < 1e-12:
+        return None, {}, (
+            "champion elastic_net_reweight: constant/zero-coef predictions "
+            "(degenerate fit — try lgbm_reweight or more train data)"
+        )
     meta = {k: float(c) for k, c in zip(keys, model.coef_, strict=True)}
     meta["_n_train_ok"] = float(n_ok)
     meta["_n_test"] = float(len(test))
