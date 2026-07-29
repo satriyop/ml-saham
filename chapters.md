@@ -125,6 +125,38 @@ SOTA vocabulary (not literature frontier): [docs/sota_vocabulary_and_literature.
 
 ---
 
+## Method sources (papers / journals)
+
+Citations for **named methods used in the curriculum** (and related challenge scorers where noted).  
+These anchor *what the code implements*, **not** that a chapter is literature SOTA for IDX 2025–2026.  
+Discovery / vocabulary: [docs/sota_vocabulary_and_literature.md](./docs/sota_vocabulary_and_literature.md).
+
+| Method | Canonical source | Chapters / use (indicative) |
+|--------|------------------|-----------------------------|
+| **LightGBM** | Ke et al., *LightGBM: A Highly Efficient Gradient Boosting Decision Tree*, NeurIPS 2017 | Ch.2–4, 13, 16, 23, 26, 28, 34, 37, 40; many default tabular arms |
+| **XGBoost** (when used) | Chen & Guestrin, *XGBoost: A Scalable Tree Boosting System*, KDD 2016 | Ch.8, 40 (optional / style paths) |
+| **Isolation Forest** | Liu, Ting & Zhou, *Isolation Forest*, IEEE ICDM 2008 | Ch.1 (compare), Ch.9, Ch.31 |
+| **Local Outlier Factor (LOF)** | Breunig et al., *LOF: Identifying Density-Based Local Outliers*, ACM SIGMOD 2000 | Ch.1 clean-prices (default with MAD) |
+| **Elastic Net** | Zou & Hastie, *Regularization and variable selection via the elastic net*, JRSS-B 2005 | Ch.4, 13, 27 compare arms |
+| **Ridge regression** | Hoerl & Kennard, *Ridge Regression…*, Technometrics 1970 | Ch.6, 11, 36–39; challenge `ridge_reweight` |
+| **Piotroski F-Score** | Piotroski, *Value Investing: The Use of Historical Financial Statement Information…*, JAR / Selected Paper 2000 | Ch.28 financial-quality |
+| **Altman Z / Z′** | Altman, *Financial Ratios…*, Journal of Finance 1968; later EM / Z′ variants (e.g. Altman 2005 EMS literature) | Ch.29 financial-distress |
+| **Sloan accruals** | Sloan, *Do Stock Prices Fully Reflect Information in Accruals and Cash Flows…*, The Accounting Review 1996 | Ch.34 earnings-quality |
+| **Hierarchical Risk Parity (HRP)** | López de Prado, *Building Diversified Portfolios that Outperform Out of Sample*, Journal of Portfolio Management 42(4):59–69 (2016), doi:10.3905/jpm.2016.42.4.059 | Ch.14 portfolio-small |
+| **Purged / combinatorial CV (style)** | López de Prado, *Advances in Financial Machine Learning*, Wiley 2018 (Ch.7 CPCV family) | Ch.13, Ch.19; challenge time folds (related idea) |
+| **Amihud illiquidity (style)** | Amihud, *Illiquidity and stock returns…*, Journal of Financial Markets 2002 | Ch.35 microstructure-impact |
+| **PageRank (graph)** | Page et al., *The PageRank Citation Ranking*, Stanford tech report 1999 (and Brin & Page, WWW) | Ch.24 broker-network |
+| **PEAD / earnings drift (style)** | Ball & Brown, JAR 1968; Bernard & Thomas, JAR 1989 (classic PEAD lineage) | Ch.16 earnings-surprise |
+| **Mansfield RS (style)** | Relative-strength practice literature (Mansfield-style RS vs benchmark); no single mandatory DOI in this stack | Ch.27 relative-strength |
+| **Ichimoku** | Classical charting system (Hosoda); chapter ML is **feature engineering + classifiers**, not a cited neural SOTA paper | Ch.30 |
+| **k-means / HDBSCAN / UMAP** | MacQueen (k-means lineage); Campello et al. HDBSCAN; McInnes et al. UMAP | Ch.5 cluster-peers |
+| **Rank IC (Spearman)** | Standard quant metric (rank correlation of scores vs returns) | Challenge metrics; many compare boards |
+| **GBRT / ML asset pricing (context)** | Gu, Kelly & Xiu, *Empirical Asset Pricing via Machine Learning*, Review of Financial Studies 2020 | Context only — not an implemented chapter model |
+
+**Not citable as implemented product SOTA:** mock FinBERT, mock CNN/RNN Ichimoku scores, random mock microstructure features, or labeling Polars as “SOTA” — see discovery doc.
+
+---
+
 ## Per-chapter content contract
 
 Every chapter CLI path should support:
