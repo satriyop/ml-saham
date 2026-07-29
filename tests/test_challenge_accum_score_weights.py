@@ -71,6 +71,85 @@ def test_extract_components_from_flow_signals():
     assert "consistency" in comps
 
 
+def test_extract_components_from_adr056_features_by_window():
+    """Regression: live ai-saham payloads use features_by_window + score_points."""
+    pol = load_policy("screener.accum.score_weights")
+    payload = {
+        "ticker": "BBCA",
+        "session_date": "2026-07-23T00:00:00",
+        "canonical_window": 7,
+        "features_by_window": {
+            "7": {
+                "candidate": {
+                    "accum_score_breakdown": {
+                        "components": [
+                            {"key": "cons", "score_points": 9.5, "max_points": 33.3},
+                            {"key": "streak", "score_points": 3.3, "max_points": 25.0},
+                            {"key": "vwap", "score_points": 4.0, "max_points": 16.7},
+                            {"key": "flow", "score_points": 2.0, "max_points": 12.5},
+                            {"key": "rsi", "score_points": 1.7, "max_points": 12.5},
+                            {"key": "inst", "score_points": 0.0, "max_points": 0.0},
+                        ],
+                        "breakdown": {
+                            "cons": 9.5,
+                            "streak": 3.3,
+                            "vwap": 4.0,
+                            "flow": 2.0,
+                            "rsi": 1.7,
+                            "bb": None,
+                        },
+                    }
+                }
+            },
+            "30": {"candidate": {}},
+        },
+    }
+    comps = extract_components(payload, pol)
+    assert comps is not None
+    assert comps["consistency"] == 9.5
+    assert comps["streak"] == 3.3
+    assert comps["vwap_discount"] == 4.0
+    assert comps["foreign_flow_ratio"] == 2.0
+    assert comps["rsi_headroom"] == 1.7
+    assert "bb_squeeze" not in comps
+
+
+def test_extract_prefers_canonical_window_over_other_lookbacks():
+    pol = load_policy("screener.accum.score_weights")
+    payload = {
+        "canonical_window": "7",
+        "features_by_window": {
+            "30": {
+                "candidate": {
+                    "accum_score_breakdown": {
+                        "components": [
+                            {"key": "cons", "score_points": 99.0},
+                            {"key": "streak", "score_points": 99.0},
+                            {"key": "vwap", "score_points": 99.0},
+                        ]
+                    }
+                }
+            },
+            "7": {
+                "candidate": {
+                    "accum_score_breakdown": {
+                        "components": [
+                            {"key": "cons", "score_points": 1.0},
+                            {"key": "streak", "score_points": 2.0},
+                            {"key": "vwap", "score_points": 3.0},
+                        ]
+                    }
+                }
+            },
+        },
+    }
+    comps = extract_components(payload, pol)
+    assert comps is not None
+    assert comps["consistency"] == 1.0
+    assert comps["streak"] == 2.0
+    assert comps["vwap_discount"] == 3.0
+
+
 def test_panel_and_folds(fixture_db: Path):
     pol = load_policy("screener.accum.score_weights")
     rows, notes = build_panel(

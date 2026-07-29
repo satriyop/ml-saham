@@ -97,72 +97,121 @@ def _alias_lookup(policy: PolicySnapshot) -> dict[str, str]:
     return m
 
 
-def extract_components(payload: dict[str, Any], policy: PolicySnapshot) -> dict[str, float] | None:
-    """Adaptive extract of component points from observation payload."""
-    aliases = _alias_lookup(policy)
-    found: dict[str, float] = {}
-
-    # 1) flow_signals list: [{key, score, weight}, ...]
-    signal = payload.get("signal") or {}
-    flow_ev = signal.get("flow_evidence") or {}
-    for item in flow_ev.get("flow_signals") or []:
+def _ingest_component_list(
+    items: list[Any],
+    aliases: dict[str, str],
+    found: dict[str, float],
+) -> None:
+    """Ingest [{key, score_points|score}, ...] into found map."""
+    for item in items:
         if not isinstance(item, dict):
             continue
         k = str(item.get("key") or "").lower()
         if k not in aliases:
             continue
+        # Prefer production score_points; fall back to score
+        raw = item.get("score_points")
+        if raw is None:
+            raw = item.get("score")
+        if raw is None:
+            continue
         try:
-            found[aliases[k]] = float(item.get("score") or 0.0)
+            found[aliases[k]] = float(raw)
         except (TypeError, ValueError):
             continue
 
-    # 2) sub_signal_fingerprint numeric fields
+
+def _pick_window_blob(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Prefer features_by_window[canonical_window], else 7, else first dict."""
+    fbw = payload.get("features_by_window")
+    if not isinstance(fbw, dict) or not fbw:
+        return None
+    preferred = []
+    cw = payload.get("canonical_window")
+    if cw is not None:
+        preferred.append(str(cw))
+    preferred.extend(["7", "30", "90"])
+    for key in preferred:
+        blob = fbw.get(key)
+        if isinstance(blob, dict):
+            return blob
+    for blob in fbw.values():
+        if isinstance(blob, dict):
+            return blob
+    return None
+
+
+def extract_components(payload: dict[str, Any], policy: PolicySnapshot) -> dict[str, float] | None:
+    """Adaptive extract of component points from observation payload.
+
+    Supports:
+    - ai-saham ADR-056 style: features_by_window.*.candidate.accum_score_breakdown
+    - fixture / legacy: top-level signal.flow_evidence.flow_signals
+    """
+    aliases = _alias_lookup(policy)
+    found: dict[str, float] = {}
+
+    # --- A) Real ai-saham accum observation (preferred) ---
+    window = _pick_window_blob(payload)
+    if window is not None:
+        cand = window.get("candidate") if isinstance(window.get("candidate"), dict) else {}
+        breakdown = cand.get("accum_score_breakdown") if isinstance(cand, dict) else None
+        if isinstance(breakdown, dict):
+            comps = breakdown.get("components")
+            if isinstance(comps, list):
+                _ingest_component_list(comps, aliases, found)
+            # also breakdown map: {cons: 9.5, streak: 3.3, ...}
+            br = breakdown.get("breakdown")
+            if isinstance(br, dict):
+                for k, v in br.items():
+                    kl = str(k).lower()
+                    if kl in aliases and aliases[kl] not in found and isinstance(v, (int, float)):
+                        found[aliases[kl]] = float(v)
+        # nested signal.flow_evidence under window
+        wsig = window.get("signal") if isinstance(window.get("signal"), dict) else {}
+        fe = wsig.get("flow_evidence") if isinstance(wsig, dict) else {}
+        if isinstance(fe, dict) and isinstance(fe.get("flow_signals"), list):
+            _ingest_component_list(fe["flow_signals"], aliases, found)
+
+    # --- B) Top-level legacy / fixture shape ---
+    signal = payload.get("signal") or {}
+    if isinstance(signal, dict):
+        flow_ev = signal.get("flow_evidence") or {}
+        if isinstance(flow_ev, dict) and isinstance(flow_ev.get("flow_signals"), list):
+            _ingest_component_list(flow_ev["flow_signals"], aliases, found)
+
+    # --- C) Fingerprint fallbacks (scaled) ---
     fp = payload.get("sub_signal_fingerprint") or {}
-    fp_map = {
-        "rsi_at_signal": "rsi_headroom",
-        "vwap_position_at_signal": "vwap_discount",
-        "bb_width_pctile_at_signal": "bb_squeeze",
-        "ia_foreign_participation": "foreign_flow_ratio",
-        "foreign_concentration_at_signal": "consistency",
-    }
-    for src, dest in fp_map.items():
-        if dest in found:
-            continue
-        if src in fp and isinstance(fp[src], (int, float)):
-            # scale raw-ish values into 0..weight space roughly
-            w = next((c.weight for c in policy.components if c.key == dest), 10.0)
-            val = float(fp[src])
-            if dest == "rsi_headroom":
-                # map RSI 25-75 into points
-                score = max(0.0, min(1.0, (val - 25.0) / 50.0)) * w
-            elif dest == "vwap_discount":
-                score = max(0.0, min(1.0, abs(val) * 10)) * w
-            elif dest == "bb_squeeze":
-                score = max(0.0, min(1.0, 1.0 - val)) * w
-            else:
-                score = max(0.0, min(1.0, abs(val))) * w
-            found[dest] = score
+    if not fp and window is not None:
+        fp = window.get("sub_signal_fingerprint") or {}
+    if isinstance(fp, dict):
+        fp_map = {
+            "rsi_at_signal": "rsi_headroom",
+            "vwap_position_at_signal": "vwap_discount",
+            "bb_width_pctile_at_signal": "bb_squeeze",
+            "ia_foreign_participation": "foreign_flow_ratio",
+            "foreign_concentration_at_signal": "consistency",
+        }
+        for src, dest in fp_map.items():
+            if dest in found:
+                continue
+            if src in fp and isinstance(fp[src], (int, float)):
+                w = next((c.weight for c in policy.components if c.key == dest), 10.0)
+                val = float(fp[src])
+                if dest == "rsi_headroom":
+                    score = max(0.0, min(1.0, (val - 25.0) / 50.0)) * w
+                elif dest == "vwap_discount":
+                    score = max(0.0, min(1.0, abs(val) * 10)) * w
+                elif dest == "bb_squeeze":
+                    score = max(0.0, min(1.0, 1.0 - val)) * w
+                else:
+                    score = max(0.0, min(1.0, abs(val))) * w
+                found[dest] = score
 
-    # 3) features_by_window (prefer longest lookback if present)
-    fbw = payload.get("features_by_window") or payload.get("features") or {}
-    if isinstance(fbw, dict):
-        # pick one window dict
-        window_dicts = [v for v in fbw.values() if isinstance(v, dict)] if fbw else []
-        if not window_dicts and all(not isinstance(v, dict) for v in fbw.values()):
-            window_dicts = [fbw]
-        for wd in reversed(window_dicts):
-            for k, v in wd.items():
-                kl = str(k).lower()
-                canon = aliases.get(kl)
-                if canon and canon not in found and isinstance(v, (int, float)):
-                    found[canon] = float(v)
-
-    # Require at least 3 enabled components
     enabled_keys = {c.key for c in policy.enabled_components()}
     present = enabled_keys & set(found)
     if len(present) < 3:
         return None
-    # fill missing enabled with 0 for scorer stability only if we have majority
     for k in enabled_keys:
         found.setdefault(k, 0.0)
     return {k: found[k] for k in enabled_keys}
@@ -202,11 +251,15 @@ def load_observation_rows(
             continue
         ticker = str(payload.get("ticker") or "").upper()
         date = str(
-            payload.get("snapshot_date")
+            payload.get("session_date")
+            or payload.get("snapshot_date")
             or payload.get("as_of")
             or payload.get("date")
             or ""
         )
+        # session_date may be date-only or ISO datetime
+        if "T" in date:
+            date = date.split("T", 1)[0]
         if not ticker or not date:
             continue
         comps = extract_components(payload, policy)
