@@ -13,7 +13,7 @@
 | Challenge purpose | Question | Status |
 |-------------------|----------|--------|
 | **Tune** | Factor worth it? Weights/combo OK? | **Shipped** |
-| **Champion** | Better score rule than production (internals optional)? | **Planned** |
+| **Champion** | Better score rule than production (internals optional)? | **Shipped** (`challenge champion`) |
 
 Not investment advice. **Never auto-promotes** configs into `ai-saham`.
 

@@ -70,7 +70,7 @@ ai-saham `research pre-open evaluate` is **not** required for ml-saham challenge
 | Accum **cohort evaluate** / ACCUM `learning_evaluations` | **dropped (legacy)** | **do not depend on** |
 | Policy tournament WIN / LOSE / rank IC / folds (**tune**) | — | **owns** |
 | Factor KEEP / DEMOTE / DROP_CANDIDATE (**tune**) | — | **owns** |
-| Champion / beat-production scorer hunt | — | **owns** (planned track; no auto-promote) |
+| Champion / beat-production scorer hunt | — | **owns** (`challenge champion`; no auto-promote) |
 | Curriculum explore / demo | light / optional | **primary onboarding** |
 | Decision memos for tuning | may link | **`docs/decisions/`** |
 | Auto-promote config into production | human policy path only | **never** |

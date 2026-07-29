@@ -12,6 +12,11 @@ from ml_saham.challenge.panel_iev import build_iev_panel
 from ml_saham.challenge.panel_pre_open_obs import build_pre_open_obs_panel
 from ml_saham.challenge.policies.registry import list_policy_ids, load_policy
 from ml_saham.challenge.protocols import ACCUM_PATH_V1, get_protocol
+from ml_saham.challenge.champion import (
+    is_champion_against,
+    normalize_champion_id,
+    score_champion,
+)
 from ml_saham.challenge.scorers import (
     score_equal_sleeves,
     score_production,
@@ -324,9 +329,12 @@ def run_policy_challenge(
 ) -> ChallengeResult:
     path = Path(db_path)
     against = against.strip().lower().replace("-", "_")
+    if is_champion_against(against):
+        against = normalize_champion_id(against)
     baseline = baseline.strip().lower().replace("-", "_")
     if baseline not in ("production",):
         baseline = "production"
+    champion_mode = is_champion_against(against)
 
     prep = prepare_for_policy(path, policy_id, protocol_id)
     if prep.blocked is not None or prep.policy is None or prep.protocol is None:
@@ -359,6 +367,11 @@ def run_policy_challenge(
     protocol = prep.protocol
     rows = prep.rows
     notes = list(prep.notes)
+    if champion_mode:
+        notes.append(
+            "mode=champion: learned score rule vs production "
+            "(not factor/weight tune); no auto-promote"
+        )
 
     folds = time_purged_folds(rows, protocol)
     if not folds:
@@ -398,7 +411,45 @@ def run_policy_challenge(
         elif against == "production":
             ag_s = score_production(test, policy)
             coefs = policy.weight_map()
+        elif champion_mode:
+            ag_s_opt, coefs, ch_err = score_champion(
+                against,
+                train,
+                test,
+                policy,
+                primary_horizon=protocol.primary_horizon,
+            )
+            if ch_err or ag_s_opt is None:
+                st = (
+                    ChallengeStatus.BLOCKED_POLICY
+                    if ch_err and ("requires" in ch_err or "unknown" in ch_err)
+                    else ChallengeStatus.BLOCKED_DATA
+                )
+                msg = ch_err or "champion scorer failed"
+                return ChallengeResult(
+                    status=st,
+                    policy_id=policy.policy_id,
+                    protocol_id=protocol.protocol_id,
+                    baseline_id=baseline,
+                    against_id=against,
+                    policy_hash=policy.hash,
+                    n_rows=len(rows),
+                    primary_horizon=protocol.primary_horizon,
+                    fold_metrics=fold_metrics,
+                    lines=[f"{st.value}:", f"  - {msg}"]
+                    + [f"  - fold={fi} n_train={len(train)} n_test={len(test)}"],
+                    summary_md=f"# Challenge {st.value}\n\n{msg}\n",
+                    notes=notes + [msg],
+                    weights={"against_id": against, "error": msg},
+                )
+            ag_s = ag_s_opt
+            last_coefs = {k: v for k, v in coefs.items() if not str(k).startswith("_")}
+            notes.append(
+                f"champion fold={fi} n_train_ok={int(coefs.get('_n_train_ok', 0))} "
+                f"n_test={len(test)}"
+            )
         else:
+            known = "equal_sleeves|ridge_reweight|lgbm_reweight|elastic_net_reweight"
             return ChallengeResult(
                 status=ChallengeStatus.BLOCKED_POLICY,
                 policy_id=policy.policy_id,
@@ -408,7 +459,7 @@ def run_policy_challenge(
                 policy_hash=policy.hash,
                 n_rows=len(rows),
                 primary_horizon=protocol.primary_horizon,
-                lines=[f"Unknown challenger {against!r}. Use equal_sleeves|ridge_reweight"],
+                lines=[f"Unknown challenger {against!r}. Use {known}"],
                 notes=[f"unknown against={against}"],
             )
 
@@ -530,12 +581,18 @@ def _format_lines(
     else:
         h_primary_txt = f"H={protocol.primary_horizon}"
 
+    mode_banner = (
+        "Mode:     CHAMPION (learned score rule vs production; not factor/weight tune)"
+        if is_champion_against(against)
+        else "Mode:     TUNE (policy / weight audit)"
+    )
     lines = [
         "=== POLICY CHALLENGE (ADR-002) ===",
         f"Policy:   {policy.policy_id}  hash={policy.hash}",
         f"Protocol: {protocol.protocol_id}  primary={h_primary_txt}  "
         f"report_H={list(protocol.horizons_report)}",
         f"Label:    {label_blurb}",
+        mode_banner,
         f"Baseline: production   Against: {against}",
         f"Panel n:  {n_rows}   Folds: {len(fold_metrics)}",
         f"Status:   {status.value}",

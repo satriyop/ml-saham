@@ -818,6 +818,105 @@ def challenge_factor_cmd(
     raise typer.Exit(code=result.exit_code())
 
 
+@challenge_app.command("champion")
+def challenge_champion_cmd(
+    ctx: typer.Context,
+    policy_id: str = typer.Argument(
+        "screener.accum.score_weights",
+        help="Policy id (champion M1: accum score_weights)",
+    ),
+    model: str = typer.Option(
+        "lgbm_reweight",
+        "--model",
+        "-m",
+        help="Champion model: lgbm_reweight | elastic_net_reweight",
+    ),
+    baseline: str = typer.Option(
+        "production",
+        "--baseline",
+        help="Baseline id (v1: production only)",
+    ),
+    export_json: Optional[Path] = typer.Option(
+        None,
+        "--export-json",
+        help="Write full result JSON",
+    ),
+    export_md: Optional[Path] = typer.Option(
+        None,
+        "--export-md",
+        help="Write summary markdown",
+    ),
+    no_artifact: bool = typer.Option(
+        False,
+        "--no-artifact",
+        help="Skip artifact pack under artifacts/challenge/",
+    ),
+) -> None:
+    """Champion track: learned score rule vs production (not factor/weight tune).
+
+    Answers: is there a better scoring rule than production under the same
+    protocol? Production stays baseline. Never auto-promotes ai-saham.
+    For factor/weight tuning use: challenge run / challenge factor.
+    """
+    from ml_saham.challenge import run_policy_challenge
+    from ml_saham.challenge.champion import is_champion_against, normalize_champion_id
+
+    against = normalize_champion_id(model)
+    if not is_champion_against(against):
+        console.print(
+            f"[red]Unknown champion model {model!r}. "
+            "Use lgbm_reweight | elastic_net_reweight[/red]"
+        )
+        raise typer.Exit(code=2)
+
+    console.print(
+        "[bold cyan]CHAMPION TRACK[/bold cyan] — beat production with a learned "
+        "score rule (not sleeve tuning). No auto-promote.\n"
+    )
+
+    db_path: Path = ctx.obj["db"]
+    arts = ctx.obj.get("artifacts_dir")
+    result = run_policy_challenge(
+        db_path,
+        policy_id,
+        against=against,
+        baseline=baseline,
+        write_artifact=not no_artifact,
+        artifacts_dir=Path(arts) if arts else None,
+    )
+    for line in result.lines:
+        console.print(line)
+
+    if export_json:
+        export_json.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "mode": "champion",
+            "status": result.status.value,
+            "policy_id": result.policy_id,
+            "protocol_id": result.protocol_id,
+            "policy_hash": result.policy_hash,
+            "baseline_id": result.baseline_id,
+            "against_id": result.against_id,
+            "n_rows": result.n_rows,
+            "primary_horizon": result.primary_horizon,
+            "primary_ic_baseline": result.primary_ic_baseline,
+            "primary_ic_against": result.primary_ic_against,
+            "horizon_metrics": result.horizon_metrics,
+            "fold_metrics": result.fold_metrics,
+            "weights": result.weights,
+            "notes": result.notes,
+            "artifact_dir": str(result.artifact_dir) if result.artifact_dir else None,
+        }
+        export_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        console.print(f"\n[green]Saved JSON to {export_json}[/green]")
+    if export_md:
+        export_md.parent.mkdir(parents=True, exist_ok=True)
+        export_md.write_text(result.summary_md, encoding="utf-8")
+        console.print(f"[green]Saved Markdown to {export_md}[/green]")
+
+    raise typer.Exit(code=result.exit_code())
+
+
 @challenge_app.command("run")
 def challenge_run_cmd(
     ctx: typer.Context,
@@ -828,7 +927,10 @@ def challenge_run_cmd(
     against: str = typer.Option(
         "ridge_reweight",
         "--against",
-        help="Challenger: equal_sleeves | ridge_reweight",
+        help=(
+            "Tune: equal_sleeves | ridge_reweight. "
+            "Champion (also via `challenge champion`): lgbm_reweight | elastic_net_reweight"
+        ),
     ),
     baseline: str = typer.Option(
         "production",

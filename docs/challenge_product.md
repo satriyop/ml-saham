@@ -18,7 +18,7 @@ Sibling ownership vs ai-saham: **[BOUNDARY.md](../BOUNDARY.md)** (ingest/corpus 
 | Factor keep/demote (accum sleeves) | Replacing `ai-saham` ingest/engines |
 | Engine portfolio rollups | Curriculum demos as promotion authority |
 | English audit reports + artifacts | Live trading / paper broker |
-| **Champion track** (planned) — beat production with a better score rule | Treating curriculum “Default” models as production authority |
+| **Champion track** — beat production with a learned score rule | Treating curriculum “Default” models as production authority |
 
 Learning (`explore` / chapters) is **secondary** and mostly Indonesian for pedagogy.
 
@@ -67,7 +67,7 @@ Shipped CLI today is **tune** only (`run` / `factor` / `engine`). Champion CLI (
 | **Protocol** | Evaluation law (labels, horizons, folds) | `accum_path_v1`, `pre_open_session_v1` |
 | **Challenger** | Named alternative under the same decision type | `equal_sleeves`, `ridge_reweight` |
 | **Tune** | Challenge purpose: factor + weight/combo audit | `challenge factor`, `run --against equal_sleeves` |
-| **Champion** | Challenge purpose: beat production with a better score rule | planned; not shipped |
+| **Champion** | Challenge purpose: beat production with a better score rule | `challenge champion`, `lgbm_reweight` |
 
 Prefer **`--scenario`**, not “track,” for accum vs pre-open.  
 Prefer **tune vs champion** for purpose (not a third product axis).
@@ -148,11 +148,16 @@ Exports: `--export-json` / `--export-md`. Artifacts: `./artifacts/challenge/…`
 4. Write a **human decision memo** if needed (example: [decisions/accum_score_weights_2026-07-29.md](./decisions/accum_score_weights_2026-07-29.md)).  
 5. **Do not** promote into ai-saham from a single thin window or BLOCKED run.
 
-### Champion (planned)
+### Champion (shipped)
+
+```bash
+ml-saham challenge champion screener.accum.score_weights --model lgbm_reweight
+```
 
 1. Same protocol and production baseline.  
-2. Run a **learned / alternate scorer** challenger.  
-3. If **WIN** (and folds/stability OK) → promote-candidate **memo** only — human may redesign ai-saham scoring; ml-saham does not write config.
+2. Learned scorer fit **only on train folds**.  
+3. If **WIN** (and folds/stability OK) → promote-candidate **memo** only — human may redesign ai-saham scoring; ml-saham does not write config.  
+4. See [challenge_champion.md](./challenge_champion.md).
 
 ### Data-tolerant policies
 
@@ -182,6 +187,7 @@ That is intentional, not a failed install.
 | Doc | Role |
 |-----|------|
 | This file | Product map + commands |
+| [challenge_champion.md](./challenge_champion.md) | Champion track (learned vs production) |
 | [challenge_engine_screener.md](./challenge_engine_screener.md) | Engine portfolio operator note |
 | [challenge_accum_score_weights.md](./challenge_accum_score_weights.md) | Accum policy |
 | [challenge_pre_open_iev_rank.md](./challenge_pre_open_iev_rank.md) | Pre-open IEV rank |

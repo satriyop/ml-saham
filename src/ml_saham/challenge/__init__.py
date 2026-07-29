@@ -1,5 +1,6 @@
 """ADR-002 challenge product (policy tournaments + factor validity + engines)."""
 
+from ml_saham.challenge.champion import is_champion_against
 from ml_saham.challenge.engines import list_engines, run_engine_portfolio
 from ml_saham.challenge.factor_validity import (
     list_enabled_factors,
@@ -23,6 +24,7 @@ __all__ = [
     "EnginePortfolioResult",
     "FactorChallengeResult",
     "FactorVerdict",
+    "is_champion_against",
     "list_enabled_factors",
     "list_engines",
     "list_policies",
