@@ -8,8 +8,8 @@ Curriculum: [chapters.md](./chapters.md) · UX: [ux.md](./ux.md) · Data: [data_
 
 ## Goals that constrain architecture
 
-1. **Challenge first** — audit `ai-saham` engines/factors via `challenge` / `compare` (`ENGINE_FACTORS` + `run_compare`).  
-2. **Learning second** — chapter modules teach problems so challenge output is interpretable (`explore` / light `demo`).  
+1. **Challenge first** — audit `ai-saham` via `challenge` (engine rollup) and `compare` (single-factor vs ai-saham-style baseline); both use `run_compare` (ADR-001 §2).  
+2. **Learning second** — chapter modules teach problems so challenge/compare output is interpretable (`explore` / light `demo`).  
 3. Emit artifacts usable to tune `ai-saham` (**never auto-promote**).  
 4. Read real market data from `ai-saham` SQLite **or** a derived learning DB.
 
@@ -23,7 +23,7 @@ Curriculum: [chapters.md](./chapters.md) · UX: [ux.md](./ux.md) · Data: [data_
 | **Ingest stays in `ai-saham`** | No Stockbit/Yahoo/IDX scrapers inside `ml-saham` |
 | **Chapters stay problem-centric** | Topic modules teach generic problems; `deepdive` is optional glue |
 | **Challenge outranks curriculum polish** | When priorities conflict, ship `run_compare` / engine audits before soft demos (ADR-001) |
-| **Language by axis** | Challenge UI/reports **English**; learning `explore` narrative **Indonesian** (ADR-001 §5). Flags/slugs always EN |
+| **Language by axis** | Challenge UI/reports **English**; learning `explore` narrative **Indonesian** (ADR-001 §6). Flags/slugs always EN |
 | **CLI is the product** | Typer (or Click) app; no web/TUI in MVP |
 
 ---

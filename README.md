@@ -15,7 +15,7 @@ Design: [architecture.md](./architecture.md) · [chapters.md](./chapters.md) · 
 | **Challenge** (primary) | `challenge`, `compare`, engine audit reports/exports | **English** |
 | **Learning** (secondary) | `explore`, curriculum narrative, teaching caveats | **Indonesian** |
 
-Commands, flags, topic slugs, and code stay English on both axes. See ADR-001 §5.
+Commands, flags, topic slugs, and code stay English on both axes. See ADR-001 §6.
 
 Not investment advice. Artifacts never auto-promote into `ai-saham`.
 
@@ -45,7 +45,23 @@ ml-saham doctor
 
 ## Challenge first (main path)
 
-Engine map lives in `src/ml_saham/eval/challenge.py` (`ENGINE_FACTORS`):
+Both primary commands are **related to `ai-saham`**, with different scope (ADR-001 §2):
+
+| Command | Product definition | Relation to `ai-saham` |
+|---------|-------------------|------------------------|
+| **`challenge`** | Multi-factor **engine audit** + rollup export | **For** engines: how is the stack doing? |
+| **`compare`** | **One-factor** baseline vs against experiment | **Against** ai-saham-style / static baselines: should we change *this* factor? |
+
+```text
+compare   = single-factor lab (challenge an ai-saham-style baseline)
+challenge = runs those compares in bulk for an engine / all factors
+```
+
+Same data plane as `ai-saham` (read-only SQLite). **Never auto-promotes** configs.
+
+### `challenge` — engine audit
+
+Engine map: `src/ml_saham/eval/challenge.py` (`ENGINE_FACTORS`).
 
 | Target | What it audits |
 |--------|----------------|
@@ -55,11 +71,8 @@ Engine map lives in `src/ml_saham/eval/challenge.py` (`ENGINE_FACTORS`):
 | `all` | Full audit |
 
 ```bash
-# Full engine audit
 ml-saham challenge all
 ml-saham challenge all --export-json /tmp/challenge.json --export-md /tmp/challenge.md
-
-# By engine surface
 ml-saham challenge screener
 ml-saham challenge screener --scenario pre-open
 ml-saham challenge screener --scenario accum
@@ -67,14 +80,19 @@ ml-saham challenge engine --category signal
 ml-saham challenge engine --category risk --type sizing
 ml-saham challenge engine --category market --type regime
 ml-saham challenge other
-
-# One factor: baseline (ai-saham-like) vs learned
-ml-saham compare factor-score --baseline equal-weight --against elastic-net
-ml-saham compare broker-flow
-ml-saham compare meta-ensemble
 ```
 
-**Quality bar:** factors on the engine map must have working **`run_compare`** + honest metrics.  
+### `compare` — single-factor experiment
+
+Prefer baselines that mean **current static / engine-like policy**; `--against` is the learned alternative. Requires `--baseline` and `--against`.
+
+```bash
+ml-saham compare factor-score --baseline equal-weight --against elastic-net
+ml-saham compare pattern-fail --baseline coinflip --against lgbm
+ml-saham compare broker-network --baseline degree --against pagerank
+```
+
+**Quality bar:** engine-map factors must have working **`run_compare`** + honest metrics.  
 Prefer install errors for missing ML deps over silent weak models that fake a win.
 
 ---

@@ -10,7 +10,12 @@ Product axis: [ADR-001](./docs/adr/ADR-001-challenge-first-product-axis.md) · C
 **Primary surface: CLI only.**  
 Not a trading cockpit, TUI workbench, or web app. Optional notebook export / TUI may come later; they are not the spine.
 
-**Command priority:** `challenge` / `compare` (audit engines) ahead of `explore` / `demo` (learn the factor).
+**Command priority:** `challenge` / `compare` (ai-saham-related audits) ahead of `explore` / `demo` (learn the factor).
+
+| Command | Use when |
+|---------|----------|
+| `challenge` | Engine / stack health (batch, rollup export) |
+| `compare` | One factor vs an **ai-saham-style or static baseline** (explicit models) |
 
 ---
 
@@ -21,10 +26,10 @@ Not a trading cockpit, TUI workbench, or web app. Optional notebook export / TUI
 | Principle | Meaning |
 |---|---|
 | Challenge first | `challenge` / `compare` are the main job; green engine audits > complete demos |
-| One job per command | `explore` teaches · `demo` illustrates · `compare` audits one factor · `challenge` audits an engine |
+| One job per command | `explore` teaches · `demo` illustrates · `compare` = one-factor ai-saham-style baseline lab · `challenge` = multi-factor engine audit |
 | Generic first | Deep-dive never blocks learning; challenge still needs honest metrics |
 | Quiet chrome | Short prose + tables + banners; no dashboard clutter |
-| Language by axis | **Challenge output: English.** **Learning (`explore`) narrative: Indonesian.** Commands/flags/slugs always EN (ADR-001 §5) |
+| Language by axis | **Challenge output: English.** **Learning (`explore`) narrative: Indonesian.** Commands/flags/slugs always EN (ADR-001 §6) |
 | Honest by default | Cost / leakage / “not investment advice” banners on scoreboards |
 
 ---
