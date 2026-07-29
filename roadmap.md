@@ -97,15 +97,15 @@ Implement in order (dependencies + pedagogy). Each chapter: `explore` + `demo` (
 
 ## Phase 5 — v1.1 chapters (after MVP)
 
-**v1.1 data** + chapters **5, 7, 8**.
+**v1.1 data** + chapters **5, 7, 9** (`volume-anomaly` is Ch.9 after survival insert).
 
 | Order | Topic | Chapter | Notes |
 |---|---|---|---|
 | 5.1 | Doctor for v1.1 data | — | insider + sector coverage |
-| 5.2 | `cluster-peers` | 5 | k-means / hierarchical / PCA |
+| 5.2 | `cluster-peers` | 5 | HDBSCAN + UMAP vs k-means |
 | 5.3 | `insider` | 7 | sparse events; scrub bad dates |
-| 5.4 | `volume-anomaly` | 8 | Isolation Forest / One-Class SVM on price-volume only |
-| 5.5 | Deepdive pass | 5–8 | Optional ai-saham links where mapped |
+| 5.4 | `volume-anomaly` | 9 | MLP autoencoder vs Isolation Forest on price-volume only |
+| 5.5 | Deepdive pass | 5, 7, 9 | Optional ai-saham links where mapped |
 
 **Exit:** v1.1 acceptance (mirror MVP checklist style — write when starting phase 5).
 
@@ -113,20 +113,24 @@ Implement in order (dependencies + pedagogy). Each chapter: `explore` + `demo` (
 
 ## Phase 6 — Phase-2 curriculum (later)
 
-Chapters **9–17** (18 optional). Suggested build clusters:
+Chapters **8, 10–19** (+ **20** optional). Registry SSOT. Suggested build clusters:
 
 | Cluster | Chapters | Data / deps |
 |---|---|---|
-| Text | 9 | Headline source if/when available |
-| Risk & regime | 10, 11 | vol features; breadth/foreign/macro-style inputs |
-| Honesty + calibrate | 12 | learning store if needed; labels/observations for deepdive |
-| Portfolio | 13 | constraints + optional risk-funnel deepdive |
-| Events | 14, 15 | corp actions, earnings |
-| Open session | 16 | IEV / pre-open sidecars; open-session scoreboard |
-| Pipeline | 17 | end-to-end + artifact pack quality |
-| Optional | 18 | RL sandbox appendix — lowest priority |
+| Survival | 8 | time-to-event / insider horizon |
+| Text | 10 | Headline source if/when available; synthetic OK |
+| Risk & regime | 11, 12 | vol features; breadth/foreign/macro-style inputs |
+| Honesty + calibrate | 13 | learning store if needed; labels/observations for deepdive |
+| Portfolio | 14 | constraints + optional risk-funnel deepdive |
+| Events | 15, 16 | corp actions, earnings |
+| Nowcast | 17 | mixed-frequency fundamentals |
+| Open session | 18 | IEV / pre-open sidecars; open-session scoreboard |
+| Pipeline | 19 | end-to-end + artifact pack quality |
+| Optional | 20 | RL sandbox appendix — lowest priority |
 
-Introduce **`ml-saham data build-panel`** (learning store) when Direct mode blocks Ch.12/4/6 quality — not before it hurts.
+Extended advanced chapters **21–44** (incl. `broker-network` Ch.24) follow the same chapter contract.
+
+Introduce **`ml-saham data build-panel`** (learning store) when Direct mode blocks Ch.13/4/6 quality — not before it hurts.
 
 ---
 

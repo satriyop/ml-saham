@@ -1,4 +1,4 @@
-"""Ch.17 Research pipeline — mini end-to-end + artifacts."""
+"""Ch.19 Research pipeline — mini end-to-end + artifacts."""
 
 from __future__ import annotations
 
@@ -230,11 +230,25 @@ def run_compare(ctx: ChapterContext, **kwargs) -> CompareResult:
         f"Speedup: Polars lebih cepat {t_pandas / max(1e-6, t_polars):.1f}x",
     ]
 
+    speedup = t_pandas / max(1e-6, t_polars)
     return CompareResult(
         title="Research pipeline · Polars vs Pandas",
         lines=lines,
+        metrics={
+            "n_polars": n_pl,
+            "n_pandas": n_pd,
+            "t_polars_ms": t_polars * 1000,
+            "t_pandas_ms": t_pandas * 1000,
+            "speedup": speedup,
+        },
+        model="polars_vs_pandas",
+        summary_md=(
+            f"# Research pipeline compare\n\nPolars {speedup:.1f}x vs pandas on as_of={as_of}.\n"
+        ),
         winner="SOTA (Vectorized Polars)",
-        winner_reason=f"Mengeksekusi perhitungan {t_pandas / max(1e-6, t_polars):.1f}x lebih cepat dibandingkan pandas iterasi.",
+        winner_reason=(
+            f"Mengeksekusi perhitungan {speedup:.1f}x lebih cepat dibandingkan pandas iterasi."
+        ),
     )
 
 

@@ -1,4 +1,4 @@
-"""Ch.31 Earnings quality — Sloan accrual anomaly & Huber robust regression."""
+"""Ch.34 Earnings quality — Sloan accrual anomaly & Huber robust regression."""
 
 from __future__ import annotations
 

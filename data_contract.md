@@ -15,7 +15,7 @@ Default path assumption: `~/dev/ai-saham/data/db/data.db` (override with `--db` 
 | Tier | Ship phase | Purpose |
 |---|---|---|
 | **MVP data** | MVP (Ch.0,1,2,3,4,6) | Prices, fundamentals, broker/foreign flow, sector, IHSG |
-| **v1.1 data** | v1.1 (Ch.5,7,8) | + insider, fuller sector usage |
+| **v1.1 data** | v1.1 (Ch.5,7,9) | + insider, fuller sector usage |
 | **Phase-2 data** | Phase 2 | + earnings, corp actions, IEV/pre-open, labels/observations, headlines if any |
 
 `doctor` reports each tier as: **ok** / **partial** / **missing** with table-level detail.
@@ -90,7 +90,7 @@ Even with real caches, teach:
 2. Demos must print `as_of` (run date or user flag) and, where used, the snapshot date of fundamentals.  
 3. Ch.0 explains look-ahead with a tiny concrete example (e.g. using “today’s” PE on a past week).  
 4. Broker/flow joins to returns must use **known** session dates only (no future bars).  
-5. Ch.16 (later): session clock vs availability — separate from IHSG long-only scoreboard.
+5. Ch.18 `pre-open-rank` (later): session clock vs availability — separate from IHSG long-only scoreboard.
 
 Learning-store materialization (later) should add explicit `as_of_date` / `available_at` columns when panels are built — not required to start Direct-mode MVP.
 

@@ -1,15 +1,17 @@
 # Architecture — `ml-saham`
 
-Implementation shape for the personal IDX ML learning CLI.  
+Implementation shape for the personal IDX **challenge lab** (+ curriculum onboarding).  
+**Product axis (locked):** [ADR-001 — Challenge-first](./docs/adr/ADR-001-challenge-first-product-axis.md)  
 Curriculum: [chapters.md](./chapters.md) · UX: [ux.md](./ux.md) · Data: [data_contract.md](./data_contract.md) · Artifacts: [artifacts.md](./artifacts.md)
 
 ---
 
 ## Goals that constrain architecture
 
-1. Learn ML step by step (chapter modules + shared libs).  
-2. Emit artifacts usable to tune `ai-saham` (never auto-promote).  
-3. Read real market data from `ai-saham` SQLite **or** a derived learning DB.
+1. **Challenge first** — audit `ai-saham` engines/factors via `challenge` / `compare` (`ENGINE_FACTORS` + `run_compare`).  
+2. **Learning second** — chapter modules teach problems so challenge output is interpretable (`explore` / light `demo`).  
+3. Emit artifacts usable to tune `ai-saham` (**never auto-promote**).  
+4. Read real market data from `ai-saham` SQLite **or** a derived learning DB.
 
 ---
 
@@ -20,6 +22,8 @@ Curriculum: [chapters.md](./chapters.md) · UX: [ux.md](./ux.md) · Data: [data_
 | **No import of `ai-saham` Python packages** | `ml-saham` talks to data via SQLite paths / exported files only |
 | **Ingest stays in `ai-saham`** | No Stockbit/Yahoo/IDX scrapers inside `ml-saham` |
 | **Chapters stay problem-centric** | Topic modules teach generic problems; `deepdive` is optional glue |
+| **Challenge outranks curriculum polish** | When priorities conflict, ship `run_compare` / engine audits before soft demos (ADR-001) |
+| **Language by axis** | Challenge UI/reports **English**; learning `explore` narrative **Indonesian** (ADR-001 §5). Flags/slugs always EN |
 | **CLI is the product** | Typer (or Click) app; no web/TUI in MVP |
 
 ---
@@ -134,7 +138,7 @@ CLI
 | **Direct** | Table shape enough for the lesson | Read-only from `ai-saham` `data.db` |
 | **Learning store** | Need panel / as_of / chapter features | `ml-saham` materializes into e.g. `~/.ml-saham/learning.db` or project `data/learning.db` from ai-saham extracts |
 
-MVP chapters (0–4, 6) should work in **Direct** mode where possible; introduce learning-store materialization when cross-section panels get painful (likely Ch.4/6 polish or Ch.12).
+MVP chapters (0–4, 6) should work in **Direct** mode where possible; introduce learning-store materialization when cross-section panels get painful (likely Ch.4/6 polish or Ch.13 walk-forward).
 
 ---
 

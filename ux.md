@@ -1,28 +1,31 @@
-# UX — ML Learning CLI (`ml-saham`)
+# UX — Challenge lab CLI (`ml-saham`)
 
-Final UI/UX for the personal IDX ML learning app.  
-Curriculum: [chapters.md](./chapters.md) · Backlog: [problem_backlog.md](./problem_backlog.md)
+UI/UX for the personal IDX **challenge lab** (+ curriculum onboarding).  
+Product axis: [ADR-001](./docs/adr/ADR-001-challenge-first-product-axis.md) · Curriculum: [chapters.md](./chapters.md) · Backlog: [problem_backlog.md](./problem_backlog.md)
 
 ---
 
 ## Verdict
 
-**Primary surface: CLI only** (MVP and phase 2).  
+**Primary surface: CLI only.**  
 Not a trading cockpit, TUI workbench, or web app. Optional notebook export / TUI may come later; they are not the spine.
+
+**Command priority:** `challenge` / `compare` (audit engines) ahead of `explore` / `demo` (learn the factor).
 
 ---
 
 ## Intent
 
-**“Kursus di terminal”** — each chapter is a short, finishable path with honest scoreboard banners.
+**“Engine audit in the terminal”** — challenge factors against ai-saham-style baselines; curriculum is the short path to understand a factor before you trust the audit.
 
 | Principle | Meaning |
 |---|---|
-| One job per command | `explore` teaches · `demo` runs · `deepdive` links to `ai-saham` |
-| Generic first | Deep-dive never blocks completing the lesson |
+| Challenge first | `challenge` / `compare` are the main job; green engine audits > complete demos |
+| One job per command | `explore` teaches · `demo` illustrates · `compare` audits one factor · `challenge` audits an engine |
+| Generic first | Deep-dive never blocks learning; challenge still needs honest metrics |
 | Quiet chrome | Short prose + tables + banners; no dashboard clutter |
-| ID-first copy | Explanations ID; commands/flags/terms EN |
-| Honest by default | Biaya / leakage / “bukan saran” visible on scoreboards |
+| Language by axis | **Challenge output: English.** **Learning (`explore`) narrative: Indonesian.** Commands/flags/slugs always EN (ADR-001 §5) |
+| Honest by default | Cost / leakage / “not investment advice” banners on scoreboards |
 
 ---
 
@@ -30,17 +33,18 @@ Not a trading cockpit, TUI workbench, or web app. Optional notebook export / TUI
 
 ```text
 ml-saham
-├── chapters              # path, phase, progress
-├── status                # alias-ish: what’s done / unlocked
-├── explore <topic>       # generic problem → options → caveats (no heavy train)
-├── demo <topic>          # real-data run + scoreboard
-├── compare …             # baseline vs model (when chapter needs it)
+├── challenge …           # PRIMARY: engine / factor audit vs baselines
+├── compare <topic> …     # PRIMARY: one-factor baseline vs learned
+├── doctor                # DB path, data-tier coverage before audits
+├── explore <topic>       # secondary: problem → options → caveats
+├── demo <topic>          # secondary: light real-data illustration
 ├── deepdive <topic>      # optional: kaitkan ke ai-saham + artifact
+├── chapters / status     # curriculum path + progress
+├── leaderboard           # cross-topic scoreboard helper
 ├── glossary [term]       # kamus bertahap
-└── doctor                # DB path, data-tier coverage, missing tables / how to fetch
 ```
 
-**Topic slugs** = generic chapter ids (examples):
+**Topic slugs** = generic chapter ids. Numbers match `registry.py` (SSOT):
 
 | Topic slug | Chapter |
 |---|---|
@@ -52,17 +56,22 @@ ml-saham
 | `cluster-peers` | 5 |
 | `broker-flow` | 6 |
 | `insider` | 7 |
-| `volume-anomaly` | 8 |
-| `headline-tone` | 9 |
-| `volatility-sizing` | 10 |
-| `market-regime` | 11 |
-| `walk-forward` | 12 |
-| `portfolio-small` | 13 |
-| `corp-events` | 14 |
-| `earnings-surprise` | 15 |
-| `pre-open-rank` | 16 |
-| `research-pipeline` | 17 |
-| `rl-sandbox` | 18 (optional appendix) |
+| `survival-analysis` | 8 |
+| `volume-anomaly` | 9 |
+| `headline-tone` | 10 |
+| `volatility-sizing` | 11 |
+| `market-regime` | 12 |
+| `walk-forward` | 13 |
+| `portfolio-small` | 14 |
+| `corp-events` | 15 |
+| `earnings-surprise` | 16 |
+| `nowcasting` | 17 |
+| `pre-open-rank` | 18 |
+| `research-pipeline` | 19 |
+| `rl-sandbox` | 20 (optional appendix) |
+| `seasonality-drift` … `pre-open-macro` | 21–44 |
+
+Full list: `ml-saham chapters --all` or [chapters.md](./chapters.md).
 
 Do **not** name topics after engines (`signal-engine`, `mce`, `risk-engine`).
 
@@ -121,7 +130,7 @@ Model    …
 Artifact (opsional):  artifacts/<topic>/…
 ```
 
-Ch.16 exception: opening-session scoreboard (not default IHSG long-only), still with biaya + disclaimer banners.
+Ch.18 (`pre-open-rank`) exception: opening-session scoreboard (not default IHSG long-only), still with biaya + disclaimer banners.
 
 ### `deepdive` — clearly secondary
 

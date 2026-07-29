@@ -169,7 +169,7 @@ def chapters_cmd(
     console.print(table)
     if not all_phases:
         console.print(
-            "\n[dim]MVP + v1.1 + phase-2. Opsional (Ch.18): ml-saham chapters --all. "
+            "\n[dim]MVP + v1.1 + phase-2. Opsional (Ch.20 rl-sandbox): ml-saham chapters --all. "
             "Progress: E✓ D✓ DV✓.[/dim]"
         )
 

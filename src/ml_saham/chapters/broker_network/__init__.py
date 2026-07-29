@@ -11,7 +11,6 @@ from ml_saham.chapters.panel import pick_as_of, resolve_universe
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, CompareResult, DemoResult
 from ml_saham.data.aisaham_read import connect, table_exists
-from ml_saham.data.doctor_checks import run_doctor
 
 META = get_meta("broker-network")
 
@@ -45,45 +44,65 @@ def explore_text(*, verbose: bool = False) -> str:
 
 
 def _build_network(ctx: ChapterContext):
-    """Membangun dummy/simple co-occurrence network antar broker."""
-    report = run_doctor(ctx.db_path)
-    
-    # Cek apakah broker_summaries atau broker_daily_flow tersedia
+    """Build co-occurrence network from broker_daily_flow (preferred) or compatible tables."""
+    from collections import defaultdict
+
     with connect(ctx.db_path) as conn:
-        if not table_exists(conn, "broker_summaries"):
-            raise ChapterDataError(
-                "Tabel broker_summaries / broker_daily_flow tidak ditemukan."
-            )
-            
         uni = ctx.universe or resolve_universe(conn, limit=10)
         as_of = ctx.as_of or pick_as_of(conn, uni, min_forward=5)
-        
-        # Sebagai contoh, query broker_summaries untuk 1 bulan kebelakang
-        # dan hitung co-occurrence broker pada ticker yang sama (dummy logic)
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT date, ticker, broker_code, bval, sval
-            FROM broker_summaries
-            WHERE date <= ? AND ticker IN ({})
-            ORDER BY date DESC LIMIT 2000
-            """.format(",".join("?" * len(uni))),
-            [as_of] + uni
-        )
-        rows = cur.fetchall()
-        
-    if not rows:
-        raise ChapterDataError("Tidak ada data broker_summaries untuk membentuk network.")
+        ph = ",".join("?" * len(uni))
+        rows: list = []
 
-    # Bentuk co-occurrence sederhana: broker X dan Y sama-sama net-buy di saham yang sama di hari yang sama
-    from collections import defaultdict
+        if table_exists(conn, "broker_daily_flow"):
+            cur = conn.execute(
+                f"""
+                SELECT date, ticker, broker_code, net_value
+                FROM broker_daily_flow
+                WHERE date <= ? AND ticker IN ({ph})
+                ORDER BY date DESC LIMIT 4000
+                """,
+                [as_of, *uni],
+            )
+            for date_str, ticker, broker_code, net_value in cur.fetchall():
+                rows.append((date_str, ticker, broker_code, float(net_value or 0.0), 0.0))
+        elif table_exists(conn, "broker_summaries"):
+            # Optional wide schema used by some caches (broker_code + bval/sval)
+            cols = {
+                r[1]
+                for r in conn.execute("PRAGMA table_info(broker_summaries)").fetchall()
+            }
+            if {"broker_code", "bval", "sval"} <= cols:
+                cur = conn.execute(
+                    f"""
+                    SELECT date, ticker, broker_code, bval, sval
+                    FROM broker_summaries
+                    WHERE date <= ? AND ticker IN ({ph})
+                    ORDER BY date DESC LIMIT 4000
+                    """,
+                    [as_of, *uni],
+                )
+                rows = list(cur.fetchall())
+            else:
+                raise ChapterDataError(
+                    "broker_summaries ada tapi tanpa broker_code; "
+                    "butuh broker_daily_flow untuk graph challenge.",
+                    hint="Seed broker_daily_flow atau jalankan fetch broker detail di ai-saham.",
+                )
+        else:
+            raise ChapterDataError(
+                "Tabel broker_daily_flow / broker_summaries tidak ditemukan."
+            )
+
+    if not rows:
+        raise ChapterDataError("Tidak ada baris broker flow untuk membentuk network.")
+
     day_ticker_buyers = defaultdict(list)
-    
+
     for r in rows:
         date_str, ticker, broker_code, bval, sval = r
         net = (bval or 0) - (sval or 0)
-        if net > 0:
-            day_ticker_buyers[(date_str, ticker)].append(broker_code)
+        if net > 0 and broker_code:
+            day_ticker_buyers[(date_str, ticker)].append(str(broker_code))
             
     edges = defaultdict(int)
     nodes = set()

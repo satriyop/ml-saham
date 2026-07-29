@@ -1,4 +1,4 @@
-"""Ch.18 RL sandbox — epsilon-greedy bandit (toy, not production)."""
+"""Ch.20 RL sandbox — epsilon-greedy bandit (toy, not production)."""
 
 from __future__ import annotations
 

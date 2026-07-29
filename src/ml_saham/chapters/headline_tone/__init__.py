@@ -1,4 +1,4 @@
-"""Ch.9 Headline tone — synthetic sentiment lab (no headlines table)."""
+"""Ch.10 Headline tone — synthetic sentiment lab (no headlines table)."""
 
 from __future__ import annotations
 

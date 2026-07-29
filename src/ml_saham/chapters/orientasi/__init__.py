@@ -52,7 +52,7 @@ def explore_text(*, verbose: bool = False) -> str:
             [
                 "",
                 "Detail (--verbose)",
-                "  • Walk-forward penuh baru di Ch.12; di sini cukup kebiasaan dasar",
+                "  • Walk-forward penuh baru di Ch.13; di sini cukup kebiasaan dasar",
                 "  • Artifact dari demo dipakai untuk audit pribadi, bukan live edge",
             ]
         )

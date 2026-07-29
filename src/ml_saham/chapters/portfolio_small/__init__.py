@@ -1,4 +1,4 @@
-"""Ch.13 Portfolio small — equal-weight vs capped weights."""
+"""Ch.14 Portfolio small — equal-weight vs capped weights."""
 
 from __future__ import annotations
 

@@ -1,9 +1,25 @@
 # ml-saham
 
-CLI kursus **machine learning problem-centric** untuk pasar saham Indonesia (IDX).  
-Personal learning — data real dari SQLite `ai-saham` milikmu.
+**Challenge lab** for personal IDX quant stack (`ai-saham`) — with a curriculum attached.
 
-Desain: [chapters.md](./chapters.md) · [ux.md](./ux.md) · [roadmap.md](./roadmap.md)
+Primary job: stress-test **factors, weights, and engine policies** on real market data (read-only SQLite from `ai-saham`).  
+Secondary job: problem-centric ML chapters so those audits are understandable.
+
+Product axis (locked): **[ADR-001 — Challenge-first](./docs/adr/ADR-001-challenge-first-product-axis.md)**  
+Design: [architecture.md](./architecture.md) · [chapters.md](./chapters.md) · [ux.md](./ux.md)
+
+### Language (by product axis)
+
+| Axis | Surface | Learner-facing language |
+|------|---------|-------------------------|
+| **Challenge** (primary) | `challenge`, `compare`, engine audit reports/exports | **English** |
+| **Learning** (secondary) | `explore`, curriculum narrative, teaching caveats | **Indonesian** |
+
+Commands, flags, topic slugs, and code stay English on both axes. See ADR-001 §5.
+
+Not investment advice. Artifacts never auto-promote into `ai-saham`.
+
+---
 
 ## Setup
 
@@ -11,103 +27,101 @@ Desain: [chapters.md](./chapters.md) · [ux.md](./ux.md) · [roadmap.md](./roadm
 cd ~/dev/ml-saham
 python3.11 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[ml]"    # challenge path (recommended)
+# pip install -e .        # core only: explore + light demos
 ```
 
-## Database
+### Database
 
-Default: `~/dev/ai-saham/data/db/data.db`
+Default: `~/dev/ai-saham/data/db/data.db`  
+Ingest stays in `ai-saham` (`saham fetch market`, …). `ml-saham` does not scrape providers.
 
 ```bash
 export ML_SAHAM_DB=~/dev/ai-saham/data/db/data.db
-# atau
-ml-saham --db ~/dev/ai-saham/data/db/data.db doctor
+ml-saham doctor
 ```
 
-Isi data lewat `ai-saham` (`saham fetch market`, dll). `ml-saham` tidak scrape provider.
+---
 
-## Perintah utama
+## Challenge first (main path)
+
+Engine map lives in `src/ml_saham/eval/challenge.py` (`ENGINE_FACTORS`):
+
+| Target | What it audits |
+|--------|----------------|
+| `screener` | Pre-open + accumulation factors |
+| `engine` | Signal / risk / market-context factors (`--category`, `--type`) |
+| `other` | Supporting labs (walk-forward, clusters, …) |
+| `all` | Full audit |
 
 ```bash
-ml-saham chapters          # jalur MVP + progress
-ml-saham chapters --all
-ml-saham status
-ml-saham doctor
-ml-saham explore orientasi --no-pager
-ml-saham demo orientasi
-ml-saham demo clean-prices
-ml-saham demo screen-rules
-ml-saham compare screen-rules --baseline hand --against tree
-ml-saham demo pattern-fail
-ml-saham demo factor-score
+# Full engine audit
+ml-saham challenge all
+ml-saham challenge all --export-json /tmp/challenge.json --export-md /tmp/challenge.md
+
+# By engine surface
+ml-saham challenge screener
+ml-saham challenge screener --scenario pre-open
+ml-saham challenge screener --scenario accum
+ml-saham challenge engine --category signal
+ml-saham challenge engine --category risk --type sizing
+ml-saham challenge engine --category market --type regime
+ml-saham challenge other
+
+# One factor: baseline (ai-saham-like) vs learned
 ml-saham compare factor-score --baseline equal-weight --against elastic-net
-ml-saham demo broker-flow
-ml-saham demo cluster-peers
-ml-saham demo insider
-ml-saham demo volume-anomaly
-ml-saham deepdive broker-flow
+ml-saham compare broker-flow
+ml-saham compare meta-ensemble
 ```
 
-Acceptance: [mvp_acceptance.md](./mvp_acceptance.md) · [v1_1_acceptance.md](./v1_1_acceptance.md)
+**Quality bar:** factors on the engine map must have working **`run_compare`** + honest metrics.  
+Prefer install errors for missing ML deps over silent weak models that fake a win.
 
-Butuh: `pip install -e .` (pandas + scikit-learn). LightGBM opsional: `pip install -e ".[ml]"`.
+---
 
-Progress: `~/.ml-saham/progress.json` (override `ML_SAHAM_HOME`).  
-Artifact root: `./artifacts` atau `ML_SAHAM_ARTIFACTS` / `--artifacts-dir`.
+## Learning second (onboarding)
 
-## Status implementasi
+Use when you need the *problem framing* before reading a challenge report.
 
-| Phase | Isi | Status |
-|---|---|---|
-| 0 | Scaffold CLI + registry + DB resolve | **done** |
-| 1 | Doctor tabel MVP + loaders + universe | **done** |
-| 2 | Metrics + artifacts + explore pager | **done** |
-| 3 | Chapter 0, 1, 2, 3, 4, 6 | **done** |
-| 4 | MVP harden / sign-off | **done** |
-| 5 | v1.1 chapters 5, 7, 8 | **done** |
-| 6 | Phase-2 curriculum 9–17 (+18) | **done** |
-| 7 | Fitur Algoritma & Performa Suite ML | **done** |
+```bash
+ml-saham chapters
+ml-saham chapters --all
+ml-saham explore broker-flow --no-pager
+ml-saham demo clean-prices          # light illustration (not the audit spine)
+ml-saham deepdive broker-flow       # optional link notes → ai-saham
+```
 
-## Algoritma ML & Performa Dataplane
+Chapter numbers: **registry** SSOT (`src/ml_saham/chapters/registry.py`).  
+Curriculum list: [chapters.md](./chapters.md).
 
-- **Dataplane Bebas N+1 Query & Aman SQL**: Resolusi universe menggunakan `GROUP BY` batch query 1x ke SQLite. Semua pengaksesan nama tabel/kolom dinamis divalidasi regex `[a-zA-Z0-9_]+` terhadap injeksi SQL.
-- **Vektor & In-Memory Efficiency**: Pengolahan z-score dan filtering rentang tanggal (`end=as_of`) dioptimalkan dengan NumPy & query tanggal langsung di SQLite.
-- **Quant ML Suite per Chapter**:
-  - **Ch.1 clean-prices**: IQR + Isolation Forest + CUSUM Change-Point Detection.
-  - **Ch.2 screen-rules**: DecisionTree feature importances & rules threshold.
-  - **Ch.3 pattern-fail**: Uji signifikansi statistik Binomial Z-test ($p$-value) vs coin-flip baseline.
-  - **Ch.4 factor-score**: Bobot koefisien fitur (`ElasticNet.coef_` & `Ridge`).
-  - **Ch.5 cluster-peers**: Silhouette Score & Davies-Bouldin Index untuk evaluasi kluster.
-  - **Ch.6 broker-flow**: Model regresi inkremental net flow asing vs price momentum.
-  - **Ch.7 insider**: Koefisien Logistic Regression pada tipe transaksi insider (BUY/SELL).
-  - **Ch.8 volume-anomaly**: IsolationForest vs One-Class SVM anomaly overlap.
-  - **Ch.9 headline-tone**: Ekstraksi token TF-IDF & log-ratio MultinomialNB.
-  - **Ch.10 volatility-sizing**: EWMA ($\lambda=0.94$) volatility forecasting & risk-targeted position sizing.
-  - **Ch.11 market-regime**: State GMM terurut (Bearish, Neutral, Bullish) + probabilitas posterior.
-  - **Ch.12 walk-forward**: Purged Time-Series Split ($H=5$ days gap) pencegah target leakage.
-  - **Ch.13 portfolio-small**: Hierarchical Risk Parity (HRP) / inverse-variance asset allocation.
-  - **Ch.14 corp-events**: Event study Cumulative Abnormal Return (CAR) vs IHSG.
-  - **Ch.15 earnings-surprise**: Estimasi slope drift PEAD ($\beta_1$) & $R^2$.
-  - **Ch.16 pre-open-rank**: Prediksi ketidakseimbangan order book pre-open (IEV vs IEP).
-  - **Ch.17 research-pipeline**: Combinatorial Purged CV & Probability of Overfitting ($P_{\text{CSCV}}$).
-  - **Ch.18 rl-sandbox**: Policy Shannon Entropy ($H(\pi)$) & tracking distribusi aksi bandit.
-  - **Ch.19 seasonality-drift**: Uji ANOVA Kruskal-Wallis (p-value) & Regresi Ridge Anomali Musiman Kalender.
-  - **Ch.20 analyst-consensus**: Regresi Kuantil Target Upside Analis & Consensus Buy Ratio.
-  - **Ch.21 broker-accumulation**: Indeks Gini Konsentrasi Kepemilikan & Top-3 Broker Accumulation Ratio.
-  - **Ch.22 sector-breadth**: PCA Primary Sector Breadth Factor & Partisipasi Sektor (> SMA-20).
-  - **Ch.23 volatility-squeeze**: RandomForest Breakout Classifier pada Bollinger Bandwidth Squeeze & Surge Volume Ratio.
-  - **Ch.24 relative-strength**: Regresi ElasticNet Relative Strength Mansfield vs IHSG Benchmark.
-  - **Ch.25 financial-quality**: Matriks 9 Sinyal Akuntansi Piotroski F-Score & Regresi Logistik Kualitas Laporan Keuangan.
-  - **Ch.26 financial-distress**: Emerging Market Altman Z'-Score Bankruptcy Model & Isolation Forest Anomaly Filter.
-  - **Ch.27 ichimoku-cloud**: RandomForest Kumo Cloud Breakout Classifier pada Tenkan/Kijun/Span A/B.
-  - **Ch.28 bandar-detector**: RandomForest Multi-Window Bandar Accumulation/Distribution Classifier.
-  - **Ch.29 forward-valuation**: Regresi Ridge Konsensus Forward P/E & Model Rasio PEG Growth.
-  - **Ch.30 special-monitoring**: DecisionTree Exchange Notations, UMA Warning & Haircut Tail-Risk Classifier.
-  - **Ch.31 earnings-quality**: Regresi Huber Robust Anomali Akrual Sloan & Kualitas Arus Kas.
-  - **Ch.32 microstructure-impact**: Model SVR Dampak Harga & Rasio Ilikuiditas Amihud.
-  - **Ch.33 meta-ensemble**: Stacked Super Learner Multi-Faktor (Level-1 Ridge Ensemble).
+Some engine chapters intentionally push you to `compare` / `challenge` instead of a soft `demo` — that is by design (ADR-001).
 
-## Catatan
+---
 
-Bukan saran trading/investasi. Skorboard demo default long-only vs IHSG (gross + banner biaya) — lihat desain di repo.
+## Ops
 
+| Item | Location |
+|------|----------|
+| Progress (curriculum) | `~/.ml-saham/progress.json` (`ML_SAHAM_HOME`) |
+| Artifacts | `./artifacts` or `ML_SAHAM_ARTIFACTS` / `--artifacts-dir` |
+| Doctor | `ml-saham doctor` — data tiers before demos/challenges |
+| Acceptance (challenge first) | [challenge_acceptance.md](./challenge_acceptance.md) |
+| Acceptance (curriculum, historical) | [mvp_acceptance.md](./mvp_acceptance.md) · [v1_1_acceptance.md](./v1_1_acceptance.md) · [phase2_acceptance.md](./phase2_acceptance.md) |
+
+Scoreboard default: long-only vs IHSG (gross + cost banner).  
+Ch.18 `pre-open-rank` uses an open-session scoreboard.
+
+---
+
+## Architecture snapshot
+
+```text
+ai-saham  →  fetch/enrich → SQLite
+ml-saham  →  read-only DB
+              ├─ challenge / compare  →  engine factor audit + artifacts  (primary)
+              └─ explore / demo       →  curriculum onboarding          (secondary)
+```
+
+Hard rules: no `ai-saham` Python imports · no scrapers · no auto-promote of configs.
+
+ADRs: [docs/adr/](./docs/adr/)

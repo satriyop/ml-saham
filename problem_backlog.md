@@ -13,10 +13,10 @@ Discussion context: early drafts in local `archive/` (gitignored).
 |---|---|
 | Support / break probability as a main chapter | Fights Ch.3 “wrong question”; OK only as anti-pattern inside Ch.3 |
 | Seasonality as a main ML chapter | Calendar superstition risk; Ch.3 anti-pattern at most |
-| Analyst consensus as its own chapter | Herding misuse; optional aside inside Ch.4 / Ch.9 only |
+| Analyst consensus as its own chapter | Herding misuse; optional aside inside Ch.4 / Ch.10 only |
 | Alt-data fusion | Needs a real alt-data commitment first |
 | Market-wide stress / scenario generators | Niche vs learner arc; maybe after Ch.11 someday |
-| Near-real-time streaming feature store | Systems problem beyond session open-ranking (Ch.16) |
+| Near-real-time streaming feature store | Systems problem beyond session open-ranking (Ch.18) |
 | Uneven-liquidity multi-task / transfer learning | Too niche for this learner arc |
 | Public dataset shipping | Personal-learning product; not a redistribution goal |
 
@@ -26,7 +26,7 @@ Discussion context: early drafts in local `archive/` (gitignored).
 
 | Idea | Park under | Notes |
 |---|---|---|
-| Full tick / order-book microstructure | **Ch.16** | Only if richer tape exists; opening-session ranking stays the headline |
+| Full tick / order-book microstructure | **Ch.18** | Only if richer tape exists; opening-session ranking stays the headline |
 | Setup-gate / phase-detector threshold sweeps | **Ch.12** deep-dive | Research-card style; not a TA chapter |
 | Tracked “smart/noise” broker list quality | **Ch.6** lab | List hygiene + caveats; not smart-money mythology |
 

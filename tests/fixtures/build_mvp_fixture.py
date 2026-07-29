@@ -135,7 +135,7 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                     shock = px * 0.12
                 close = px + shock
                 vol = 1_000_000.0 + si * 10_000 + (i % 7) * 1000
-                # volume spike for Ch.8
+                # volume spike for Ch.9 volume-anomaly
                 if t != "IHSG" and i == 55 and si == 1:
                     vol *= 25
                 candle_rows.append(
@@ -348,6 +348,167 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                     0.01 * ((k % 5) - 2),
                 ),
             )
+
+        # Challenge axis: broker graph + observations + market context
+        import json
+
+        conn.executescript(
+            """
+            CREATE TABLE broker_daily_flow (
+                ticker TEXT NOT NULL,
+                date TEXT NOT NULL,
+                broker_code TEXT NOT NULL,
+                net_value REAL,
+                buy_value REAL,
+                sell_value REAL
+            );
+            CREATE TABLE learning_observations (
+                id INTEGER PRIMARY KEY,
+                purpose TEXT NOT NULL,
+                captured_at TEXT NOT NULL,
+                decision_payload_json TEXT NOT NULL
+            );
+            CREATE TABLE market_context_snapshots (
+                as_of_date TEXT NOT NULL,
+                regime TEXT NOT NULL,
+                factors_json TEXT NOT NULL
+            );
+            """
+        )
+        factor_names = ["vix", "eido", "usd_idr", "idx_trend", "idx_breadth", "foreign_flow"]
+        mctx_rows = []
+        for k in range(min_bars - 10):
+            d = (start + timedelta(days=k)).isoformat()
+            regime = "STRESSED" if k % 7 == 0 else ("BULL" if k % 3 == 0 else "NEUTRAL")
+            factors = [
+                {"name": n, "value": float((k + i * 3) % 50) / 10.0}
+                for i, n in enumerate(factor_names)
+            ]
+            mctx_rows.append((d, regime, json.dumps(factors)))
+        conn.executemany(
+            "INSERT INTO market_context_snapshots VALUES (?,?,?)",
+            mctx_rows,
+        )
+        brokers = ("YP", "KK", "XL", "RX", "AK", "CC", "PD", "MG")
+        flow_rows = []
+        for i in range(min_bars):
+            d = (start + timedelta(days=i)).isoformat()
+            for si, t in enumerate(_STOCKS[:10]):
+                for bi, b in enumerate(brokers):
+                    # multi-broker net-buy co-occurrence on same day/ticker
+                    net = 1e8 * (1 + (si + bi + i) % 5) if bi < 4 + (i % 3) else -5e7
+                    flow_rows.append((t, d, b, net, max(net, 0), max(-net, 0)))
+        conn.executemany(
+            "INSERT INTO broker_daily_flow VALUES (?,?,?,?,?,?)",
+            flow_rows,
+        )
+
+        obs_rows = []
+        groups = [
+            "institutional_flow",
+            "setup_quality",
+            "sector_context",
+            "company_quality_context",
+        ]
+        flow_keys = ["cons", "streak", "vwap", "flow", "inst"]
+        for i in range(min(40, min_bars - 5)):
+            d = (start + timedelta(days=20 + i)).isoformat()
+            captured = f"{d}T09:00:00"
+            for si, t in enumerate(_STOCKS):
+                seed = (si + 1) * 17 + i * 3
+                excess = ((seed % 11) - 5) / 100.0
+                raw = 40.0 + (seed % 50)
+                flow_signals = [
+                    {"key": k, "score": float((seed + j * 7) % 100), "weight": 0.2}
+                    for j, k in enumerate(flow_keys)
+                ]
+                group_contribs = [
+                    {
+                        "group": g,
+                        "score": float((seed + gi * 11) % 100),
+                        "configured_weight": 0.25,
+                    }
+                    for gi, g in enumerate(groups)
+                ]
+                fingerprint = {
+                    "rsi_at_signal": 40.0 + (seed % 30),
+                    "vwap_position_at_signal": ((seed % 20) - 10) / 100.0,
+                    "ia_foreign_participation": (seed % 40) / 100.0,
+                    "ia_domestic_buy_vwap_distance": ((seed % 15) - 7) / 100.0,
+                    "bb_width_pctile_at_signal": (seed % 100) / 100.0,
+                    "foreign_concentration_at_signal": (seed % 60) / 100.0,
+                    "atr_pct_at_signal": 0.01 + (seed % 10) / 1000.0,
+                    "raw_signal_score": raw,
+                    "volatility_size_multiplier_at_signal": 0.5 + (seed % 10) / 20.0,
+                    "cq_valuation_score": float(seed % 80),
+                    "tp_liquidity_score": float((seed * 2) % 80),
+                    "tp_volatility_score": float((seed * 3) % 80),
+                    "benchmark_excess_return_5_session": {
+                        "excess_return_pct": excess,
+                    },
+                }
+                gates = []
+                if seed % 7 == 0:
+                    gates.append("BandarGate")
+                if seed % 11 == 0:
+                    gates.append("LiquidityGate")
+                action = "BLOCKED" if gates else "ALLOW"
+                for purpose in (
+                    "ACCUMULATION_DISCOVERY",
+                    "PRE_OPEN_AUCTION_DIRECTION",
+                ):
+                    payload = {
+                        "ticker": t,
+                        "snapshot_date": d,
+                        "purpose": purpose,
+                        "signal": {
+                            "raw_score": raw,
+                            "raw_exact_score": raw,
+                            "score": raw,
+                            "alpha_trigger_score": {
+                                "group_contributions": group_contribs,
+                            },
+                            "flow_evidence": {
+                                "flow_signals": flow_signals,
+                                "flow_score_ex_bb": raw * 0.8,
+                                "uncapped_strength": raw,
+                            },
+                            "factors": {
+                                "book_pressure": ((seed % 21) - 10) / 10.0,
+                                "delta_iev_ratio": ((seed % 15) - 7) / 100.0,
+                                "iep_gap_pct": ((seed % 9) - 4) / 100.0,
+                                "iev_intensity": float(seed % 50),
+                                "spread_pct": 0.001 + (seed % 5) / 1000.0,
+                                "bid_offer_imbalance": ((seed % 17) - 8) / 10.0,
+                                "delta_iev": float((seed % 30) - 15),
+                                "iev": 100.0 + si + i * 0.1,
+                                "atr": 1.0 + (seed % 10) / 10.0,
+                            },
+                        },
+                        "candidate": {
+                            "iep_gap_pct": ((seed % 9) - 4) / 100.0,
+                            "bid_offer_imbalance": ((seed % 17) - 8) / 10.0,
+                            "book_pressure": ((seed % 21) - 10) / 10.0,
+                            "delta_iev": float((seed % 30) - 15),
+                            "delta_iev_ratio": ((seed % 15) - 7) / 100.0,
+                            "iev_intensity": float(seed % 50),
+                            "iev": 100.0 + si + i * 0.1,
+                            "spread_pct": 0.001 + (seed % 5) / 1000.0,
+                            "atr": 1.0 + (seed % 10) / 10.0,
+                        },
+                        "trade_setup": {
+                            "action": action,
+                            "blocking_gates": gates,
+                            "signal_multiplier": 0.8 + (seed % 5) / 10.0,
+                        },
+                        "sub_signal_fingerprint": fingerprint,
+                    }
+                    obs_rows.append((purpose, captured, json.dumps(payload)))
+        conn.executemany(
+            "INSERT INTO learning_observations (purpose, captured_at, decision_payload_json) "
+            "VALUES (?,?,?)",
+            obs_rows,
+        )
         conn.commit()
     finally:
         conn.close()

@@ -101,27 +101,34 @@ def _build_rows(ctx: ChapterContext):
 
 
 def _xgb_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], str, list[float]]:
-    try:
-        import numpy as np
-        import xgboost as xgb
-    except ImportError as exc:
-        raise ChapterError("Butuh xgboost: pip install xgboost") from exc
-    
+    import numpy as np
+
     arr = np.array(X, dtype=float)
     yy = np.array(y, dtype=float)
-    
-    model = xgb.XGBRegressor(
-        n_estimators=50,
-        max_depth=3,
-        learning_rate=0.05,
-        random_state=42,
-        n_jobs=1,
-    )
-    model.fit(arr, yy)
-    pred = model.predict(arr)
-    
-    importances = model.feature_importances_.tolist()
-    return pred.tolist(), "xgboost", importances
+
+    try:
+        import xgboost as xgb
+
+        model = xgb.XGBRegressor(
+            n_estimators=50,
+            max_depth=3,
+            learning_rate=0.05,
+            random_state=42,
+            n_jobs=1,
+        )
+        model.fit(arr, yy)
+        pred = model.predict(arr)
+        importances = model.feature_importances_.tolist()
+        return pred.tolist(), "xgboost", importances
+    except ImportError:
+        from sklearn.linear_model import Ridge
+
+        model = Ridge(alpha=1.0, random_state=42)
+        model.fit(arr, yy)
+        pred = model.predict(arr)
+        coef = np.abs(model.coef_)
+        imp = (coef / coef.sum()).tolist() if float(coef.sum()) > 0 else [0.0] * arr.shape[1]
+        return pred.tolist(), "ridge-fallback", imp
 
 
 def run_demo(ctx: ChapterContext) -> DemoResult:

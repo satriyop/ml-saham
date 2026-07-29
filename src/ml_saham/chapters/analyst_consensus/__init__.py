@@ -1,4 +1,4 @@
-"""Ch.20 Analyst consensus — target price revisions & consensus drift."""
+"""Ch.22 Analyst consensus — target price revisions & consensus drift."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Ch.22 Sector breadth — market participation & sector rotation index."""
+"""Ch.25 Sector breadth — market participation & sector rotation index."""
 
 from __future__ import annotations
 

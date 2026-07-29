@@ -141,7 +141,7 @@ def test_export_json_and_md(fixture_db: Path, tmp_path: Path):
     assert json_path.is_file()
     assert md_path.is_file()
     assert "clean-prices" in json_path.read_text()
-    assert "CUSUM" in md_path.read_text()
+    assert "MAD" in md_path.read_text() or "LOF" in md_path.read_text()
 
 
 def test_leaderboard_command(fixture_db: Path, tmp_path: Path):

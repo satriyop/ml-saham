@@ -156,29 +156,39 @@ def _lgbm_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], str
     try:
         import numpy as np
         import lightgbm as lgb
-        import shap
     except ImportError as exc:
-        raise ChapterError("Butuh lightgbm dan shap: pip install lightgbm shap") from exc
-    
+        raise ChapterError("Butuh lightgbm: pip install lightgbm (or pip install -e '.[ml]')") from exc
+
     arr = np.array(X, dtype=float)
     yy = np.array(y, dtype=float)
-    
+
     model = lgb.LGBMRegressor(
         n_estimators=50,
         max_depth=3,
         learning_rate=0.05,
         random_state=42,
-        n_jobs=1
+        n_jobs=1,
+        verbosity=-1,
     )
     model.fit(arr, yy)
     pred = model.predict(arr)
-    
-    explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(arr)
-    if isinstance(shap_values, list):
-        shap_values = shap_values[0]
-    
-    importances = np.abs(shap_values).mean(axis=0).tolist()
+
+    # SHAP optional — gain importances are enough for challenge scoreboards
+    try:
+        import shap
+
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(arr)
+        if isinstance(shap_values, list):
+            shap_values = shap_values[0]
+        importances = np.abs(shap_values).mean(axis=0).tolist()
+    except Exception:
+        imp = getattr(model, "feature_importances_", None)
+        importances = (
+            (imp / imp.sum()).tolist()
+            if imp is not None and float(imp.sum()) > 0
+            else [0.0] * arr.shape[1]
+        )
     return pred.tolist(), "lightgbm", importances
 
 

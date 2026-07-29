@@ -40,3 +40,5 @@ class CompareResult:
     model: str | None = None
     summary_md: str = ""
     scoreboard: bool = True
+    winner: str | None = None  # optional label for baseline vs against outcomes
+    winner_reason: str | None = None

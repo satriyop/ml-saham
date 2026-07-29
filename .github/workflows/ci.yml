@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  challenge:
+    name: challenge + core tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install package (ml + dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[ml,dev]"
+
+      - name: Challenge acceptance (ADR-001)
+        run: pytest tests/test_challenge_acceptance.py -q --tb=short
+
+      - name: Core curriculum / phase tests
+        run: pytest tests/test_phase0.py tests/test_phase1.py tests/test_phase2.py tests/test_phase5.py -q --tb=short
+
+      - name: Challenge CLI smoke on fixture
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from tempfile import TemporaryDirectory
+          from typer.testing import CliRunner
+          from ml_saham.cli.app import app
+          from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+
+          runner = CliRunner()
+          with TemporaryDirectory() as td:
+              db = build_mvp_fixture(Path(td) / "c.db", min_bars=100)
+              r = runner.invoke(app, ["--db", str(db), "challenge", "screener", "--scenario", "accum"])
+              assert r.exit_code == 0, r.stdout
+              print("challenge CLI smoke OK")
+          PY

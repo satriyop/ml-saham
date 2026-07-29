@@ -119,17 +119,17 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
     try:
-        import pandas as pd
         import numpy as np
-        from prophet import Prophet
-        from sklearn.metrics import mean_squared_error, mean_absolute_error
-        import logging
-        logging.getLogger("cmdstanpy").disabled = True
+        import pandas as pd
+        from sklearn.linear_model import Ridge
+        from sklearn.metrics import mean_absolute_error, mean_squared_error
+        from sklearn.preprocessing import OneHotEncoder
     except ImportError as exc:
-        raise ChapterError("Butuh pandas, scikit-learn & prophet.") from exc
+        raise ChapterError("Butuh pandas & scikit-learn: pip install -e .") from exc
 
     with connect(ctx.db_path) as conn:
-        rows = load_candles(conn, ctx.universe)
+        uni = ctx.universe or []
+        rows = load_candles(conn, uni if uni else None)
 
     if not rows:
         raise ChapterDataError("Candles kosong.")
@@ -140,46 +140,65 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     df["return"] = df.groupby("ticker")["close"].pct_change() * 100
     df = df.dropna(subset=["return"])
 
-    ticker = ctx.universe[0] if ctx.universe else df["ticker"].iloc[0]
+    ticker = uni[0] if uni else str(df["ticker"].iloc[0])
     df_t = df[df["ticker"] == ticker].copy()
+    if len(df_t) < 40:
+        raise ChapterDataError(f"Data candles {ticker} terlalu sedikit untuk seasonality compare.")
 
-    if len(df_t) < 500:
-        raise ChapterDataError(f"Data candles {ticker} terlalu sedikit untuk di-split.")
-
-    # Train-test split (last 252 days as test)
-    split_idx = len(df_t) - 252
+    test_n = min(20, max(8, len(df_t) // 4))
+    split_idx = len(df_t) - test_n
     train_df = df_t.iloc[:split_idx].copy()
     test_df = df_t.iloc[split_idx:].copy()
-
-    # SOTA: Prophet
-    train_prophet = train_df[["date", "return"]].rename(columns={"date": "ds", "return": "y"})
-    test_prophet = test_df[["date", "return"]].rename(columns={"date": "ds", "return": "y"})
-
-    model = Prophet(yearly_seasonality=True, weekly_seasonality=False, daily_seasonality=False)
-    model.fit(train_prophet)
-    
-    forecast = model.predict(test_prophet[["ds"]])
-    sota_preds = forecast["yhat"].values
-
-    # Baseline: Naive month-of-year average
     train_df["month"] = train_df["date"].dt.month
-    monthly_avg = train_df.groupby("month")["return"].mean().to_dict()
-
     test_df["month"] = test_df["date"].dt.month
-    baseline_preds = test_df["month"].map(monthly_avg).fillna(0).values
 
+    monthly_avg = train_df.groupby("month")["return"].mean().to_dict()
+    baseline_preds = test_df["month"].map(monthly_avg).fillna(0).values
     actual = test_df["return"].values
+
+    sota_name = "Ridge month dummies"
+    model_tag = "ridge_month_vs_naive"
+    try:
+        enc = OneHotEncoder(sparse_output=False, handle_unknown="ignore")
+        X_train = enc.fit_transform(train_df[["month"]])
+        X_test = enc.transform(test_df[["month"]])
+        ridge = Ridge(alpha=1.0, random_state=42)
+        ridge.fit(X_train, train_df["return"].values)
+        sota_preds = ridge.predict(X_test)
+    except Exception:
+        sota_preds = baseline_preds
+        sota_name = "fallback=baseline"
+        model_tag = "seasonality_fallback"
+
+    # Optional Prophet when installed and history is long enough
+    if len(df_t) >= 200:
+        try:
+            import logging
+
+            from prophet import Prophet
+
+            logging.getLogger("cmdstanpy").disabled = True
+            train_p = train_df[["date", "return"]].rename(columns={"date": "ds", "return": "y"})
+            test_p = test_df[["date"]].rename(columns={"date": "ds"})
+            model = Prophet(
+                yearly_seasonality=True, weekly_seasonality=False, daily_seasonality=False
+            )
+            model.fit(train_p)
+            sota_preds = model.predict(test_p)["yhat"].values
+            sota_name = "Prophet"
+            model_tag = "prophet_vs_naive"
+        except Exception:
+            pass
 
     sota_rmse = float(np.sqrt(mean_squared_error(actual, sota_preds)))
     base_rmse = float(np.sqrt(mean_squared_error(actual, baseline_preds)))
-    
     sota_mae = float(mean_absolute_error(actual, sota_preds))
     base_mae = float(mean_absolute_error(actual, baseline_preds))
 
     lines = [
-        f"Ticker: {ticker} (Test set: 252 hari)",
+        f"Ticker: {ticker} (test n={test_n})",
         "",
-        "SOTA (Prophet):",
+        f"SOTA ({sota_name}):",
         f"  RMSE: {sota_rmse:.6f}",
         f"  MAE:  {sota_mae:.6f}",
         "",
@@ -187,7 +206,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         f"  RMSE: {base_rmse:.6f}",
         f"  MAE:  {base_mae:.6f}",
         "",
-        f"Winner (RMSE): {'SOTA (Prophet)' if sota_rmse < base_rmse else 'Baseline (Naive Month Avg)'}"
+        f"Winner (RMSE): {'SOTA' if sota_rmse < base_rmse else 'Baseline'}",
     ]
 
     metrics = {
@@ -195,14 +214,18 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         "base_rmse": base_rmse,
         "sota_mae": sota_mae,
         "base_mae": base_mae,
+        "sota_model": sota_name,
     }
 
     return DemoResult(
         title="Compare SOTA vs Baseline · Seasonality Drift",
         lines=lines,
         metrics=metrics,
-        model="prophet_vs_naive",
-        summary_md=f"# Compare Seasonality\n\nSOTA RMSE: {sota_rmse:.4f} vs Baseline RMSE: {base_rmse:.4f}",
+        model=model_tag,
+        summary_md=(
+            f"# Compare Seasonality\n\nSOTA ({sota_name}) RMSE: {sota_rmse:.4f} "
+            f"vs Baseline RMSE: {base_rmse:.4f}"
+        ),
         scoreboard=False,
         scoreboard_kind="none",
     )

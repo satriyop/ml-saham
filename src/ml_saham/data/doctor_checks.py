@@ -341,7 +341,7 @@ def _phase2_checks(conn) -> list[CheckItem]:
             CheckItem(
                 "headlines",
                 "missing",
-                "tidak ada tabel headline — Ch.9 pakai korpus sintetis",
+                "tidak ada tabel headline — Ch.10 pakai korpus sintetis",
                 hard=False,
             )
         )
