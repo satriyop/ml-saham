@@ -142,7 +142,7 @@ That is intentional, not a failed install.
 | [challenge_pre_open_directional_score.md](./challenge_pre_open_directional_score.md) | Pre-open observation / raw_score |
 | [challenge_factor_validity.md](./challenge_factor_validity.md) | Factor track |
 | [engine_factor_map.md](./engine_factor_map.md) | Engines ↔ tables ↔ policies |
-| [data_contract.md](../data_contract.md) | Live SQLite tables (`learning_*`, not retired names) |
+| [data_contract.md](../data_contract.md) | Live SQLite tables; **label ownership** (corpus = ai-saham, challenge **y** = protocol / artifacts only) |
 | [adr/](./adr/) | Locked product decisions |
 
 ---

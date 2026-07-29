@@ -70,35 +70,84 @@ Scrub absurd dates (e.g. year 1970) in chapter adapters; warn in `doctor`.
 
 ## Phase-2 data (summary)
 
-| Need | Tables (ai-saham) — **live SSOT** |
-|---|---|
-| Earnings | `earnings_cache` |
-| Corp actions | `corp_action_cache` / `corporate_action_events` (+ dates) |
-| IEV / pre-open ranks | `iev_snapshots`, prefer `iev_snapshot_history` when present |
-| Learning observations (decisions) | **`learning_observations`** |
-| Learning outcomes (labels) | **`learning_outcome_labels`** |
-| Learning evaluations (cohort) | **`learning_evaluations`** (optional for demos; used by ai-saham research loop) |
-| Headlines | only if a real source exists |
+| Need | Where it lives | Tables / outputs |
+|---|---|---|
+| Earnings | **ai-saham** ingest | `earnings_cache` |
+| Corp actions | **ai-saham** ingest | `corp_action_cache` / `corporate_action_events` |
+| IEV / pre-open ranks | **ai-saham** ingest | `iev_snapshots`, prefer `iev_snapshot_history` |
+| Decisions / captures | **ai-saham** corpus | **`learning_observations`** |
+| Corpus outcome labels | **ai-saham** corpus | **`learning_outcome_labels`** |
+| Cohort evaluations | **ai-saham** research loop | **`learning_evaluations`** (optional for ml-saham demos) |
+| Headlines | **ai-saham** if a real source exists | (table name varies) |
+| Challenge evaluation labels | **Protocol-owned in ml-saham** (not written back to ai-saham) | Built from `candles` and/or **joined** corpus labels → panel in-memory / artifacts / optional learning store |
 
-Detail for challenge-path columns: [§ Learning corpus](#learning-corpus-ai-saham-live).  
+Detail: [§ Label ownership](#label-ownership-ingest-vs-challenge) · [§ Learning corpus](#learning-corpus-ai-saham-live).  
 Phase-2 soft tables need not block MVP demos; **challenge** needs observations + candles (see [docs/challenge_product.md](./docs/challenge_product.md)).
 
 ### Retired / do not reintroduce
 
 These names appear in older notes or fixtures only. **Live ai-saham does not use them as the observation/label plane.** Do not teach agents to require them for challenge or new features:
 
-| Dead / legacy name | Replaced by |
+| Dead / legacy name | Replaced by (ai-saham corpus) |
 |---|---|
 | `candidate_observations` | `learning_observations` (`decision_payload_json`, `purpose`, …) |
-| `signal_forward_labels` | `learning_outcome_labels` (and multi-horizon excess from `candles` for ADR-002 panels) |
+| `signal_forward_labels` | `learning_outcome_labels` (ai-saham research/label contracts) |
 
-Optional: a curriculum chapter may still soft-read `signal_forward_labels` if present in a fixture; that is **not** the production contract.
+Do **not** treat “honest labels for challenge” as a reason to recreate those dead tables inside ml-saham. Challenge labels are protocol-owned (next section).
+
+Optional: a curriculum chapter may still soft-read `signal_forward_labels` if present in a **fixture**; that is not the production contract.
+
+---
+
+## Label ownership (ingest vs challenge)
+
+Two different “label” ideas — **do not merge ownership**.
+
+| Kind | Owner | Stored where | Written by |
+|---|---|---|---|
+| **Ingest / corpus labels** | **ai-saham** | Always ai-saham SQLite: `learning_outcome_labels` (+ related research tables) | ai-saham `research <scenario> labels` / evaluate pipeline |
+| **Challenge evaluation labels** | **ml-saham Protocol** | **Not** written into ai-saham. Exist as panel fields in-memory during `challenge run` / `engine`; may be summarized in **artifacts** (`./artifacts/…`) or an **optional ml-saham learning store** | ml-saham challenge only |
+
+### Ingest / corpus labels (ai-saham only)
+
+- Path contracts such as `price_path.open_30m.v1`, `price_path.accum_10d.v1` live in **`learning_outcome_labels`**.  
+- Observations they attach to live in **`learning_observations`**.  
+- ml-saham is **read-only** on this plane.  
+- Never invent parallel `candidate_observations` / `signal_forward_labels` tables in ml-saham “for honesty.”
+
+### Challenge evaluation labels (protocol-owned)
+
+ADR-002 panels need a **y** for rank IC under a fixed protocol. That **y** is built at challenge time:
+
+| Protocol family | How evaluation labels are built (read-only inputs) | Primary store of the result |
+|---|---|---|
+| `accum_path_v1` | Excess close→close vs IHSG from **`candles`** @ H=3/10/20 (primary **10**) | Challenge panel / artifact metrics — **not** ai-saham tables |
+| `pre_open_session_v1` | Same-session open→close excess vs IHSG from **`candles`**, and/or **join** `learning_outcome_labels` when available | Same |
+
+Rules:
+
+1. Challenge **reads** ai-saham corpus labels when useful (join on `observation_id`); it does **not** upsert them.  
+2. Challenge **computes** protocol returns from **`candles`** when that is the protocol contract (especially accum multi-horizon).  
+3. Challenge **writes** only to ml-saham surfaces: terminal report, `--export-json` / `--export-md`, `artifacts/challenge/…`, and later optional `data/learning.db` / `~/.ml-saham/learning.db` materializations.  
+4. **No auto-promote** of weights/labels into ai-saham configs or corpus tables.
+
+```text
+ai-saham                          ml-saham challenge
+────────                          ──────────────────
+learning_observations  ──read──►  features / scores
+learning_outcome_labels ─read──►  optional y (join)
+candles (+ IHSG)         ─read──►  protocol y (excess / open-close)
+                                  │
+                                  └── write → artifacts / exports
+                                              (optional learning store)
+                                  never write → ai-saham SQLite
+```
 
 ---
 
 ## Learning corpus (ai-saham live)
 
-Primary store for **challenge** policy panels and research captures.
+**ai-saham-owned** store for research captures and corpus outcomes. Challenge **reads** these; it does not own them.
 
 ### `learning_observations`
 
@@ -107,16 +156,16 @@ Primary store for **challenge** policy panels and research captures.
 | `purpose` | e.g. `ACCUMULATION_DISCOVERY`, `PRE_OPEN_AUCTION_DIRECTION` |
 | `captured_at` | Capture time (ordering / dedupe) |
 | `decision_payload_json` | Full decision JSON (components, scores, ticker, dates) |
-| `observation_id` | Identity for join to outcomes (when column present) |
+| `observation_id` | Identity for join to corpus outcomes (when column present) |
 
-**Challenge use:**
+**Read by challenge for features / scores:**
 
 | Purpose | Policy / surface |
 |---|---|
 | `ACCUMULATION_DISCOVERY` (and ACCUM*) | `screener.accum.score_weights` |
 | `PRE_OPEN_AUCTION_DIRECTION` | `screener.pre_open.directional_score` |
 
-### `learning_outcome_labels`
+### `learning_outcome_labels` (corpus labels)
 
 | Column (min) | Role |
 |---|---|
@@ -126,19 +175,19 @@ Primary store for **challenge** policy panels and research captures.
 | `metrics_json` | Path metrics (e.g. open_to_close_return_pct) |
 | `labeled_at` | Label time |
 
-**Challenge use:** optional open-path labels for pre-open directional panel; accum ADR-002 primarily labels from **`candles`** excess vs IHSG.
+Owned by **ai-saham** ingest/research. Challenge may **join** for protocol **y** (e.g. pre-open directional); accum ADR-002 primarily uses **`candles`** excess for evaluation labels (protocol-owned computation).
 
 ### `learning_evaluations`
 
 Cohort / evaluate artifacts from ai-saham `research <scenario> evaluate`.  
-Not required for ADR-002 `challenge run` panels today; doctor may report presence only.
+ai-saham-owned. Not required for ADR-002 `challenge run` panels today; doctor may report presence only.
 
-### Related caches (not observation plane)
+### Related caches (inputs, not label stores)
 
 | Table | Role |
 |---|---|
-| `candles` (+ IHSG) | Forward and same-session returns for challenge labels |
-| `iev_snapshots` / `iev_snapshot_history` | Pre-open IEV rank policy (not learning_observations) |
+| `candles` (+ IHSG) | Raw prices for **protocol-owned** challenge evaluation labels |
+| `iev_snapshots` / `iev_snapshot_history` | Pre-open IEV rank **features** (not learning_observations) |
 
 ---
 
@@ -159,7 +208,9 @@ Learning-store materialization (later) should add explicit `as_of_date` / `avail
 
 ## Learning store (when Direct mode is awkward)
 
-Optional SQLite owned by `ml-saham`, e.g. `data/learning.db` or `~/.ml-saham/learning.db`.
+Optional SQLite **owned by `ml-saham`**, e.g. `data/learning.db` or `~/.ml-saham/learning.db`.
+
+This is a place for **materialized challenge/curriculum panels** (including protocol evaluation labels and features), **not** a second copy of ai-saham’s corpus. It must not replace `learning_observations` / `learning_outcome_labels` as the system of record for decisions/outcomes.
 
 Suggested early panels (implement when needed):
 
@@ -169,7 +220,18 @@ Suggested early panels (implement when needed):
 | `cross_section` | ticker × as_of | Factor / flow features for one date |
 | `feature_asof` | ticker × as_of × feature | Long features if wide panels hurt |
 
-Population: ETL command e.g. `ml-saham data build-panel --from-db <ai-saham>` (phase when Direct mode is insufficient).
+Population: ETL command e.g. `ml-saham data build-panel --from-db <ai-saham>` (phase when Direct mode is insufficient). Write path: **ml-saham only**.
+
+---
+
+## Challenge product data plane (short)
+
+| Read from ai-saham | Write from ml-saham challenge |
+|---|---|
+| `learning_observations`, `learning_outcome_labels` (optional join), `candles`, `iev_*`, … | Artifacts, exports, optional learning store |
+| Never required: `candidate_observations`, `signal_forward_labels` | Never write challenge **y** or policy verdicts into ai-saham |
+
+See [docs/challenge_product.md](./docs/challenge_product.md).
 
 ---
 
