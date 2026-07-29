@@ -82,6 +82,7 @@ ml-saham vet
 | `pre-open` | `screener.pre_open.directional_score` | `pre_open_session_v1` | [docs](./docs/challenge_pre_open_directional_score.md) |
 
 **Engine rollup:** [docs/challenge_engine_screener.md](./docs/challenge_engine_screener.md)  
+**Champion:** [docs/challenge_champion.md](./docs/challenge_champion.md)  
 **Factor keep/demote (accum):** [docs/challenge_factor_validity.md](./docs/challenge_factor_validity.md)  
 **Full product doc:** [docs/challenge_product.md](./docs/challenge_product.md)
 
@@ -101,6 +102,9 @@ ml-saham challenge engine screener
 ml-saham challenge engine screener --scenario accum
 ml-saham challenge engine screener --scenario pre-open
 
+# Champion (learned score rule vs production)
+ml-saham challenge champion screener.accum.score_weights --model lgbm_reweight
+
 # Factor validity (accum sleeves)
 ml-saham challenge factor screener.accum.score_weights --all
 ml-saham challenge factor screener.accum.score_weights --factor consistency
@@ -109,7 +113,8 @@ ml-saham challenge factor screener.accum.score_weights --factor consistency
 | Command | Job |
 |---------|-----|
 | `challenge list` | Policy ids + protocols |
-| `challenge run <policy>` | Production vs challenger |
+| `challenge run <policy>` | Production vs challenger (tune) |
+| `challenge champion` | Learned score rule vs production |
 | `challenge engine screener` | PolicySpec portfolio (`--scenario` optional) |
 | `challenge factor …` | KEEP / DEMOTE / DROP_CANDIDATE (accum) |
 | `vet` / `doctor --deep` | Data-plane gate |

@@ -159,3 +159,75 @@ def test_score_champion_dispatch_unknown():
     pol = load_policy("screener.accum.score_weights")
     s, m, err = score_champion("nope", [], [], pol, primary_horizon=10)
     assert s is None and err
+
+
+def test_elastic_net_champion_accum(fixture_db: Path):
+    result = run_policy_challenge(
+        fixture_db,
+        "screener.accum.score_weights",
+        against="elastic_net_reweight",
+        write_artifact=False,
+    )
+    assert result.status in {
+        ChallengeStatus.WIN,
+        ChallengeStatus.LOSE,
+        ChallengeStatus.INCONCLUSIVE,
+        ChallengeStatus.BLOCKED_DATA,
+        ChallengeStatus.BLOCKED_POLICY,
+    }
+    assert result.against_id == "elastic_net_reweight"
+    if result.status not in (
+        ChallengeStatus.BLOCKED_DATA,
+        ChallengeStatus.BLOCKED_POLICY,
+    ):
+        assert result.fold_metrics
+
+
+def test_champion_pre_open_iev_or_block(fixture_db: Path):
+    """Pre-open uses feature_keys; may run or BLOCKED depending on panel/deps."""
+    result = run_policy_challenge(
+        fixture_db,
+        "screener.pre_open.iev_rank",
+        against="lgbm_reweight",
+        write_artifact=False,
+    )
+    assert result.status in {
+        ChallengeStatus.WIN,
+        ChallengeStatus.LOSE,
+        ChallengeStatus.INCONCLUSIVE,
+        ChallengeStatus.BLOCKED_DATA,
+        ChallengeStatus.BLOCKED_POLICY,
+    }
+    assert "champion" in " ".join(result.notes).lower() or "CHAMPION" in "\n".join(
+        result.lines
+    )
+
+
+def test_champion_constant_y_blocks():
+    """Constant train labels → honest error from scorer."""
+    from ml_saham.challenge.panel import PanelRow
+
+    pol = load_policy("screener.accum.score_weights")
+    keys = feature_keys_for_learned(pol)
+    train = [
+        PanelRow(
+            ticker="AAA",
+            date=f"2024-01-{i:02d}",
+            components={k: float(i) for k in keys},
+            excess={10: 0.0},
+        )
+        for i in range(1, 40)
+    ]
+    test = [
+        PanelRow(
+            ticker="BBB",
+            date="2024-02-01",
+            components={k: 1.0 for k in keys},
+            excess={10: 0.01},
+        )
+    ]
+    scores, _m, err = score_lgbm_reweight(train, test, pol, primary_horizon=10)
+    if err and "lightgbm" in err.lower():
+        pytest.skip("lightgbm not installed")
+    assert scores is None
+    assert err and "constant" in err.lower()

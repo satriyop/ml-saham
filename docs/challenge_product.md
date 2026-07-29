@@ -31,7 +31,7 @@ Still **one axis** (Challenge), two **purposes / tracks**. Not a third top-level
 | Track | Purpose | You care about ai-saham factors / weights / formula? | Question |
 |-------|---------|------------------------------------------------------|----------|
 | **Challenge (tune)** — **shipped** | Help humans **tune** production policy | **Yes** | (1) Is this **factor** worth it? (2) Are **weights & combination** sensible? |
-| **Challenge champion** — **planned** | Find a **better scoring rule** that beats production | **No** (internals optional / black-box OK) | (3) Is there a contender that **replaces** production score under the same protocol? |
+| **Challenge champion** — **shipped** (accum) | Find a **better scoring rule** that beats production | **No** (internals optional / black-box OK) | (3) Is there a contender that **replaces** production score under the same protocol? |
 
 ```text
 ml-saham
@@ -39,21 +39,21 @@ ml-saham
 └── Challenge             English audit lab (production baseline, no auto-promote)
       ├── tune            factor worth? · weights/combo OK?     ← shipped
       │     policy tournament · factor validity · engine rollup
-      └── champion        better score rule than production?  ← planned
+      └── champion        better score rule than production?  ← shipped
 ```
 
-| | **Tune** (today) | **Champion** (planned) |
-|--|------------------|-------------------------|
+| | **Tune** | **Champion** |
+|--|----------|--------------|
 | Baseline | Always **`production`** | Always **`production`** |
-| Typical against | `equal_sleeves`, `ridge_reweight`, drop-factor | e.g. `lgbm_reweight`, other learned scorers |
+| Typical against | `equal_sleeves`, `ridge_reweight`, drop-factor | `lgbm_reweight`, `elastic_net_reweight` |
 | If WIN | Maybe retune weights / demote factor | Maybe **adopt a new scorer** (bigger human change) |
-| Protocol / folds / labels | Required | Required (same honesty) |
+| Protocol / folds / labels | Required | Required (same honesty; train-only fit) |
 | Auto-promote to ai-saham | **Never** | **Never** |
+| CLI | `challenge run` / `factor` / `engine` | **`challenge champion`** |
 
 **Champion is not Learning.** Curriculum LightGBM demos stay non-authority.  
-**Champion is not “SOTA.”** It is “beats production under protocol → human promote review.”
-
-Shipped CLI today is **tune** only (`run` / `factor` / `engine`). Champion CLI (e.g. `challenge champion …` or `--mode champion`) is **not implemented yet**.
+**Champion is not “SOTA.”** It is “beats production under protocol → human promote review.”  
+Operator: [challenge_champion.md](./challenge_champion.md).
 
 ---
 
