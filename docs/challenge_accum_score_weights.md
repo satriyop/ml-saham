@@ -19,7 +19,16 @@ ml-saham challenge run screener.accum.score_weights --against ridge_reweight
 ## Baseline
 
 Frozen snapshot: `src/ml_saham/challenge/policies/accum_score_weights.v1.json`  
-Mirrored from ai-saham `ScoreAccumUseCase.AccumScorePolicy` defaults. Hash is embedded in artifacts.
+Mirrored from ai-saham `ScoreAccumUseCase.AccumScorePolicy` defaults, with **P0 honesty**:
+
+| Sleeve | Enabled | Notes |
+|--------|---------|--------|
+| consistency, streak, vwap_discount, rsi_headroom, foreign_flow_ratio | yes | Original weighted book |
+| **bci** (`inst`) | **yes (P0)** | Production points-based additive; challenged as sleeve weight 8.3 |
+| **sector_breadth** | **yes (P0)** | Production soft +10 peer-breadth add-on; extractable points |
+| bb_squeeze | **no** | Matches production BB off — not inventing BB-on |
+
+Hash is embedded in artifacts (bumped when components change).
 
 ## Protocol `accum_path_v1`
 

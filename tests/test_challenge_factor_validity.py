@@ -34,7 +34,10 @@ def test_resolve_aliases():
     assert resolve_factor_key(pol, "cons") == "consistency"
     assert resolve_factor_key(pol, "consistency") == "consistency"
     assert resolve_factor_key(pol, "streak") == "streak"
-    assert resolve_factor_key(pol, "bb_squeeze") is None  # disabled
+    assert resolve_factor_key(pol, "inst") == "bci"  # P0 enabled
+    assert resolve_factor_key(pol, "bci") == "bci"
+    assert resolve_factor_key(pol, "breadth") == "sector_breadth"
+    assert resolve_factor_key(pol, "bb_squeeze") is None  # still production-off
     assert resolve_factor_key(pol, "nope") is None
 
 
@@ -42,6 +45,8 @@ def test_list_enabled_factors():
     rows = list_enabled_factors()
     keys = {r["key"] for r in rows}
     assert "consistency" in keys
+    assert "bci" in keys
+    assert "sector_breadth" in keys
     assert "bb_squeeze" not in keys
 
 
@@ -58,6 +63,20 @@ def test_blocked_disabled_factor(fixture_db: Path):
     r = run_factor_challenge(fixture_db, factor="bb_squeeze", write_artifact=False)
     assert r.verdict == FactorVerdict.BLOCKED_POLICY
     assert r.exit_code() == 2
+
+
+def test_p0_bci_and_sector_breadth_factor_challenge(fixture_db: Path):
+    """P0: BCI and sector_breadth are first-class enabled sleeves."""
+    for key in ("bci", "inst", "sector_breadth", "breadth"):
+        r = run_factor_challenge(fixture_db, factor=key, write_artifact=False)
+        assert r.verdict != FactorVerdict.BLOCKED_POLICY, (key, r.notes)
+        assert r.verdict in {
+            FactorVerdict.KEEP,
+            FactorVerdict.DEMOTE,
+            FactorVerdict.DROP_CANDIDATE,
+            FactorVerdict.INCONCLUSIVE,
+            FactorVerdict.BLOCKED_DATA,
+        }
 
 
 def test_blocked_unknown_factor(fixture_db: Path):

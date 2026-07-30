@@ -4,68 +4,61 @@
   "protocol_id": "accum_path_v1",
   "panel_kind": "accum_components",
   "score_kind": "weighted_sleeves",
-  "source": "ai-saham ScoreAccumUseCase.AccumScorePolicy defaults",
-  "source_ref": "src/application/use_case/score_accum_use_case.py (mirrored snapshot)",
-  "max_score": 100.0,
+  "source": "ai-saham ScoreAccumUseCase.AccumScorePolicy defaults + P0 BCI/sector_breadth sleeves",
+  "source_ref": "src/application/use_case/score_accum_use_case.py (mirrored snapshot); P0 enables bci + sector_breadth",
+  "max_score": 110.0,
   "components": [
     {
       "key": "consistency",
-      "aliases": [
-        "cons"
-      ],
+      "aliases": ["cons"],
       "weight": 33.3,
       "enabled": true
     },
     {
       "key": "streak",
-      "aliases": [
-        "streak"
-      ],
+      "aliases": ["streak"],
       "weight": 25.0,
       "enabled": true
     },
     {
       "key": "vwap_discount",
-      "aliases": [
-        "vwap"
-      ],
+      "aliases": ["vwap"],
       "weight": 16.7,
       "enabled": true
     },
     {
       "key": "rsi_headroom",
-      "aliases": [
-        "rsi"
-      ],
+      "aliases": ["rsi"],
       "weight": 8.3,
       "enabled": true
     },
     {
       "key": "foreign_flow_ratio",
-      "aliases": [
-        "flow"
-      ],
+      "aliases": ["flow"],
       "weight": 8.3,
       "enabled": true
     },
     {
-      "key": "bb_squeeze",
-      "aliases": [
-        "bb"
-      ],
+      "key": "bci",
+      "aliases": ["bci", "inst"],
       "weight": 8.3,
-      "enabled": false
+      "enabled": true,
+      "note": "P0: first-class sleeve; production is points-based additive — weight mirrors soft sleeve scale"
     },
     {
-      "key": "bci",
-      "aliases": [
-        "bci",
-        "inst"
-      ],
-      "weight": 0.0,
+      "key": "sector_breadth",
+      "aliases": ["breadth", "sector_breadth_bonus", "peer_breadth"],
+      "weight": 10.0,
+      "enabled": true,
+      "note": "P0: production soft add-on (+10 when peer breadth high); scored as extractable sleeve points"
+    },
+    {
+      "key": "bb_squeeze",
+      "aliases": ["bb"],
+      "weight": 8.3,
       "enabled": false,
-      "note": "points-based additive in production; excluded from weighted sleeves in v1"
+      "note": "Matches production BB off — not inventing BB-on"
     }
   ],
-  "hash": "ac01f2a36342191f"
+  "hash": "6b5bc2fef45338b4"
 }

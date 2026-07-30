@@ -100,7 +100,7 @@ Operator notes: [docs/challenge_*.md](./docs/) · map: [docs/engine_factor_map.m
 
 ### Honest coverage (accum enter stack)
 
-Product challenge for the **accumulation journey** is **not** the full ai-saham enter desk. Today it is **AccumScore weighted sleeves** (five enabled factors) under rank IC vs excess return — not Action ENTER accuracy.
+Product challenge for the **accumulation journey** is **not** the full ai-saham enter desk. Today it is **AccumScore weighted sleeves** (seven enabled factors after P0 BCI + sector_breadth; BB off) under rank IC vs excess return — not Action ENTER accuracy.
 
 Live inventory (ai-saham): `docs/evidence_diagnostic_factor_accum.md`.  
 Gap plan: [docs/challenge_product_roadmap.md](./docs/challenge_product_roadmap.md).

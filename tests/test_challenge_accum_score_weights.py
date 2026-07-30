@@ -32,6 +32,10 @@ def test_policy_registry_loads():
     pol = load_policy("screener.accum.score_weights")
     assert pol.hash
     assert any(c.key == "consistency" and c.enabled for c in pol.components)
+    assert any(c.key == "bci" and c.enabled and c.weight > 0 for c in pol.components)
+    assert any(
+        c.key == "sector_breadth" and c.enabled and c.weight > 0 for c in pol.components
+    )
     assert any(c.key == "bb_squeeze" and not c.enabled for c in pol.components)
 
 
@@ -60,13 +64,19 @@ def test_extract_components_from_flow_signals():
                     {"key": "vwap", "score": 5.0},
                     {"key": "flow", "score": 3.0},
                     {"key": "rsi", "score": 2.0},
+                    {"key": "inst", "score": 4.0},
                 ]
             }
-        }
+        },
+        "sub_signal_fingerprint": {
+            "sector_breadth": 0.7,
+        },
     }
     comps = extract_components(payload, pol)
     assert comps is not None
     assert comps["consistency"] == 10.0
+    assert comps["bci"] == 4.0
+    assert comps["sector_breadth"] == pytest.approx(0.7 * 10.0)
     assert "bb_squeeze" not in comps  # disabled not required in output keys of enabled only
     assert "consistency" in comps
 
@@ -88,7 +98,8 @@ def test_extract_components_from_adr056_features_by_window():
                             {"key": "vwap", "score_points": 4.0, "max_points": 16.7},
                             {"key": "flow", "score_points": 2.0, "max_points": 12.5},
                             {"key": "rsi", "score_points": 1.7, "max_points": 12.5},
-                            {"key": "inst", "score_points": 0.0, "max_points": 0.0},
+                            {"key": "inst", "score_points": 5.0, "max_points": 8.3},
+                            {"key": "sector_breadth", "score_points": 10.0, "max_points": 10.0},
                         ],
                         "breakdown": {
                             "cons": 9.5,
@@ -96,6 +107,8 @@ def test_extract_components_from_adr056_features_by_window():
                             "vwap": 4.0,
                             "flow": 2.0,
                             "rsi": 1.7,
+                            "inst": 5.0,
+                            "sector_breadth": 10.0,
                             "bb": None,
                         },
                     }
@@ -111,6 +124,8 @@ def test_extract_components_from_adr056_features_by_window():
     assert comps["vwap_discount"] == 4.0
     assert comps["foreign_flow_ratio"] == 2.0
     assert comps["rsi_headroom"] == 1.7
+    assert comps["bci"] == 5.0
+    assert comps["sector_breadth"] == 10.0
     assert "bb_squeeze" not in comps
 
 

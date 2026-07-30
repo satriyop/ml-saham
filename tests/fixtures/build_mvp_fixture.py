@@ -461,6 +461,10 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                     "cq_valuation_score": float(seed % 80),
                     "tp_liquidity_score": float((seed * 2) % 80),
                     "tp_volatility_score": float((seed * 3) % 80),
+                    # P0 Accum sleeves: BCI + sector breadth extract paths
+                    "bci_score": (seed % 50) / 100.0,
+                    "sector_breadth": (seed % 80) / 100.0,
+                    "peer_breadth": (seed % 80) / 100.0,
                     "benchmark_excess_return_5_session": {
                         "excess_return_pct": excess,
                     },

@@ -95,7 +95,7 @@ Prefer **tune vs champion** for purpose (not a third product axis).
 
 ## Coverage (honest)
 
-**Accum enter stack:** product challenge covers **AccumScore weighted sleeves** only (five enabled factors on `screener.accum.score_weights`). Hard filters, signal groups/flags/DecisionPolicy, setup readiness, risk gates, diagnostics, and TradeSetup **Action** are **not** product-challenged yet.
+**Accum enter stack:** product challenge covers **AccumScore weighted sleeves** only (seven enabled factors on `screener.accum.score_weights`, including P0 **bci** + **sector_breadth**; BB still off). Hard filters, signal groups/flags/DecisionPolicy, setup readiness, risk gates, and TradeSetup **Action** are **not** product-challenged as PolicySpecs. Diagnostics use a separate display/promote-candidate track.
 
 Expansion plan (P0–P4): **[challenge_product_roadmap.md](./challenge_product_roadmap.md)**.  
 Live judgment inventory (ai-saham): `docs/evidence_diagnostic_factor_accum.md`.

@@ -191,6 +191,15 @@ def extract_components(payload: dict[str, Any], policy: PolicySnapshot) -> dict[
             "bb_width_pctile_at_signal": "bb_squeeze",
             "ia_foreign_participation": "foreign_flow_ratio",
             "foreign_concentration_at_signal": "consistency",
+            # P0 BCI / sector breadth when not in flow_signals breakdown
+            "bci_score": "bci",
+            "bci_points": "bci",
+            "inst_score": "bci",
+            "tier1_concentration": "bci",
+            "sector_breadth": "sector_breadth",
+            "peer_breadth": "sector_breadth",
+            "sector_breadth_bonus": "sector_breadth",
+            "breadth_at_signal": "sector_breadth",
         }
         for src, dest in fp_map.items():
             if dest in found:
@@ -204,9 +213,33 @@ def extract_components(payload: dict[str, Any], policy: PolicySnapshot) -> dict[
                     score = max(0.0, min(1.0, abs(val) * 10)) * w
                 elif dest == "bb_squeeze":
                     score = max(0.0, min(1.0, 1.0 - val)) * w
+                elif dest == "sector_breadth":
+                    # production: often fraction 0–1 or already points 0–10
+                    score = val * w if val <= 1.0 else min(w, val)
+                elif dest == "bci":
+                    score = val * w if val <= 1.0 else min(w, max(0.0, val))
                 else:
                     score = max(0.0, min(1.0, abs(val))) * w
                 found[dest] = score
+
+    # --- D) Candidate / top-level extras for P0 sleeves ---
+    cand = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+    if window is not None and isinstance(window.get("candidate"), dict):
+        cand = {**cand, **window["candidate"]}
+    for src, dest in (
+        ("sector_breadth", "sector_breadth"),
+        ("peer_breadth", "sector_breadth"),
+        ("sector_breadth_bonus", "sector_breadth"),
+        ("bci", "bci"),
+        ("bci_points", "bci"),
+    ):
+        if dest in found:
+            continue
+        raw = cand.get(src) if isinstance(cand, dict) else None
+        if isinstance(raw, (int, float)):
+            w = next((c.weight for c in policy.components if c.key == dest), 10.0)
+            val = float(raw)
+            found[dest] = val * w if val <= 1.0 else min(w, max(0.0, val))
 
     enabled_keys = {c.key for c in policy.enabled_components()}
     present = enabled_keys & set(found)

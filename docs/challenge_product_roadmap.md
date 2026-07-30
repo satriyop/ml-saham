@@ -26,7 +26,7 @@ curriculum                  →  explore / demo / compare (never promotion autho
 | Question | Product answer today |
 |----------|----------------------|
 | Whole evidence + diagnostic inventory under challenge? | **No** |
-| What is product-challenged on the **accum** journey? | **AccumScore sleeves only** (5 enabled) |
+| What is product-challenged on the **accum** journey? | **AccumScore sleeves only** (7 enabled after P0; BB off) |
 | Can challenge tune “should we ENTER this ticker?” | **No** — only sleeve / score rules vs protocol labels |
 | Pre-open? | Separate lane (2 policies already shipped) |
 
@@ -65,16 +65,16 @@ Pre-open (not this inventory): `screener.pre_open.iev_rank`, `screener.pre_open.
 
 ## Phases
 
-### P0 — Close the AccumScore lab *(next)*
+### P0 — Close the AccumScore lab
 
 **Goal:** PolicySpec mirrors production Accum book more honestly; docs stop over-claiming.
 
 | # | Work | Exit when |
 |---|------|-----------|
-| P0.1 | **BCI (`bci` / `inst`) as enabled sleeve** (or documented points-based scorer path) | Factor list + tournament include BCI when production does; hash bump + operator note |
-| P0.2 | **Sector breadth bonus** as first-class component or explicit additive challenger | Present in PolicySpec + extractable from panel payloads (or honest BLOCKED_DATA note) |
-| P0.3 | **Coverage note in product docs** | This file + [challenge_product.md](./challenge_product.md) / [engine_factor_map.md](./engine_factor_map.md) state “accum product = sleeves, not ENTER stack” |
-| P0.4 | Optional: **BB sleeve** enable only if production re-enables BB | Do not invent production on |
+| P0.1 | **BCI (`bci` / `inst`) as enabled sleeve** | **Done** — enabled weight 8.3; factor list + extract via `inst` |
+| P0.2 | **Sector breadth bonus** as first-class component | **Done** — `sector_breadth` weight 10.0; fingerprint/candidate extract |
+| P0.3 | **Coverage note in product docs** | **Done** — this file + product/engine map |
+| P0.4 | Optional: **BB sleeve** enable only if production re-enables BB | Still off (matches production) |
 
 **Protocol:** keep `accum_path_v1` (excess vs IHSG, primary H=10).  
 **Surfaces:** existing `challenge run` / `factor` / `champion` / `engine screener --scenario accum`.  
