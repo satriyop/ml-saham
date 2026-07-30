@@ -194,12 +194,13 @@ class EnginePortfolioResult:
 
 @dataclass
 class HealthReportResult:
-    """Orchestrated control-tower health pack (engine ± champion ± factors)."""
+    """Orchestrated control-tower health pack (engine ± champion ± factors ± diagnostics)."""
 
     engine_id: str
     scenario_filter: str | None
     with_champion: bool
     with_factors: bool
+    with_diagnostics: bool = False
     summary_md: str = ""
     lines: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
@@ -207,6 +208,7 @@ class HealthReportResult:
     engine_payload: dict[str, Any] = field(default_factory=dict)
     champion_payload: dict[str, Any] | None = None
     factors_payload: dict[str, Any] | None = None
+    diagnostics_payload: dict[str, Any] | None = None
     artifact_dir: Path | None = None
     resolve_error: str | None = None
 

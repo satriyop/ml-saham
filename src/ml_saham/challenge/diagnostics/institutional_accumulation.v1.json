@@ -1,0 +1,33 @@
+{
+  "diagnostic_id": "institutional.accumulation_bag",
+  "version": "v1",
+  "hash": "diaginst03c8e1f2a",
+  "engine": "institutional",
+  "scenario": "accum",
+  "kind": "diagnostic",
+  "protocol_id": "accum_path_v1",
+  "control_score": "accum_production",
+  "source": "ai-saham institutional accumulation / foreign-domestic diagnostic bag (ADR-057)",
+  "source_ref": "observation group institutional_flow + sub_signal_fingerprint ia_*",
+  "banner": "ADR-057: not Action authority — display / promote-candidate only",
+  "features": [
+    {
+      "key": "institutional_flow_score",
+      "aliases": ["institutional_flow", "inst_flow"],
+      "enabled": true,
+      "note": "group_contributions.institutional_flow score"
+    },
+    {
+      "key": "ia_foreign_participation",
+      "aliases": ["foreign_participation", "ia_foreign"],
+      "enabled": true,
+      "note": "fingerprint ia_foreign_participation"
+    },
+    {
+      "key": "ia_domestic_buy_vwap_distance",
+      "aliases": ["ia_domestic_vwap", "domestic_vwap_distance"],
+      "enabled": true,
+      "note": "fingerprint ia_domestic_buy_vwap_distance when present"
+    }
+  ]
+}

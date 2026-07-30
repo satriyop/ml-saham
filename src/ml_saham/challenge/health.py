@@ -7,6 +7,7 @@ from typing import Any
 
 from ml_saham.challenge.artifacts import write_health_artifact
 from ml_saham.challenge.champion import is_champion_against
+from ml_saham.challenge.diagnostic_validity import run_diagnostic_health
 from ml_saham.challenge.engines import normalize_scenario, resolve_engine_policies, run_engine_portfolio
 from ml_saham.challenge.factor_validity import run_factor_challenge_batch
 from ml_saham.challenge.runner import run_policy_challenge
@@ -94,10 +95,38 @@ def _factors_payload(batch) -> dict[str, Any]:
     }
 
 
+def _diagnostics_payload(batch) -> dict[str, Any]:
+    """Separate display/promote-candidate section — never sleeve KEEP/DEMOTE."""
+    return {
+        "section": "diagnostics_display",
+        "banner": "ADR-057: not Action authority — display / promote-candidate only",
+        "diagnostic_id": batch.diagnostic_id,
+        "protocol_id": batch.protocol_id,
+        "n_rows": batch.n_rows,
+        "primary_horizon": batch.primary_horizon,
+        "blocked": batch.blocked.value if batch.blocked else None,
+        "notes": batch.notes,
+        "features": [
+            {
+                "feature": r.feature,
+                "diagnostic_id": r.diagnostic_id,
+                "verdict": r.verdict.value,
+                "coverage": r.coverage,
+                "mean_univariate_ic": r.mean_univariate_ic,
+                "mean_residual_ic": r.mean_residual_ic,
+                "mean_redundancy": r.mean_redundancy,
+                "notes": r.notes[-2:],
+            }
+            for r in batch.results
+        ],
+    }
+
+
 def _attention(
     engine_rows: list[dict[str, Any]],
     champion: dict[str, Any] | None,
     factors: dict[str, Any] | None,
+    diagnostics: dict[str, Any] | None,
     notes: list[str],
 ) -> list[str]:
     attn: list[str] = []
@@ -132,6 +161,27 @@ def _attention(
         ]
         if demote:
             attn.append("factor DEMOTE/DROP candidates: " + ", ".join(demote))
+    if diagnostics and not diagnostics.get("blocked"):
+        promo = [
+            f["feature"]
+            for f in diagnostics.get("features") or []
+            if f.get("verdict") == "PROMOTE_CANDIDATE"
+        ]
+        drop = [
+            f["feature"]
+            for f in diagnostics.get("features") or []
+            if f.get("verdict") in ("DROP_DISPLAY", "DEMOTE_DISPLAY")
+        ]
+        if promo:
+            attn.append(
+                "diagnostic PROMOTE_CANDIDATE (design tune PolicySpec; not Action): "
+                + ", ".join(promo[:6])
+            )
+        if drop:
+            attn.append(
+                "diagnostic DEMOTE/DROP_DISPLAY (desk noise candidates): "
+                + ", ".join(drop[:6])
+            )
     for n in notes:
         if "skip" in n.lower():
             attn.append(n)
@@ -146,9 +196,11 @@ def build_summary_md(
     scenario: str | None,
     with_champion: bool,
     with_factors: bool,
+    with_diagnostics: bool,
     engine_payload: dict[str, Any],
     champion_payload: dict[str, Any] | None,
     factors_payload: dict[str, Any] | None,
+    diagnostics_payload: dict[str, Any] | None,
     notes: list[str],
 ) -> str:
     sc = scenario or "all"
@@ -159,7 +211,8 @@ def build_summary_md(
         f"- **Engine:** screener · **scenario filter:** {sc}",
         f"- **Recipe:** engine tune (equal_sleeves)"
         f"{' + champion' if with_champion else ''}"
-        f"{' + factors' if with_factors else ''}",
+        f"{' + factors' if with_factors else ''}"
+        f"{' + diagnostics' if with_diagnostics else ''}",
         "- **Disclaimer:** gross metrics · not investment advice · "
         "**never auto-promotes** ai-saham",
         "",
@@ -196,7 +249,7 @@ def build_summary_md(
                 lines.append(f"- note: {n}")
 
     if with_factors:
-        lines.extend(["", "## Factors (accum)", ""])
+        lines.extend(["", "## Factors (accum sleeves — KEEP/DEMOTE)", ""])
         if factors_payload is None:
             lines.append("_Factors skipped or not run._")
         elif factors_payload.get("blocked"):
@@ -211,10 +264,37 @@ def build_summary_md(
                     f"{_fmt_ic(f.get('mean_univariate_ic'))} |"
                 )
 
+    if with_diagnostics:
+        lines.extend(
+            [
+                "",
+                "## Diagnostics (display bags — not Action authority)",
+                "",
+                "> ADR-057: KEEP_DISPLAY / DEMOTE_DISPLAY / PROMOTE_CANDIDATE only. "
+                "**Not** sleeve KEEP/DEMOTE. **Never** sets TradeSetup Action.",
+                "",
+            ]
+        )
+        if diagnostics_payload is None:
+            lines.append("_Diagnostics skipped or not run._")
+        elif diagnostics_payload.get("blocked"):
+            lines.append(f"**Blocked:** {diagnostics_payload.get('blocked')}")
+        else:
+            lines.append("| bag:feature | verdict | coverage | residual IC |")
+            lines.append("|-------------|---------|----------|-------------|")
+            for f in diagnostics_payload.get("features") or []:
+                cov = f.get("coverage")
+                cov_s = f"{cov:.0%}" if isinstance(cov, (int, float)) else "n/a"
+                lines.append(
+                    f"| {f.get('feature')} | {f.get('verdict')} | {cov_s} | "
+                    f"{_fmt_ic(f.get('mean_residual_ic'))} |"
+                )
+
     attn = _attention(
         list(engine_payload.get("rows") or []),
         champion_payload,
         factors_payload,
+        diagnostics_payload,
         notes,
     )
     lines.extend(["", "## Attention", ""])
@@ -231,6 +311,7 @@ def build_summary_md(
             "ml-saham challenge run screener.accum.score_weights --against equal_sleeves",
             "ml-saham challenge champion screener.accum.score_weights --model lgbm_reweight",
             "ml-saham challenge factor screener.accum.score_weights --all",
+            "ml-saham challenge diagnostic health --scenario accum",
             "ml-saham challenge promote-packet --from-json <export.json>",
             "```",
             "",
@@ -250,6 +331,7 @@ def build_health_report(
     scenario: str | None = None,
     with_champion: bool = False,
     with_factors: bool = False,
+    with_diagnostics: bool = False,
     champion_model: str = DEFAULT_CHAMPION_MODEL,
     write_artifact: bool = True,
     artifacts_dir: Path | None = None,
@@ -267,6 +349,7 @@ def build_health_report(
             scenario_filter=sc,
             with_champion=with_champion,
             with_factors=with_factors,
+            with_diagnostics=with_diagnostics,
             summary_md=f"# Health blocked\n\n{resolve_err}\n",
             lines=[f"BLOCKED_POLICY: {resolve_err}"],
             notes=[resolve_err],
@@ -280,6 +363,7 @@ def build_health_report(
             scenario_filter=sc,
             with_champion=with_champion,
             with_factors=with_factors,
+            with_diagnostics=with_diagnostics,
             summary_md=f"# Health blocked\n\n{err}\n",
             lines=[f"BLOCKED_DATA: {err}"],
             notes=[err],
@@ -329,14 +413,39 @@ def build_health_report(
         )
         factors_payload = _factors_payload(batch)
 
+    diagnostics_payload: dict[str, Any] | None = None
+    if with_diagnostics:
+        # Display bags for accum by default; pre-open-only filter still runs accum bags
+        # (diagnostic registry is scenario-tagged; filter maps to accum when mixed/all).
+        diag_sc = sc if sc in ("accum", "pre-open") else "accum"
+        if diag_sc == "pre-open":
+            notes.append(
+                "diagnostics slice: no pre-open DiagnosticSpecs yet; "
+                "running scenario=accum display bags"
+            )
+            diag_sc = "accum"
+        notes.append(
+            f"diagnostics = display bags (ADR-057); not sleeve KEEP/DEMOTE; "
+            f"scenario={diag_sc}"
+        )
+        dbatch = run_diagnostic_health(
+            path,
+            scenario=diag_sc,
+            write_artifact=False,
+            artifacts_dir=None,
+        )
+        diagnostics_payload = _diagnostics_payload(dbatch)
+
     summary_md = build_summary_md(
         db_path=path.resolve(),
         scenario=sc,
         with_champion=with_champion,
         with_factors=with_factors,
+        with_diagnostics=with_diagnostics,
         engine_payload=engine_payload,
         champion_payload=champion_payload,
         factors_payload=factors_payload,
+        diagnostics_payload=diagnostics_payload,
         notes=notes,
     )
 
@@ -369,15 +478,26 @@ def build_health_report(
                     "status": f.get("verdict"),
                 }
             )
+    if diagnostics_payload and not diagnostics_payload.get("blocked"):
+        for f in diagnostics_payload.get("features") or []:
+            index.append(
+                {
+                    "section": "diagnostic_display",
+                    "diagnostic_id": f.get("diagnostic_id"),
+                    "feature": f.get("feature"),
+                    "status": f.get("verdict"),
+                }
+            )
 
     lines = [
         "=== CHALLENGE HEALTH (control tower) ===",
         f"DB: {path}",
-        f"Scenario: {sc or 'all'} · champion={with_champion} · factors={with_factors}",
+        f"Scenario: {sc or 'all'} · champion={with_champion} · "
+        f"factors={with_factors} · diagnostics={with_diagnostics}",
         "",
     ]
-    lines.extend(summary_md.splitlines()[:40])
-    if len(summary_md.splitlines()) > 40:
+    lines.extend(summary_md.splitlines()[:50])
+    if len(summary_md.splitlines()) > 50:
         lines.append("… (full summary in artifact summary.md)")
 
     result = HealthReportResult(
@@ -385,6 +505,7 @@ def build_health_report(
         scenario_filter=sc,
         with_champion=with_champion,
         with_factors=with_factors,
+        with_diagnostics=with_diagnostics,
         summary_md=summary_md,
         lines=lines,
         notes=notes,
@@ -392,6 +513,7 @@ def build_health_report(
         engine_payload=engine_payload,
         champion_payload=champion_payload,
         factors_payload=factors_payload,
+        diagnostics_payload=diagnostics_payload,
     )
     if write_artifact:
         write_health_artifact(result, db_path=path, artifacts_root=artifacts_dir)

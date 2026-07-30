@@ -13,6 +13,8 @@ from ml_saham.challenge.types import DiagnosticFeature, DiagnosticSpec
 _DIAG_FILES: dict[str, str] = {
     "mce.screen_display": "mce_screen_display.v1.json",
     "sector.peer_context": "sector_peer_context.v1.json",
+    "institutional.accumulation_bag": "institutional_accumulation.v1.json",
+    "company_quality.bag": "company_quality.v1.json",
 }
 
 

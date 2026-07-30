@@ -183,6 +183,29 @@ def extract_diagnostic_features(
         if pb is not None and "peer_breadth" in enabled:
             found["peer_breadth"] = pb
 
+    elif spec.diagnostic_id == "institutional.accumulation_bag":
+        ig = _group_score(payload, "institutional_flow")
+        if ig is not None and "institutional_flow_score" in enabled:
+            found["institutional_flow_score"] = ig
+        fp = payload.get("sub_signal_fingerprint")
+        if isinstance(fp, dict):
+            for k in (
+                "ia_foreign_participation",
+                "ia_domestic_buy_vwap_distance",
+            ):
+                if k in enabled and isinstance(fp.get(k), (int, float)):
+                    found[k] = float(fp[k])
+
+    elif spec.diagnostic_id == "company_quality.bag":
+        cq = _group_score(payload, "company_quality_context")
+        if cq is not None and "company_quality_score" in enabled:
+            found["company_quality_score"] = cq
+        fp = payload.get("sub_signal_fingerprint")
+        if isinstance(fp, dict):
+            for k in ("cq_valuation_score", "tp_liquidity_score", "tp_volatility_score"):
+                if k in enabled and isinstance(fp.get(k), (int, float)):
+                    found[k] = float(fp[k])
+
     else:
         # generic: fingerprint + group names matching feature keys
         fp = payload.get("sub_signal_fingerprint")

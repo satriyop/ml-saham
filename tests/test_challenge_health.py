@@ -84,6 +84,50 @@ def test_health_factors_flag(fixture_db: Path, tmp_path: Path):
     assert (result.artifact_dir / "factors.json").is_file()
 
 
+def test_health_diagnostics_flag(fixture_db: Path, tmp_path: Path):
+    result = build_health_report(
+        fixture_db,
+        with_diagnostics=True,
+        write_artifact=True,
+        artifacts_dir=tmp_path / "arts",
+    )
+    assert result.exit_code() == 0
+    assert result.diagnostics_payload is not None
+    assert result.diagnostics_payload.get("section") == "diagnostics_display"
+    assert "not Action" in (result.diagnostics_payload.get("banner") or "")
+    assert (result.artifact_dir / "diagnostics.json").is_file()
+    # Separate from sleeve KEEP/DEMOTE
+    assert "Diagnostics (display bags" in result.summary_md
+    assert "not Action authority" in result.summary_md
+    # Index uses diagnostic_display, not factor KEEP
+    diag_idx = [i for i in result.index if i.get("section") == "diagnostic_display"]
+    if diag_idx:
+        for i in diag_idx:
+            st = str(i.get("status") or "")
+            assert st not in ("KEEP", "DEMOTE", "DROP_CANDIDATE")
+            assert "WIN" not in st and "LOSE" not in st
+
+
+def test_health_cli_with_diagnostics(fixture_db: Path, tmp_path: Path):
+    r = runner.invoke(
+        app,
+        [
+            "--db",
+            str(fixture_db),
+            "--artifacts-dir",
+            str(tmp_path / "a"),
+            "challenge",
+            "health",
+            "--scenario",
+            "accum",
+            "--with-diagnostics",
+            "--no-artifact",
+        ],
+    )
+    assert r.exit_code == 0, r.stdout
+    assert "diagnostics=True" in r.stdout or "diagnostic" in r.stdout.lower()
+
+
 def test_health_preopen_skips_champion(fixture_db: Path, tmp_path: Path):
     result = build_health_report(
         fixture_db,

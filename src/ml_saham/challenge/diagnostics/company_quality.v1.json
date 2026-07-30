@@ -1,0 +1,33 @@
+{
+  "diagnostic_id": "company_quality.bag",
+  "version": "v1",
+  "hash": "diagcq04d9f2b3c1",
+  "engine": "company_quality",
+  "scenario": "accum",
+  "kind": "diagnostic",
+  "protocol_id": "accum_path_v1",
+  "control_score": "accum_production",
+  "source": "ai-saham company quality diagnostic bag (ADR-057); some fields also feed production flags",
+  "source_ref": "observation group company_quality_context + fingerprint cq_*",
+  "banner": "ADR-057: not Action authority — display / promote-candidate only",
+  "features": [
+    {
+      "key": "company_quality_score",
+      "aliases": ["company_quality_context", "cq_group"],
+      "enabled": true,
+      "note": "group_contributions.company_quality_context score"
+    },
+    {
+      "key": "cq_valuation_score",
+      "aliases": ["valuation", "cq_valuation"],
+      "enabled": true,
+      "note": "fingerprint cq_valuation_score; may also feed VALUATION_STRETCHED flag in production"
+    },
+    {
+      "key": "tp_liquidity_score",
+      "aliases": ["liquidity_score", "tp_liquidity"],
+      "enabled": true,
+      "note": "fingerprint tp_liquidity_score when present"
+    }
+  ]
+}

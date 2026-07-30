@@ -1051,6 +1051,14 @@ def challenge_health_cmd(
         "--with-factors",
         help="Also run factor --all on accum policy (always accum, not scenario-filtered)",
     ),
+    with_diagnostics: bool = typer.Option(
+        False,
+        "--with-diagnostics",
+        help=(
+            "Also run diagnostic display-bag validity (KEEP_DISPLAY / PROMOTE_CANDIDATE); "
+            "never mixed into sleeve KEEP/DEMOTE"
+        ),
+    ),
     champion_model: str = typer.Option(
         "lgbm_reweight",
         "--champion-model",
@@ -1062,7 +1070,7 @@ def challenge_health_cmd(
         help="Print summary only; skip artifacts/challenge/health pack",
     ),
 ) -> None:
-    """Control tower: engine rollup ± champion ± factors → one English health pack."""
+    """Control tower: engine rollup ± champion ± factors ± diagnostics → English pack."""
     from ml_saham.challenge.health import build_health_report
 
     db_path: Path = ctx.obj["db"]
@@ -1072,6 +1080,7 @@ def challenge_health_cmd(
         scenario=scenario,
         with_champion=with_champion,
         with_factors=with_factors,
+        with_diagnostics=with_diagnostics,
         champion_model=champion_model,
         write_artifact=not no_artifact,
         artifacts_dir=Path(arts) if arts else None,

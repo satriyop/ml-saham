@@ -32,6 +32,8 @@ def test_list_catalog():
     ids = {r["diagnostic_id"] for r in rows}
     assert "mce.screen_display" in ids
     assert "sector.peer_context" in ids
+    assert "institutional.accumulation_bag" in ids
+    assert "company_quality.bag" in ids
 
 
 def test_load_and_resolve_features():
@@ -180,3 +182,34 @@ def test_cli_mutual_exclusion(fixture_db: Path):
         ],
     )
     assert r.exit_code == 2
+
+
+def test_batch_institutional_and_cq(fixture_db: Path, tmp_path: Path):
+    for did, key in (
+        ("institutional.accumulation_bag", "institutional_flow_score"),
+        ("company_quality.bag", "company_quality_score"),
+    ):
+        batch = run_diagnostic_challenge_batch(
+            fixture_db,
+            did,
+            write_artifact=True,
+            artifacts_dir=tmp_path / "arts",
+        )
+        if batch.blocked is None:
+            assert batch.exit_code() == 0
+            assert any(r.feature == key for r in batch.results)
+            for r in batch.results:
+                assert r.verdict.value in {
+                    "KEEP_DISPLAY",
+                    "DEMOTE_DISPLAY",
+                    "DROP_DISPLAY",
+                    "PROMOTE_CANDIDATE",
+                    "INCONCLUSIVE",
+                    "BLOCKED_DATA",
+                    "BLOCKED_SPEC",
+                }
+                assert "WIN" not in r.verdict.value
+                assert "LOSE" not in r.verdict.value
+        else:
+            assert batch.exit_code() == 2
+            assert batch.blocked.value.startswith("BLOCKED")

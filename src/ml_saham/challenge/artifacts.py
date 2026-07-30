@@ -371,6 +371,7 @@ def write_health_artifact(
         "scenario_filter": result.scenario_filter,
         "with_champion": result.with_champion,
         "with_factors": result.with_factors,
+        "with_diagnostics": result.with_diagnostics,
         "db_path": str(db_path),
         "created_at": datetime.now(tz=JAKARTA).isoformat(),
         "n_index": len(result.index),
@@ -392,6 +393,10 @@ def write_health_artifact(
     if result.factors_payload is not None:
         (out / "factors.json").write_text(
             json.dumps(result.factors_payload, indent=2) + "\n", encoding="utf-8"
+        )
+    if result.diagnostics_payload is not None:
+        (out / "diagnostics.json").write_text(
+            json.dumps(result.diagnostics_payload, indent=2) + "\n", encoding="utf-8"
         )
     result.artifact_dir = out
     return out

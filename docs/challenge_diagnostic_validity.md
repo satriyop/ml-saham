@@ -179,13 +179,13 @@ Diagnostic PROMOTE_CANDIDATE
 |-----------------|--------|--------------------|---------|
 | `mce.screen_display` | mce | regime_score, vix, eido, usd_idr, idx_trend, idx_breadth, foreign_flow | `market_context_snapshots` join by date |
 | `sector.peer_context` | sector | sector_context_score, peer_breadth | observation group_contributions / peer fields |
+| `institutional.accumulation_bag` | institutional | institutional_flow_score, ia_foreign_participation, ia_domestic_buy_vwap_distance | group + fingerprint |
+| `company_quality.bag` | company_quality | company_quality_score, cq_valuation_score, tp_liquidity_score | group + fingerprint |
 
 ### Next bags (not shipped)
 
 | Priority | `diagnostic_id` (illustrative) | Why next |
 |----------|--------------------------------|----------|
-| P1 | `institutional.accumulation_bag` | Overlaps broker/bandar story |
-| P1 | `company_quality.bag` | Some fields also feed **production flags** |
 | P2 | `setup.diagnostic_fit` | Not entry authority when setup evidence not attached |
 | P2 | `corp_events.near_window` | Event calibration, not score sleeve |
 | Later | `alpha_trigger`, multi-window labels, resistance flag | Only if extracts stable |
@@ -210,11 +210,11 @@ ml-saham challenge diagnostic promote-packet --from-json …
 # checklist only: KEEP_DISPLAY | DEMOTE_DISPLAY | open_tune_design
 ```
 
-Integration with existing control tower (optional):
+Control tower (shipped):
 
 ```text
-challenge health --with-diagnostics
-# separate section: “Display bags” — never mixed into sleeve KEEP/DEMOTE table
+ml-saham challenge health --with-diagnostics
+# separate section: “Diagnostics (display bags)” — never sleeve KEEP/DEMOTE
 ```
 
 ---
@@ -222,15 +222,15 @@ challenge health --with-diagnostics
 ## Acceptance (v1)
 
 - [x] `DiagnosticSpec` registry loads with hash; unknown id → `BLOCKED_SPEC`  
-- [x] Two bags: `mce.screen_display`, `sector.peer_context` (fixture tests)  
+- [x] Four bags: MCE, sector, institutional, company_quality (fixture tests)  
 - [x] Verdicts use **display/promote-candidate** language only (no WIN/LOSE)  
 - [x] Reports state **ADR-057: not Action authority** on every summary  
 - [x] Residual IC after accum production score control when components extract  
 - [x] Artifacts: `artifacts/challenge/diagnostic/...`  
 - [x] CLI: `challenge diagnostic list|run|health`  
 - [x] Docs: this file + links from product/roadmap  
-- [ ] Optional: `--with-diagnostics` on `challenge health` (control tower)  
-- [ ] More bags (institutional, CQ, setup, corp events)  
+- [x] `--with-diagnostics` on `challenge health` (separate display section)  
+- [ ] More bags (setup, corp events)  
 - [ ] No ai-saham Python import; read-only SQLite (**held**)
 
 ---
