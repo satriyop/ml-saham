@@ -33,7 +33,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Bukan saran trading / investasi",
         "",
         f"Lanjut:  ml-saham vet",
-        f"         ml-saham compare {META.slug} --baseline coverage --against integrity",
+        f"         ml-saham learn compare {META.slug} --baseline coverage --against integrity",
         f"         ml-saham doctor --deep",
     ]
     if verbose:

@@ -27,7 +27,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Default: Logistic Regression/XGBoost Classifier memprediksi Probabilitas Crash",
         "    menggunakan status gate secara adaptif.",
         "",
-        f"Lanjut:  ml-saham challenge engine --category risk --scenario accum --type gating",
+        f"Lanjut:  ml-saham learn demo {META.slug}\n"        f"         ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: Evaluasi Gating Risk Engine.")

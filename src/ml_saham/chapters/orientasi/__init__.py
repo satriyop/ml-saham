@@ -46,7 +46,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Skorboard: long-only vs IHSG · belum termasuk biaya (default)",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
         "         ml-saham doctor --deep",
         "         ml-saham vet",
     ]

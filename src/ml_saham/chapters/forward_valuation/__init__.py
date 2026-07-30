@@ -38,8 +38,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Saham siklikal (komoditas) sering memiliki Forward P/E semu yang sangat rendah di puncak siklus",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"         ml-saham compare {META.slug}",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"         ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: forward_estimates_cache di ai-saham.")

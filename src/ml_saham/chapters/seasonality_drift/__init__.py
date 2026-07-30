@@ -31,8 +31,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Sample size bulanan relatif terbatas",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"Bandingkan: ml-saham compare {META.slug}",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"Bandingkan: ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: Menggunakan Prophet untuk memisahkan komponen musiman pada return harian.")

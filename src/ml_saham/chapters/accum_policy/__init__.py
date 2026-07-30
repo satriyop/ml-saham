@@ -24,8 +24,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Default: LightGBM Regression pada komponen-komponen akumulasi.",
         "  • Baseline: Pembobotan manual 33.3% dari ScoreAccumUseCase.",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"         ml-saham compare {META.slug}",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"         ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: Eksperimen model LightGBM vs baseline manual.")

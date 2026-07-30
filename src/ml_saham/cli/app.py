@@ -35,7 +35,7 @@ from ml_saham.progress import mark, topic_flags
 
 app = typer.Typer(
     name="ml-saham",
-    help="Challenge lab for ai-saham (+ curriculum onboarding).",
+    help="Challenge lab for ai-saham (+ learn curriculum onboarding).",
     no_args_is_help=True,
     add_completion=False,
     context_settings={"help_option_names": ["-h", "--help"]},
@@ -45,7 +45,13 @@ challenge_app = typer.Typer(
     help="ADR-002 policy challenges (run/list/engine/factor/health/champion).",
     no_args_is_help=True,
 )
+learn_app = typer.Typer(
+    name="learn",
+    help="Curriculum onboarding (list/explore/demo/compare) — not promotion authority.",
+    no_args_is_help=True,
+)
 app.add_typer(challenge_app, name="challenge")
+app.add_typer(learn_app, name="learn")
 console = Console()
 
 
@@ -142,8 +148,9 @@ def main_callback(
     ctx.obj["artifacts_dir"] = artifacts_dir
 
 
-@app.command("chapters")
-def chapters_cmd(
+@learn_app.command("list")
+@learn_app.command("chapters")
+def learn_list_cmd(
     all_phases: bool = typer.Option(
         False,
         "--all",
@@ -151,7 +158,7 @@ def chapters_cmd(
     ),
 ) -> None:
     """Tampilkan jalur chapter dan progress."""
-    table = Table(title="ml-saham chapters")
+    table = Table(title="ml-saham learn list")
     table.add_column("#", justify="right")
     table.add_column("topic")
     table.add_column("phase")
@@ -173,13 +180,13 @@ def chapters_cmd(
     console.print(table)
     if not all_phases:
         console.print(
-            "\n[dim]MVP + v1.1 + phase-2. Opsional (Ch.20 rl-sandbox): ml-saham chapters --all. "
+            "\n[dim]MVP + v1.1 + phase-2. Opsional (Ch.20 rl-sandbox): ml-saham learn list --all. "
             "Progress: E✓ D✓.[/dim]"
         )
 
 
-@app.command("status")
-def status_cmd(ctx: typer.Context) -> None:
+@learn_app.command("status")
+def learn_status_cmd(ctx: typer.Context) -> None:
     """Ringkas DB + progress MVP."""
     db_path: Path = ctx.obj["db"]
     console.print(f"DB: {db_path}")
@@ -190,8 +197,8 @@ def status_cmd(ctx: typer.Context) -> None:
         console.print(f"  Ch.{ch.number} {ch.slug}: {_progress_cell(ch.slug)}")
 
 
-@app.command("explore")
-def explore_cmd(
+@learn_app.command("explore")
+def learn_explore_cmd(
     topic: str = typer.Argument(help="Topic slug, mis. factor-score"),
     no_pager: bool = typer.Option(
         False,
@@ -225,8 +232,8 @@ def explore_cmd(
     mark(topic, "explore")
 
 
-@app.command("demo")
-def demo_cmd(
+@learn_app.command("demo")
+def learn_demo_cmd(
     ctx: typer.Context,
     topic: str = typer.Argument(help="Topic slug"),
     with_costs: bool = typer.Option(
@@ -368,8 +375,8 @@ def demo_cmd(
         console.print(f"[green]Saved Markdown export to {export_md}[/green]")
 
 
-@app.command("compare")
-def compare_cmd(
+@learn_app.command("compare")
+def learn_compare_cmd(
     ctx: typer.Context,
     topic: str = typer.Argument(help="Topic slug"),
     baseline: str = typer.Option(..., "--baseline", help="Baseline id"),
@@ -442,8 +449,8 @@ def compare_cmd(
         console.print(f"\nArtifact:  {pack.path}")
 
 
-@app.command("leaderboard")
-def leaderboard_cmd(
+@learn_app.command("leaderboard")
+def learn_leaderboard_cmd(
     ctx: typer.Context,
     with_costs: bool = typer.Option(
         False,
@@ -1132,8 +1139,8 @@ def challenge_engine_cmd(
     raise typer.Exit(code=result.exit_code())
 
 
-@app.command("glossary")
-def glossary_cmd(
+@learn_app.command("glossary")
+def learn_glossary_cmd(
     term: Optional[str] = typer.Argument(None, help="Istilah (EN), opsional"),
 ) -> None:
     """Kamus bertahap (stub Phase 0)."""

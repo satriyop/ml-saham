@@ -41,8 +41,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Skorboard: long-only vs IHSG · belum termasuk biaya",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"Bandingkan:  ml-saham compare {META.slug}",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"Bandingkan:  ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.append("\nOutput: feature_list.json di extra_files.")

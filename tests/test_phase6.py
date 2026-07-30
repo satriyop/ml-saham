@@ -76,7 +76,7 @@ def test_phase2_modules(slug: str):
 @pytest.mark.parametrize("slug", PHASE2_SLUGS + OPTIONAL_SLUGS)
 def test_phase2_explore_cli(fixture_db: Path, slug: str):
     r = runner.invoke(
-        app, ["--db", str(fixture_db), "explore", slug, "--no-pager"]
+        app, ["--db", str(fixture_db), "learn", "explore", slug, "--no-pager"]
     )
     assert r.exit_code == 0, r.stdout
 
@@ -90,6 +90,7 @@ def test_phase2_demo_fixture(fixture_db: Path, slug: str, tmp_path: Path):
             str(fixture_db),
             "--artifacts-dir",
             str(tmp_path / "arts"),
+            "learn",
             "demo",
             slug,
             "--no-artifact",
@@ -115,7 +116,7 @@ def test_headline_marks_synthetic(fixture_db: Path):
 
 
 def test_chapters_lists_phase2(fixture_db: Path):
-    r = runner.invoke(app, ["--db", str(fixture_db), "chapters"])
+    r = runner.invoke(app, ["--db", str(fixture_db), "learn", "chapters"])
     assert r.exit_code == 0
     assert "walk-forward" in r.stdout
     assert "pre-open-rank" in r.stdout
@@ -129,7 +130,7 @@ def test_export_json_and_md(fixture_db: Path, tmp_path: Path):
         [
             "--db",
             str(fixture_db),
-            "demo",
+            "learn", "demo",
             "clean-prices",
             "--export-json",
             str(json_path),
@@ -151,7 +152,7 @@ def test_leaderboard_command(fixture_db: Path, tmp_path: Path):
         [
             "--db",
             str(fixture_db),
-            "leaderboard",
+            "learn", "leaderboard",
             "--export-json",
             str(json_path),
         ],

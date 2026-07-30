@@ -26,8 +26,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • default menggunakan XGBoost classifier.",
         "  • Baseline menggunakan DT deterministik & aturan capping.",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"Banding: ml-saham compare {META.slug}",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"Banding: ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: klasifikasi XGBoost vs Baseline heuristic.")

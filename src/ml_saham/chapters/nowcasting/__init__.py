@@ -30,8 +30,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Data kuartalan memiliki lag laporan (sampai 1-2 bulan).",
         "  • Pastikan tidak ada data leak (look-ahead bias) saat menggunakan fundamental.",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"Atau:    ml-saham compare {META.slug} --baseline ols",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"Atau:    ml-saham learn compare {META.slug} --baseline ols",
     ]
     if verbose:
         lines.extend(

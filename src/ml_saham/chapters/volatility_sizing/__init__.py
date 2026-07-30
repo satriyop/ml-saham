@@ -28,7 +28,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Default: Multiplier dinamis yang dioptimasi oleh Ridge Regression / Kelly",
         "    menggunakan fitur ATR dan volatilitas.",
         "",
-        f"Lanjut:  ml-saham challenge engine --category risk --scenario accum --type sizing",
+        f"Lanjut:  ml-saham learn demo {META.slug}\n"        f"         ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: Evaluasi Sizing Risk Engine.")

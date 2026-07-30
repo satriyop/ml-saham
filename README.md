@@ -35,7 +35,7 @@ Full ownership matrix and vocabulary: **[BOUNDARY.md](./BOUNDARY.md)** (mirror: 
 | Axis | Surfaces | Learner-facing language |
 |------|----------|-------------------------|
 | **Challenge** (primary) | `challenge …`, `vet`, audit exports | **English** |
-| **Learning** (secondary) | `explore`, curriculum narrative | **Indonesian** |
+| **Learning** (secondary) | `learn explore`, curriculum narrative | **Indonesian** |
 
 Commands, flags, slugs, and code stay English on both axes.
 
@@ -124,7 +124,7 @@ ml-saham challenge factor screener.accum.score_weights --factor consistency
 | `challenge engine screener` | PolicySpec portfolio (`--scenario` optional) |
 | `challenge factor …` | KEEP / DEMOTE / DROP_CANDIDATE (accum) |
 | `vet` / `doctor --deep` | Data-plane gate |
-| `compare <slug>` | Curriculum lab — **not** ADR-002 authority |
+| `learn compare <slug>` | Curriculum lab — **not** ADR-002 authority |
 
 Statuses: `WIN` · `LOSE` · `INCONCLUSIVE` · `BLOCKED_DATA` · `BLOCKED_POLICY` (first-class; thin data is honest, not a broken install).
 
@@ -135,9 +135,9 @@ Map: [docs/engine_factor_map.md](./docs/engine_factor_map.md) · Decision exampl
 ## Learning second (onboarding)
 
 ```bash
-ml-saham chapters
-ml-saham explore broker-flow --no-pager
-ml-saham demo clean-prices
+ml-saham learn list
+ml-saham learn explore broker-flow --no-pager
+ml-saham learn demo clean-prices
 ```
 
 Curriculum list: [chapters.md](./chapters.md). Registry SSOT: `src/ml_saham/chapters/registry.py`.
@@ -159,7 +159,7 @@ Sibling contract: **[BOUNDARY.md](./BOUNDARY.md)**.
 ai-saham  →  fetch/enrich → SQLite → corpus obs + path labels (no accum evaluate product)
 ml-saham  →  read-only DB
               ├─ challenge run / engine / factor / health  →  ADR-002 scoring authority
-              └─ explore / demo / compare                  →  curriculum (not promotion)
+              └─ learn list / explore / demo / compare     →  curriculum (not promotion)
 ```
 
 ADRs: [docs/adr/](./docs/adr/) · Architecture: [architecture.md](./architecture.md) · Boundary: [BOUNDARY.md](./BOUNDARY.md)  

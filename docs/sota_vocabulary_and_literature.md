@@ -12,7 +12,7 @@
 
 | Surface | What “SOTA” / preferred arm means here | Literature SOTA? |
 |---------|----------------------------------------|------------------|
-| **Curriculum** (`explore` / `demo` / `compare`) | Preferred or default **demo path** (often LightGBM, Ridge, HRP, even Polars vs pandas) | **No** — product UI language |
+| **Curriculum** (`learn explore` / `demo` / `compare`) | Preferred or default **demo path** (often LightGBM, Ridge, HRP, even Polars vs pandas) | **No** — product UI language |
 | **Challenge** (`challenge run` / `engine`) | Does **not** use “SOTA” as a verdict. Baseline = frozen **production** policy; challengers = equal / ridge ablations | **No** — ablation tournament, not a model bake-off |
 
 **Do not** treat curriculum `compare` LightGBM as authority for `screener.accum.score_weights` promotion (Path A memo + ADR-002).

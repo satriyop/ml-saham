@@ -15,7 +15,7 @@ Chapters: [chapters.md](./chapters.md) · UX: [ux.md](./ux.md) · Data: [data_co
 - [x] Installable CLI: `ml-saham --help`  
 - [x] `--db` / `ML_SAHAM_DB` resolution works  
 - [x] `ml-saham doctor` reports MVP data coverage with remediation text  
-- [x] `ml-saham chapters` lists MVP path and topic slugs  
+- [x] `ml-saham learn list` lists MVP path and topic slugs  
 - [x] ID-first teaching copy; EN flags/slugs  
 - [x] Every `demo` scoreboard shows **biaya banner** + **bukan saran trading/investasi**  
 - [x] Default scoreboard long-only vs IHSG where applicable (not Ch.3 toy accuracy-only)  

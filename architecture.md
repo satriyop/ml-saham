@@ -11,7 +11,7 @@ Curriculum: [chapters.md](./chapters.md) · UX: [ux.md](./ux.md) · Data: [data_
 ## Goals that constrain architecture
 
 1. **Challenge first** — policy tournaments + factor keep/drop under fixed protocols (ADR-001, **ADR-002**). Chapter-loop product surface is retired.  
-2. **Learning second** — chapter modules teach problems so audits are interpretable (`explore` / light `demo`).  
+2. **Learning second** — chapter modules teach problems so audits are interpretable (`ml-saham learn explore` / light `learn demo`).  
 3. Emit artifacts usable to tune `ai-saham` (**never auto-promote**).  
 4. Read real market data from `ai-saham` SQLite **or** a derived learning DB.  
 5. **Horizons:** align with ai-saham (accum primary **10** sessions; report **3** and **20** where applicable) — ADR-002 §4.
@@ -26,7 +26,7 @@ Curriculum: [chapters.md](./chapters.md) · UX: [ux.md](./ux.md) · Data: [data_
 | **Ingest stays in `ai-saham`** | No Stockbit/Yahoo/IDX scrapers inside `ml-saham` |
 | **Chapters stay problem-centric** | Topic modules teach generic problems; product authority is ADR-002 challenge, not curriculum glue |
 | **Challenge outranks curriculum polish** | When priorities conflict, ship `run_compare` / engine audits before soft demos (ADR-001) |
-| **Language by axis** | Challenge UI/reports **English**; learning `explore` narrative **Indonesian** (ADR-001 §6). Flags/slugs always EN |
+| **Language by axis** | Challenge UI/reports **English**; learning `learn explore` narrative **Indonesian** (ADR-001 §6). Flags/slugs always EN |
 | **CLI is the product** | Typer (or Click) app; no web/TUI in MVP |
 
 ---
@@ -63,13 +63,7 @@ ml-saham/
 ├── src/ml_saham/
 │   ├── __init__.py
 │   ├── cli/
-│   │   ├── app.py            # Typer root
-│   │   ├── chapters_cmd.py
-│   │   ├── explore.py
-│   │   ├── demo.py
-│   │   ├── compare.py
-│   │   ├── glossary.py
-│   │   └── doctor.py
+│   │   └── app.py            # Typer root: challenge + learn + doctor/vet
 │   ├── data/
 │   │   ├── connection.py     # resolve --db / env
 │   │   ├── doctor_checks.py  # MVP / v1.1 / phase-2 data presence
@@ -108,9 +102,9 @@ Every chapter under `src/ml_saham/chapters/<slug>/` provides:
 | Symbol | Role |
 |---|---|
 | `META` | id, number, title (ID), tier, phase, topic slug |
-| `explore_text()` | markdown/plain sections for `explore` |
-| `run_demo(ctx) -> DemoResult` | real-data run |
-| `run_compare(ctx) -> CompareResult` | curriculum lab (not ADR-002 promotion authority) |
+| `explore_text()` | markdown/plain for `learn explore` |
+| `run_demo(ctx) -> DemoResult` | real-data run via `learn demo` |
+| `run_compare(ctx) -> CompareResult` | curriculum lab via `learn compare` (not ADR-002 authority) |
 | `required_data` | `"mvp"` / `"v1_1"` / `"phase2"` for `doctor` |
 
 `ctx` carries: db connection, universe, as_of, model flags, output dirs, cost flags.
@@ -123,7 +117,7 @@ Every chapter under `src/ml_saham/chapters/<slug>/` provides:
 CLI
   → resolve db (flag / env / config)
   → registry.get(topic)
-  → doctor gate if demo/compare (data-tier requirement)
+  → doctor gate if learn demo/compare (data-tier requirement)
   → chapter.run_* 
   → scoreboard.render (banners)
   → optional artifacts.writer
@@ -156,7 +150,7 @@ MVP chapters (0–4, 6) should work in **Direct** mode where possible; introduce
 | Layer | What |
 |---|---|
 | Unit | metrics, scoreboard banners, doctor checks on fixture SQLite |
-| Chapter smoke | `explore` returns non-empty; `demo` runs against a **real** local db path in integration job (optional/local marker) |
+| Chapter smoke | `learn explore` returns non-empty; `learn demo` runs against a **real** local db path in integration job (optional/local marker) |
 | No | Live Stockbit calls inside `ml-saham` tests |
 
 ---

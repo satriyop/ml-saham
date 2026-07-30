@@ -39,7 +39,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Sektor keuangan (Bank) membutuhkan definisi arus kas khusus",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: load_company_financials di ai-saham.")

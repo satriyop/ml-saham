@@ -170,9 +170,9 @@ Every chapter CLI path should support:
 Example:
 
 ```text
-ml-saham --db … explore broker-flow
-ml-saham --db … demo broker-flow --universe LQ45
-ml-saham --db … compare broker-flow
+ml-saham --db … learn explore broker-flow
+ml-saham --db … learn demo broker-flow
+ml-saham --db … learn compare broker-flow
 ml-saham challenge run screener.accum.score_weights   # product authority
 ```
 

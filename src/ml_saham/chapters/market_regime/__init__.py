@@ -28,7 +28,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Baseline: Klasifikasi rezim kaku dari ai-saham (market_context_snapshots).",
         "  • Default: Machine Learning (Random Forest) mengolah data mentah VIX, EIDO, USD/IDR, dll.",
         "",
-        f"Lanjut:  ml-saham challenge engine --category market --type regime",
+        f"Lanjut:  ml-saham learn demo {META.slug}\n"        f"         ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: Evaluasi Market Regime.")

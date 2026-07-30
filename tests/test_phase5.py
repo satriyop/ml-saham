@@ -51,7 +51,7 @@ def test_v11_modules_load():
 @pytest.mark.parametrize("slug", V11_SLUGS)
 def test_v11_explore_and_demo(fixture_db: Path, slug: str, tmp_path: Path):
     er = runner.invoke(
-        app, ["--db", str(fixture_db), "explore", slug, "--no-pager"]
+        app, ["--db", str(fixture_db), "learn", "explore", slug, "--no-pager"]
     )
     assert er.exit_code == 0, er.stdout
     dr = runner.invoke(
@@ -61,6 +61,7 @@ def test_v11_explore_and_demo(fixture_db: Path, slug: str, tmp_path: Path):
             str(fixture_db),
             "--artifacts-dir",
             str(tmp_path / "arts"),
+            "learn",
             "demo",
             slug,
             "--no-artifact",
@@ -86,7 +87,7 @@ def test_insider_scrubs_absurd(fixture_db: Path):
 
 
 def test_chapters_lists_v11(fixture_db: Path):
-    r = runner.invoke(app, ["--db", str(fixture_db), "chapters"])
+    r = runner.invoke(app, ["--db", str(fixture_db), "learn", "chapters"])
     assert r.exit_code == 0
     assert "cluster-peers" in r.stdout
     assert "insider" in r.stdout

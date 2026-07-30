@@ -72,7 +72,7 @@ ai-saham `research pre-open evaluate` is **not** required for ml-saham challenge
 | Factor KEEP / DEMOTE / DROP_CANDIDATE (**tune**) | — | **owns** |
 | Champion / beat-production scorer hunt | — | **owns** (`challenge champion`; no auto-promote) |
 | Health report / promote packet packs | — | **owns** (artifacts only; never write ai-saham) |
-| Curriculum explore / demo | light / optional | **primary onboarding** |
+| Curriculum `learn explore` / `learn demo` | light / optional | **primary onboarding** |
 | Decision memos for tuning | may link | **`docs/decisions/`** |
 | Auto-promote config into production | human policy path only | **never** |
 | Import the other repo’s Python packages | **no** | **no** |
@@ -112,7 +112,7 @@ Challenge excess and corpus SUCCESS/FAILURE labels remain **different products**
 | **WIN / LOSE** | N/A for research accum | Challenge verdict only |
 | **primary 10d / H=10** | `price_path.accum_10d.v1` path label | Protocol primary horizon for IC |
 
-Curriculum `compare` is **not** promotion authority (ADR-001 / ADR-002). Chapter-loop challenge batch is retired.
+Curriculum `learn compare` is **not** promotion authority (ADR-001 / ADR-002). Chapter-loop challenge batch is retired.
 
 ---
 

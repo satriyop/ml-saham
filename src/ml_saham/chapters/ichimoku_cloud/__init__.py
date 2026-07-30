@@ -28,8 +28,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Pelatihan CNN/RNN membutuhkan tensor 3D/4D dan resource komputasi besar",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"Bandingkan: ml-saham compare {META.slug}",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"Bandingkan: ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: plugins/indicators/ichimoku.py di ai-saham.")

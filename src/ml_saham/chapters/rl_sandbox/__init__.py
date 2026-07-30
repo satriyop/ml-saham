@@ -40,8 +40,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Tidak ada scoreboard IHSG (eksplorasi saja)",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"Compare: ml-saham compare {META.slug}",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"Compare: ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.extend(

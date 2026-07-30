@@ -107,6 +107,7 @@ def test_demo_writes_artifact(tmp_path: Path):
             str(db),
             "--artifacts-dir",
             str(tmp_path / "out"),
+            "learn",
             "demo",
             "orientasi",
         ],
@@ -133,6 +134,7 @@ def test_demo_no_artifact(tmp_path: Path):
             str(db),
             "--artifacts-dir",
             str(tmp_path / "out"),
+            "learn",
             "demo",
             "orientasi",
             "--no-artifact",
@@ -155,6 +157,7 @@ def test_compare_artifacts(tmp_path: Path):
             str(db),
             "--artifacts-dir",
             str(root),
+            "learn",
             "compare",
             "factor-score",
             "--baseline",
@@ -172,7 +175,7 @@ def test_compare_artifacts(tmp_path: Path):
 def test_explore_no_pager_verbose():
     result = runner.invoke(
         app,
-        ["explore", "orientasi", "--no-pager", "--verbose"],
+        ["learn", "explore", "orientasi", "--no-pager", "--verbose"],
     )
     assert result.exit_code == 0
     assert "Masalah" in result.stdout

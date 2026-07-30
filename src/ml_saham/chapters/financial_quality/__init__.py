@@ -37,8 +37,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Laporan keuangan dipublikasikan kuartalan (PIT delay)",
         "  • Perusahaan sektor keuangan membutuhkan penyesuaian khusus",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"Bandingkan: ml-saham compare {META.slug}",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"Bandingkan: ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: load_company_financials di ai-saham.")

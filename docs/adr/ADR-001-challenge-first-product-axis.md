@@ -12,8 +12,8 @@
 
 | Axis | Surface | Purpose |
 |------|---------|---------|
-| **Learning** | `explore` / `demo` / curriculum chapters | Problem-centric ML course on real IDX data |
-| **Challenge** | `challenge` / `compare` / engine factor map | Stress-test factors & parameters that feed **`ai-saham` engines** |
+| **Learning** | `learn list|explore|demo|compare` / curriculum chapters | Problem-centric ML course on real IDX data |
+| **Challenge** | `challenge run|engine|factor|health|…` | Stress-test policies that feed **`ai-saham` engines** |
 
 Early docs and tests optimized for the curriculum (`demo` green, chapter order, soft learning paths). The maintainer priority is the opposite: **challenge is more important than learning.** Artifacts and comparisons should inform tuning of `ai-saham` (never auto-promoted).
 
@@ -28,25 +28,26 @@ Without an explicit decision, agents and future work keep recentering “finish 
    - Superseded implementation detail: chapter-loop `ENGINE_FACTORS` / `challenge legacy` — **retired**.  
    - Quality bar: frozen policies, versioned protocols, honest WIN/LOSE/INCONCLUSIVE/BLOCKED_* outcomes.
 
-2. **`challenge` vs `compare`**  
+2. **`challenge` vs `learn`**  
 
    | Command | Product definition | Relation to `ai-saham` |
    |---------|-------------------|------------------------|
    | **`challenge`** | **Policy / engine audit** — production vs challenger, factor validity, engine portfolios, health. | **For** `ai-saham` policies: “Does this still beat clean alternatives?” |
-   | **`compare`** | **Curriculum single-factor lab** — chapter `run_compare`, pedagogy. | **Not** promotion authority (ADR-002). |
+   | **`learn`** | **Curriculum namespace** — `list` / `explore` / `demo` / `compare` (chapter `run_compare` pedagogy). | **Not** promotion authority (ADR-002). |
 
    One-liner:
 
-   > **`challenge`** is the product audit of **ai-saham policies**; **`compare`** is the learning lab for individual chapter factors.
+   > **`challenge`** is the product audit of **ai-saham policies**; **`learn`** is the curriculum onboarding namespace (including single-factor labs).
 
    Rules of thumb:
    - Daily / ship review of production policies → `challenge run` / `engine` / `health`  
-   - Learn or dig into a curriculum factor → `compare` / `explore`  
+   - Learn or dig into a curriculum factor → `learn explore` / `learn demo` / `learn compare`  
    - **Never auto-promote** winners into `ai-saham` configs
 
 3. **Learning is secondary onboarding**  
-   - `explore` / `demo` / chapter numbers teach *why* a factor exists so challenge output is interpretable.  
-   - Curriculum order and registry numbers remain useful, but **do not outrank policy challenges** when priorities conflict.
+   - `learn explore` / `learn demo` / chapter numbers teach *why* a factor exists so challenge output is interpretable.  
+   - Curriculum order and registry numbers remain useful, but **do not outrank policy challenges** when priorities conflict.  
+   - Flat root `explore` / `demo` / `compare` / `chapters` are **retired** — use `ml-saham learn …`.
 
 4. **Two sources of truth, different jobs**  
    - **Curriculum SSOT:** `src/ml_saham/chapters/registry.py` (chapter number, slug, phase).  
@@ -59,8 +60,8 @@ Without an explicit decision, agents and future work keep recentering “finish 
 6. **Product language by axis**  
    | Axis | Learner-facing copy language |
    |------|------------------------------|
-   | **Challenge** (primary) | **English** — `challenge` / `compare` titles, tables, metrics labels, export reports, engine audit banners |
-   | **Learning** (secondary) | **Indonesian** — `explore` / curriculum narrative, teaching caveats, chapter “Masalah / Opsi / Caveat” prose |
+   | **Challenge** (primary) | **English** — `challenge` titles, tables, metrics labels, export reports, engine audit banners |
+   | **Learning** (secondary) | **Indonesian** — `learn explore` / curriculum narrative, teaching caveats, chapter “Masalah / Opsi / Caveat” prose |
 
    Shared rules:
    - CLI **command names, flags, topic slugs, code identifiers** stay English on both axes.  
@@ -116,10 +117,10 @@ Without an explicit decision, agents and future work keep recentering “finish 
 
 ```text
 challenge  →  PolicySpec + protocol  →  panel/score/verdict  →  artifacts (ADR-002)
-compare    →  one slug.run_compare(--baseline, --against)  →  curriculum lab only
-explore    →  teach problem (no heavy train required)  [ID]
-demo       →  optional illustration; may defer to challenge path
+learn compare →  one slug.run_compare(--baseline, --against)  →  curriculum lab only
+learn explore →  teach problem (no heavy train required)  [ID]
+learn demo    →  optional illustration; may defer to challenge path
 ```
 
 Product SSOT: `src/ml_saham/challenge/` (policies, protocols, engines).  
-Curriculum SSOT: `src/ml_saham/chapters/registry.py`.
+Curriculum SSOT: `src/ml_saham/chapters/registry.py` · CLI: `ml-saham learn …`.

@@ -10,26 +10,26 @@ Product axis: [ADR-001](./docs/adr/ADR-001-challenge-first-product-axis.md) · C
 **Primary surface: CLI only.**  
 Not a trading cockpit, TUI workbench, or web app. Optional notebook export / TUI may come later; they are not the spine.
 
-**Command priority:** `challenge` / `compare` (ai-saham-related audits) ahead of `explore` / `demo` (learn the factor).
+**Command priority:** `challenge` (product) ahead of `learn` (curriculum).
 
 | Command | Use when |
 |---------|----------|
-| `challenge` | Engine / stack health (batch, rollup export) |
-| `compare` | One factor vs an **ai-saham-style or static baseline** (explicit models) |
+| `challenge` | Policy / engine audit (ADR-002 authority) |
+| `learn` | Curriculum: list / explore / demo / compare (not promotion) |
 
 ---
 
 ## Intent
 
-**“Engine audit in the terminal”** — challenge factors against ai-saham-style baselines; curriculum is the short path to understand a factor before you trust the audit.
+**“Engine audit in the terminal”** — challenge policies against clean challengers; curriculum is the short path to understand a factor before you trust the audit.
 
 | Principle | Meaning |
 |---|---|
-| Challenge first | `challenge` / `compare` are the main job; green engine audits > complete demos |
-| One job per command | `explore` teaches · `demo` illustrates · `compare` = one-factor ai-saham-style baseline lab · `challenge` = multi-factor engine audit |
-| Generic first | Deep-dive never blocks learning; challenge still needs honest metrics |
+| Challenge first | `challenge` is the main job; green policy audits > complete demos |
+| One namespace per axis | `learn explore` teaches · `learn demo` illustrates · `learn compare` = curriculum lab · `challenge` = product audit |
+| Generic first | Curriculum never blocks product work; challenge still needs honest metrics |
 | Quiet chrome | Short prose + tables + banners; no dashboard clutter |
-| Language by axis | **Challenge output: English.** **Learning (`explore`) narrative: Indonesian.** Commands/flags/slugs always EN (ADR-001 §6) |
+| Language by axis | **Challenge output: English.** **Learning (`learn explore`) narrative: Indonesian.** Commands/flags/slugs always EN (ADR-001 §6) |
 | Honest by default | Cost / leakage / “not investment advice” banners on scoreboards |
 
 ---
@@ -38,14 +38,17 @@ Not a trading cockpit, TUI workbench, or web app. Optional notebook export / TUI
 
 ```text
 ml-saham
-├── challenge …           # PRIMARY: engine / factor audit vs baselines
-├── compare <topic> …     # PRIMARY: one-factor baseline vs learned
-├── doctor                # DB path, data-tier coverage before audits
-├── explore <topic>       # secondary: problem → options → caveats
-├── demo <topic>          # secondary: light real-data illustration
-├── chapters / status     # curriculum path + progress
-├── leaderboard           # cross-topic scoreboard helper
-├── glossary [term]       # kamus bertahap
+├── challenge …              # PRIMARY: ADR-002 policy / engine / factor / health
+├── learn …                  # SECONDARY curriculum (not promotion)
+│   ├── list | chapters      # catalog + progress (E✓ D✓)
+│   ├── status               # DB path + MVP progress
+│   ├── explore <topic>
+│   ├── demo <topic>
+│   ├── compare <topic>
+│   ├── leaderboard
+│   └── glossary [term]
+├── doctor                   # shared: data-tier coverage
+└── vet                      # shared: English data-integrity audit
 ```
 
 **Topic slugs** = generic chapter ids. Numbers match `registry.py` (SSOT):
@@ -75,7 +78,7 @@ ml-saham
 | `rl-sandbox` | 20 (optional appendix) |
 | `seasonality-drift` … `pre-open-macro` | 21–44 |
 
-Full list: `ml-saham chapters --all` or [chapters.md](./chapters.md).
+Full list: `ml-saham learn list --all` or [chapters.md](./chapters.md).
 
 Do **not** name topics after engines (`signal-engine`, `mce`, `risk-engine`).
 
@@ -84,10 +87,10 @@ Do **not** name topics after engines (`signal-engine`, `mce`, `risk-engine`).
 ## Happy path (every chapter)
 
 ```text
-ml-saham chapters
-ml-saham explore <topic>
-ml-saham demo <topic> [flags]
-ml-saham compare <topic> --baseline … --against …   # curriculum lab
+ml-saham learn list
+ml-saham learn explore <topic>
+ml-saham learn demo <topic> [flags]
+ml-saham learn compare <topic> --baseline … --against …   # curriculum lab
 ml-saham challenge run|engine|factor|health …        # product authority
 ```
 
@@ -97,7 +100,7 @@ Progress stored lightly (e.g. `~/.ml-saham/progress.json`): explored / demoed pe
 
 ## Screen frames
 
-### `explore` — teach, don’t train
+### `learn explore` — teach, don’t train
 
 ```text
 ═══════════════════════════════════════
@@ -115,13 +118,13 @@ Caveat (baca sebelum demo)
   • …
   • Skorboard: … · belum termasuk biaya
 
-Lanjut:  ml-saham demo <topic> --help
+Lanjut:  ml-saham learn demo <topic> --help
 ```
 
 - Use pager by default; `--no-pager` to disable.  
 - Keep “must read” short; extra detail behind `--verbose`.
 
-### `demo` — run on real data
+### `learn demo` — run on real data
 
 ```text
 Data     db=…  universe=…  as_of=…
@@ -160,7 +163,7 @@ Report DB path, MVP / v1.1 / phase-2 table coverage, and exact remediation (e.g.
 1. Section headers and teaching prose: **Indonesian**.  
 2. Flags, topic slugs, library names, metric names (`rank IC`, `walk-forward`): **English**.  
 3. Every scoreboard block includes: honesty banners (biaya and/or leakage as relevant) + **bukan saran trading/investasi**.  
-4. Curriculum `compare` is not promotion authority; use `challenge` for policy audits.
+4. Curriculum `learn compare` is not promotion authority; use `challenge` for policy audits.
 
 ---
 
@@ -169,8 +172,8 @@ Report DB path, MVP / v1.1 / phase-2 table coverage, and exact remediation (e.g.
 - TUI workbench  
 - Web UI  
 - Chat-first “AI tutor” as the main interface  
-- Retired: `deepdive` command (stubs never became product)  
-- Notebook as primary path (optional `demo --export-notebook` later only)
+- Retired: flat root `explore` / `demo` / `compare` / `chapters` (use `learn …`); `deepdive`  
+- Notebook as primary path (optional later only)
 
 ---
 

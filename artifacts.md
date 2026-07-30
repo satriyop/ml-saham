@@ -72,9 +72,9 @@ Curriculum artifacts are learning-only. Product promotion notes live under `arti
 
 | Command | Default |
 |---|---|
-| `explore` | No |
-| `demo` | Yes (minimal: manifest + summary + metrics) unless `--no-artifact` |
-| `compare` | Yes |
+| `learn explore` | No |
+| `learn demo` | Yes (minimal: manifest + summary + metrics) unless `--no-artifact` |
+| `learn compare` | Yes |
 | `challenge …` | Yes under `artifacts/challenge/` (policy packs) |
 
 ---

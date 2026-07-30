@@ -28,7 +28,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Bias optimisme analis pada saham capitalization besar",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: load_analysts dari analyst_cache.")

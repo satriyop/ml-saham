@@ -21,7 +21,7 @@ Sibling ownership vs ai-saham: **[BOUNDARY.md](../BOUNDARY.md)** (ingest/corpus 
 | **Champion track** — beat production with a learned score rule | Treating curriculum “Default” models as production authority |
 | **Health / promote-packet** — control tower packs | Auto-writing ai-saham YAML |
 
-Learning (`explore` / chapters) is **secondary** and mostly Indonesian for pedagogy.
+Learning (`ml-saham learn …`) is **secondary** and mostly Indonesian for pedagogy.
 
 ---
 
@@ -195,8 +195,8 @@ That is intentional, not a failed install.
 
 | Surface | Role |
 |---------|------|
-| `compare <slug>` / `demo` | Curriculum / lab (chapter `run_compare` is pedagogy only) |
-| `explore` | Indonesian problem framing |
+| `learn compare` / `learn demo` | Curriculum / lab (chapter `run_compare` is pedagogy only) |
+| `learn explore` | Indonesian problem framing |
 
 Pre-ADR-002 chapter-loop batch (`challenge legacy` / `ENGINE_FACTORS`) is **retired** — not available as a product path.
 

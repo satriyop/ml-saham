@@ -39,7 +39,7 @@ def fixture_db(tmp_path: Path) -> Path:
 def test_explore_smoke_nonempty(fixture_db: Path, slug: str):
     r = runner.invoke(
         app,
-        ["--db", str(fixture_db), "explore", slug, "--no-pager"],
+        ["--db", str(fixture_db), "learn", "explore", slug, "--no-pager"],
     )
     assert r.exit_code == 0, r.stdout
     assert "Masalah" in r.stdout or "Ch." in r.stdout
@@ -55,6 +55,7 @@ def test_demo_smoke_fixture(fixture_db: Path, slug: str, tmp_path: Path):
             str(fixture_db),
             "--artifacts-dir",
             str(tmp_path / "arts"),
+            "learn",
             "demo",
             slug,
             "--no-artifact",
@@ -69,11 +70,44 @@ def test_deepdive_command_retired():
     assert r.exit_code != 0
 
 
+def test_learn_namespace_cutover(fixture_db: Path):
+    """Curriculum lives under learn; flat root verbs are retired."""
+    help_r = runner.invoke(app, ["--help"])
+    assert help_r.exit_code == 0
+    assert "learn" in help_r.stdout
+    assert "challenge" in help_r.stdout
+    # Flat curriculum verbs must not appear as root commands
+    for verb in ("explore", "demo", "compare", "chapters", "glossary", "leaderboard"):
+        r = runner.invoke(app, [verb, "--help"])
+        assert r.exit_code != 0, verb
+
+    lr = runner.invoke(app, ["learn", "--help"])
+    assert lr.exit_code == 0
+    for sub in ("list", "explore", "demo", "compare", "status", "glossary", "leaderboard"):
+        assert sub in lr.stdout
+
+    lst = runner.invoke(app, ["--db", str(fixture_db), "learn", "list"])
+    assert lst.exit_code == 0, lst.stdout
+    assert "orientasi" in lst.stdout
+
+    ex = runner.invoke(
+        app, ["--db", str(fixture_db), "learn", "explore", "orientasi", "--no-pager"]
+    )
+    assert ex.exit_code == 0, ex.stdout
+    assert "Masalah" in ex.stdout or "Ch." in ex.stdout
+
+    st = runner.invoke(app, ["--db", str(fixture_db), "learn", "status"])
+    assert st.exit_code == 0, st.stdout
+    assert "DB:" in st.stdout
+
+
+
+
 def test_error_ux_no_traceback_missing_db(tmp_path: Path):
     missing = tmp_path / "nope.db"
     r = runner.invoke(
         app,
-        ["--db", str(missing), "demo", "factor-score", "--no-artifact"],
+        ["--db", str(missing), "learn", "demo", "factor-score", "--no-artifact"],
     )
     assert r.exit_code == 1
     out = r.stdout + (r.stderr or "")
@@ -86,7 +120,7 @@ def test_error_ux_empty_shell_db(tmp_path: Path):
     db = build_mvp_fixture(tmp_path / "empty.db", with_hard=False)
     r = runner.invoke(
         app,
-        ["--db", str(db), "demo", "broker-flow", "--no-artifact"],
+        ["--db", str(db), "learn", "demo", "broker-flow", "--no-artifact"],
     )
     assert r.exit_code == 1
     out = r.stdout + (r.stderr or "")
@@ -97,7 +131,7 @@ def test_error_ux_empty_shell_db(tmp_path: Path):
 def test_progress_marks_show_in_chapters(fixture_db: Path):
     mark("orientasi", "explore")
     mark("orientasi", "demo")
-    r = runner.invoke(app, ["--db", str(fixture_db), "chapters"])
+    r = runner.invoke(app, ["--db", str(fixture_db), "learn", "chapters"])
     assert r.exit_code == 0
     assert "E✓" in r.stdout
     assert "D✓" in r.stdout
@@ -127,6 +161,7 @@ def test_compare_screen_rules_cli(fixture_db: Path, tmp_path: Path):
             str(fixture_db),
             "--artifacts-dir",
             str(tmp_path / "arts"),
+            "learn",
             "compare",
             "screen-rules",
             "--baseline",

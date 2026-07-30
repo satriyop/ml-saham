@@ -27,7 +27,7 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Baseline: Skor akhir menggunakan configured_weight statis ai-saham.",
         "  • Default: Skor dioptimasi ulang oleh Ridge Regression secara dinamis.",
         "",
-        f"Lanjut:  ml-saham challenge engine --category signal --scenario accum --type ensemble",
+        f"Lanjut:  ml-saham learn demo {META.slug}\n"        f"         ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: Evaluasi Meta-Ensemble Signal Engine.")

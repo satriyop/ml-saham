@@ -27,8 +27,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • ML predictor bisa overfitting pada pola masa lalu.",
         "  • Squeeze butuh volume konfirmasi untuk menghindari whipsaw.",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"         ml-saham compare {META.slug}",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"         ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: strategies/bb-squeeze di ai-saham.")

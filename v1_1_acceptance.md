@@ -13,7 +13,7 @@ Chapters: [chapters.md](./chapters.md) · Data: [data_contract.md](./data_contra
 
 - [x] `ml-saham doctor` reports **v1.1 data** (sector_coverage + insider_cache, absurd-date note)  
 - [x] Demo/compare for `required_data=v1_1` gated on `v1_1_hard_ok` (implies MVP hard OK)  
-- [x] `ml-saham chapters` lists MVP + v1.1 by default  
+- [x] `ml-saham learn list` lists MVP + v1.1 by default  
 - [x] Scoreboard banners + bukan-saran on demos; artifacts unless `--no-artifact`  
 - [x] No `ai-saham` Python imports  
 

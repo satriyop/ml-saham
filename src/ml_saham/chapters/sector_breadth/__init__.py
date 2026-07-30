@@ -38,8 +38,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Rotasi sektor sering mendahului pergerakan indeks utama",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"Banding: ml-saham compare {META.slug}",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"Banding: ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: load_sector_map + load_candles di ai-saham.")

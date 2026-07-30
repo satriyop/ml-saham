@@ -35,8 +35,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Sering kali saham ber-RS tinggi mengalami profit taking mendadak",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"Compare: ml-saham compare {META.slug} --baseline rs --against ml",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"Compare: ml-saham learn compare {META.slug} --baseline rs --against ml",
     ]
     if verbose:
         lines.append("\nDetail: strategies/rs-momentum di ai-saham.")

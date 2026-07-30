@@ -3,7 +3,7 @@
 Living map between **`ai-saham` engines / evidence**, SQLite surfaces, and **`ml-saham` ADR-002** challenges.  
 Product: [ADR-002](./adr/ADR-002-ideal-challenge-system.md) · SSOT: `src/ml_saham/challenge/` · Curriculum: `src/ml_saham/chapters/registry.py`
 
-**Rule:** new `ai-saham` factor/evidence → decide: (a) existing **PolicySpec** covers it, (b) extend factor track / scorer, or (c) new policy (+ optional learning `explore` / `compare`).  
+**Rule:** new `ai-saham` factor/evidence → decide: (a) existing **PolicySpec** covers it, (b) extend factor track / scorer, or (c) new policy (+ optional `learn explore` / `learn compare`).  
 Do **not** invent curriculum for pure plumbing. Curriculum `compare` is **not** promotion authority.
 
 ---
@@ -42,7 +42,7 @@ Factors / evidence that exist or are growing in **ai-saham** but are **thin or m
 2. Which **tables / observation fields**?  
 3. Existing **PolicySpec** that already measures the same decision?  
 4. If no → new policy under `challenge/policies/` + protocol + panel/scorer; register in engine portfolio when ready.  
-5. Learning `explore` / `compare` only if the problem is non-obvious (ID explore; English compare); challenge report always **English**.
+5. Learning `learn explore` / `learn compare` only if the problem is non-obvious (ID explore; English compare); challenge report always **English**.
 
 ---
 
@@ -54,4 +54,5 @@ Factors / evidence that exist or are growing in **ai-saham** but are **thin or m
 | `ml-saham vet` | English data-integrity audit |
 | `ml-saham challenge engine screener [--scenario …]` | ADR-002 PolicySpec portfolio rollup |
 | `ml-saham challenge run / factor / health / champion` | Policy product surface |
-| `ml-saham compare <slug> …` | Single-factor curriculum lab (not promotion) |
+| `ml-saham learn compare <slug> …` | Single-factor curriculum lab (not promotion) |
+| `ml-saham learn list` | Curriculum catalog + progress |

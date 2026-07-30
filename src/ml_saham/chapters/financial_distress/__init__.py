@@ -39,8 +39,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Emiten distress bisa mengalami lonjakan harga spekulatif (dead cat bounce)",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"Compare: ml-saham compare {META.slug} --baseline altman-z --against xgboost",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"Compare: ml-saham learn compare {META.slug} --baseline altman-z --against xgboost",
     ]
     if verbose:
         lines.append("\nDetail: load_company_financials di ai-saham.")

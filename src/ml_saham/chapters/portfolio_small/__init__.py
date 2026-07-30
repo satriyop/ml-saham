@@ -38,8 +38,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Skorboard: long-only vs IHSG · belum termasuk biaya",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"         ml-saham compare {META.slug}",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"         ml-saham learn compare {META.slug}",
     ]
     if verbose:
         lines.append("\nDetail: momentum-20 rank → portfolio construction.")

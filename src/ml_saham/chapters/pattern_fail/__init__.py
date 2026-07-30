@@ -31,17 +31,17 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Lanjut yang lebih masuk akal: factor-score, broker-flow, walk-forward",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"Compare: ml-saham compare {META.slug} --baseline coinflip --against lgbm",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"Compare: ml-saham learn compare {META.slug} --baseline coinflip --against lgbm",
     ]
     if verbose:
         lines.extend(
             [
                 "",
                 "Pointer",
-                "  • ml-saham explore factor-score",
-                "  • ml-saham explore broker-flow",
-                "  • ml-saham explore walk-forward  (phase-2)",
+                "  • ml-saham learn explore factor-score",
+                "  • ml-saham learn explore broker-flow",
+                "  • ml-saham learn explore walk-forward  (phase-2)",
             ]
         )
     return "\n".join(lines)
@@ -116,9 +116,9 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         "  Ini failure lab — bukan edge ketemu.",
         "",
         "Lanjut framing yang lebih sehat:",
-        "  → ml-saham explore factor-score",
-        "  → ml-saham explore broker-flow",
-        "  → ml-saham explore walk-forward",
+        "  → ml-saham learn explore factor-score",
+        "  → ml-saham learn explore broker-flow",
+        "  → ml-saham learn explore walk-forward",
     ]
     metrics = {
         "n": len(X_list),

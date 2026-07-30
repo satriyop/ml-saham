@@ -26,7 +26,7 @@ Ship a Typer CLI that teaches problem-centric ML on **real** personal market dat
 | 0.5 | Progress stub | `~/.ml-saham/progress.json` create/read |
 | 0.6 | README | How to install, point `--db`, run `doctor` |
 
-**Exit:** `pip install -e .` && `ml-saham chapters` prints MVP list.
+**Exit:** `pip install -e .` && `ml-saham learn list` prints MVP list.
 
 ---
 

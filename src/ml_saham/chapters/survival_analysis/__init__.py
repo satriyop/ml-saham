@@ -36,8 +36,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Membutuhkan data harga harian untuk observasi event",
         "  • Bukan saran trading / investasi",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"Compare: ml-saham compare {META.slug} --baseline kaplan-meier --against xgboost",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"Compare: ml-saham learn compare {META.slug} --baseline kaplan-meier --against xgboost",
     ]
     if verbose:
         lines.append("\nCatatan: insider_cache (waktu hingga profit) di data plane.")

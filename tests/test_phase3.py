@@ -76,7 +76,7 @@ def test_pattern_fail_conclusion(fixture_db: Path):
 def test_explore_cli_orientasi(fixture_db: Path):
     r = runner.invoke(
         app,
-        ["--db", str(fixture_db), "explore", "orientasi", "--no-pager"],
+        ["--db", str(fixture_db), "learn", "explore", "orientasi", "--no-pager"],
     )
     assert r.exit_code == 0, r.stdout
     assert "fetched_date" in r.stdout
@@ -91,6 +91,7 @@ def test_demo_orientasi_cli_artifact(fixture_db: Path, tmp_path: Path):
             str(fixture_db),
             "--artifacts-dir",
             str(arts),
+            "learn",
             "demo",
             "orientasi",
         ],

@@ -32,8 +32,8 @@ def explore_text(*, verbose: bool = False) -> str:
         "  • Kompleksitas tinggi (Graph ML).",
         "  • Bukan bukti hukum manipulasi pasar, hanya klastering kemiripan aksi.",
         "",
-        f"Lanjut:  ml-saham demo {META.slug}",
-        f"Compare: ml-saham compare {META.slug} --baseline degree --against pagerank",
+        f"Lanjut:  ml-saham learn demo {META.slug}",
+        f"Compare: ml-saham learn compare {META.slug} --baseline degree --against pagerank",
     ]
     if verbose:
         lines.append(
