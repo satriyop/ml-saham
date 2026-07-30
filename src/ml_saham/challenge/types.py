@@ -181,6 +181,46 @@ class EnginePortfolioResult:
 
 
 @dataclass
+class HealthReportResult:
+    """Orchestrated control-tower health pack (engine ± champion ± factors)."""
+
+    engine_id: str
+    scenario_filter: str | None
+    with_champion: bool
+    with_factors: bool
+    summary_md: str = ""
+    lines: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    index: list[dict[str, Any]] = field(default_factory=list)
+    engine_payload: dict[str, Any] = field(default_factory=dict)
+    champion_payload: dict[str, Any] | None = None
+    factors_payload: dict[str, Any] | None = None
+    artifact_dir: Path | None = None
+    resolve_error: str | None = None
+
+    def exit_code(self) -> int:
+        if self.resolve_error:
+            return 2
+        return 0
+
+
+@dataclass
+class PromotePacketResult:
+    """Human-only promote review pack (never applies to ai-saham)."""
+
+    policy_id: str
+    mode: str  # tune | champion
+    summary_md: str = ""
+    lines: list[str] = field(default_factory=list)
+    evidence: dict[str, Any] = field(default_factory=dict)
+    artifact_dir: Path | None = None
+    error: str | None = None
+
+    def exit_code(self) -> int:
+        return 2 if self.error else 0
+
+
+@dataclass
 class BatchFactorResult:
     """Batch factor validity over all enabled sleeves (shared prep)."""
 

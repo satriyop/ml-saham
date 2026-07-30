@@ -14,6 +14,8 @@ from ml_saham.challenge.types import (
     ChallengeResult,
     EnginePortfolioResult,
     FactorChallengeResult,
+    HealthReportResult,
+    PromotePacketResult,
 )
 
 JAKARTA = ZoneInfo("Asia/Jakarta")
@@ -234,5 +236,77 @@ def write_engine_artifact(
         encoding="utf-8",
     )
     (out / "summary.md").write_text(result.summary_md or "", encoding="utf-8")
+    result.artifact_dir = out
+    return out
+
+
+def write_health_artifact(
+    result: HealthReportResult,
+    *,
+    db_path: Path,
+    artifacts_root: Path | None = None,
+) -> Path:
+    root = resolve_artifacts_root(artifacts_root)
+    ts = datetime.now(tz=JAKARTA).strftime("%Y%m%d_%H%M%S")
+    out = root / "challenge" / "health" / ts
+    out.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "schema_version": 2,
+        "mode": "challenge_health",
+        "engine_id": result.engine_id,
+        "scenario_filter": result.scenario_filter,
+        "with_champion": result.with_champion,
+        "with_factors": result.with_factors,
+        "db_path": str(db_path),
+        "created_at": datetime.now(tz=JAKARTA).isoformat(),
+        "n_index": len(result.index),
+    }
+    (out / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    (out / "summary.md").write_text(result.summary_md or "", encoding="utf-8")
+    (out / "engine.json").write_text(
+        json.dumps(result.engine_payload, indent=2) + "\n", encoding="utf-8"
+    )
+    (out / "index.json").write_text(
+        json.dumps(result.index, indent=2) + "\n", encoding="utf-8"
+    )
+    if result.champion_payload is not None:
+        (out / "champion.json").write_text(
+            json.dumps(result.champion_payload, indent=2) + "\n", encoding="utf-8"
+        )
+    if result.factors_payload is not None:
+        (out / "factors.json").write_text(
+            json.dumps(result.factors_payload, indent=2) + "\n", encoding="utf-8"
+        )
+    result.artifact_dir = out
+    return out
+
+
+def write_promote_packet(
+    result: PromotePacketResult,
+    *,
+    artifacts_root: Path | None = None,
+) -> Path:
+    root = resolve_artifacts_root(artifacts_root)
+    ts = datetime.now(tz=JAKARTA).strftime("%Y%m%d_%H%M%S")
+    safe = result.policy_id.replace("/", ".")
+    out = root / "challenge" / "promote" / safe / ts
+    out.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "schema_version": 2,
+        "mode": "challenge_promote_packet",
+        "policy_id": result.policy_id,
+        "purpose_mode": result.mode,
+        "created_at": datetime.now(tz=JAKARTA).isoformat(),
+        "auto_applied": False,
+    }
+    (out / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    (out / "PROMOTE.md").write_text(result.summary_md or "", encoding="utf-8")
+    (out / "evidence.json").write_text(
+        json.dumps(result.evidence, indent=2) + "\n", encoding="utf-8"
+    )
     result.artifact_dir = out
     return out

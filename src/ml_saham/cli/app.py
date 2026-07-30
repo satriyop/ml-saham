@@ -818,6 +818,96 @@ def challenge_factor_cmd(
     raise typer.Exit(code=result.exit_code())
 
 
+@challenge_app.command("health")
+def challenge_health_cmd(
+    ctx: typer.Context,
+    scenario: Optional[str] = typer.Option(
+        None,
+        "--scenario",
+        help="ai-saham scenario filter: accum | pre-open (omit = all)",
+    ),
+    with_champion: bool = typer.Option(
+        False,
+        "--with-champion",
+        help="Also run champion lgbm_reweight on accum policy",
+    ),
+    with_factors: bool = typer.Option(
+        False,
+        "--with-factors",
+        help="Also run factor --all on accum policy (always accum, not scenario-filtered)",
+    ),
+    champion_model: str = typer.Option(
+        "lgbm_reweight",
+        "--champion-model",
+        help="Champion model when --with-champion (lgbm_reweight | elastic_net_reweight)",
+    ),
+    no_artifact: bool = typer.Option(
+        False,
+        "--no-artifact",
+        help="Print summary only; skip artifacts/challenge/health pack",
+    ),
+) -> None:
+    """Control tower: engine rollup ± champion ± factors → one English health pack."""
+    from ml_saham.challenge.health import build_health_report
+
+    db_path: Path = ctx.obj["db"]
+    arts = ctx.obj.get("artifacts_dir")
+    result = build_health_report(
+        db_path,
+        scenario=scenario,
+        with_champion=with_champion,
+        with_factors=with_factors,
+        champion_model=champion_model,
+        write_artifact=not no_artifact,
+        artifacts_dir=Path(arts) if arts else None,
+    )
+    for line in result.lines:
+        console.print(line)
+    if result.artifact_dir:
+        console.print(f"\n[green]Health pack: {result.artifact_dir}[/green]")
+    raise typer.Exit(code=result.exit_code())
+
+
+@challenge_app.command("promote-packet")
+def challenge_promote_packet_cmd(
+    ctx: typer.Context,
+    from_json: Optional[Path] = typer.Option(
+        None,
+        "--from-json",
+        help="Export JSON from challenge run / champion",
+    ),
+    from_artifact: Optional[Path] = typer.Option(
+        None,
+        "--from-artifact",
+        help="Challenge artifact directory (manifest.json + metrics.json)",
+    ),
+    no_artifact: bool = typer.Option(
+        False,
+        "--no-artifact",
+        help="Print only; skip writing promote pack",
+    ),
+) -> None:
+    """Build human promote/reject checklist from a result. Never applies to ai-saham."""
+    from ml_saham.challenge.promote import build_promote_packet
+
+    arts = ctx.obj.get("artifacts_dir")
+    result = build_promote_packet(
+        from_json=from_json,
+        from_artifact=from_artifact,
+        write_artifact=not no_artifact,
+        artifacts_dir=Path(arts) if arts else None,
+    )
+    for line in result.lines:
+        console.print(line)
+    if result.error:
+        console.print(f"[red]{result.error}[/red]")
+    elif result.summary_md and no_artifact:
+        console.print(result.summary_md[:2000])
+    if result.artifact_dir:
+        console.print(f"\n[green]Promote pack: {result.artifact_dir}[/green]")
+    raise typer.Exit(code=result.exit_code())
+
+
 @challenge_app.command("champion")
 def challenge_champion_cmd(
     ctx: typer.Context,

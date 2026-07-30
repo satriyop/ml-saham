@@ -1,0 +1,400 @@
+"""Challenge health report — control-tower recipe over existing runners."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from ml_saham.challenge.artifacts import write_health_artifact
+from ml_saham.challenge.champion import is_champion_against
+from ml_saham.challenge.engines import normalize_scenario, resolve_engine_policies, run_engine_portfolio
+from ml_saham.challenge.factor_validity import run_factor_challenge_batch
+from ml_saham.challenge.runner import run_policy_challenge
+from ml_saham.challenge.types import ChallengeResult, HealthReportResult
+
+ACCUM_POLICY = "screener.accum.score_weights"
+DEFAULT_ENGINE = "screener"
+DEFAULT_TUNE_AGAINST = "equal_sleeves"
+DEFAULT_CHAMPION_MODEL = "lgbm_reweight"
+
+
+def _fmt_ic(x: float | None) -> str:
+    return f"{x:+.4f}" if x is not None else "n/a"
+
+
+def _engine_payload(eng) -> dict[str, Any]:
+    return {
+        "engine_id": eng.engine_id,
+        "scenario_filter": eng.scenario_filter,
+        "against_id": eng.against_id,
+        "baseline_id": eng.baseline_id,
+        "counts": eng.counts,
+        "notes": eng.notes,
+        "resolve_error": eng.resolve_error,
+        "rows": [
+            {
+                "scenario": r.scenario,
+                "policy_id": r.policy_id,
+                "protocol_id": r.protocol_id,
+                "policy_hash": r.policy_hash,
+                "status": r.status,
+                "n_rows": r.n_rows,
+                "primary_horizon": r.primary_horizon,
+                "primary_ic_baseline": r.primary_ic_baseline,
+                "primary_ic_against": r.primary_ic_against,
+                "against_id": r.against_id,
+                "notes": r.notes[-5:],
+                "error": r.error,
+            }
+            for r in eng.rows
+        ],
+    }
+
+
+def _challenge_payload(result: ChallengeResult) -> dict[str, Any]:
+    return {
+        "mode": "champion" if is_champion_against(result.against_id) else "tune",
+        "status": result.status.value,
+        "policy_id": result.policy_id,
+        "protocol_id": result.protocol_id,
+        "policy_hash": result.policy_hash,
+        "baseline_id": result.baseline_id,
+        "against_id": result.against_id,
+        "n_rows": result.n_rows,
+        "primary_horizon": result.primary_horizon,
+        "primary_ic_baseline": result.primary_ic_baseline,
+        "primary_ic_against": result.primary_ic_against,
+        "horizon_metrics": result.horizon_metrics,
+        "fold_metrics": result.fold_metrics,
+        "weights": result.weights,
+        "notes": result.notes,
+    }
+
+
+def _factors_payload(batch) -> dict[str, Any]:
+    return {
+        "policy_id": batch.policy_id,
+        "protocol_id": batch.protocol_id,
+        "policy_hash": batch.policy_hash,
+        "n_rows": batch.n_rows,
+        "primary_horizon": batch.primary_horizon,
+        "blocked": batch.blocked.value if batch.blocked else None,
+        "notes": batch.notes,
+        "factors": [
+            {
+                "factor": r.factor,
+                "verdict": r.verdict.value,
+                "mean_delta_ic": r.mean_delta_ic,
+                "mean_univariate_ic": r.mean_univariate_ic,
+                "fold_agree_positive_delta": r.fold_agree_positive_delta,
+                "notes": r.notes[-3:],
+            }
+            for r in batch.results
+        ],
+    }
+
+
+def _attention(
+    engine_rows: list[dict[str, Any]],
+    champion: dict[str, Any] | None,
+    factors: dict[str, Any] | None,
+    notes: list[str],
+) -> list[str]:
+    attn: list[str] = []
+    blocked = [r for r in engine_rows if str(r.get("status", "")).startswith("BLOCKED")]
+    if blocked:
+        attn.append(
+            f"{len(blocked)} engine policy row(s) BLOCKED: "
+            + ", ".join(r["policy_id"] for r in blocked[:5])
+        )
+    loses = [r for r in engine_rows if r.get("status") == "LOSE"]
+    if loses:
+        attn.append(
+            f"{len(loses)} tune LOSE vs equal_sleeves: "
+            + ", ".join(r["policy_id"] for r in loses[:5])
+        )
+    if champion:
+        st = champion.get("status")
+        if st == "WIN":
+            attn.append(
+                f"CHAMPION WIN: {champion.get('against_id')} beat production on "
+                f"{champion.get('policy_id')} — human review only"
+            )
+        elif st and str(st).startswith("BLOCKED"):
+            attn.append(f"champion {st}: {'; '.join((champion.get('notes') or [])[-2:])}")
+        elif st == "LOSE":
+            attn.append("champion LOSE — production still ahead of learned scorer")
+    if factors and not factors.get("blocked"):
+        demote = [
+            f["factor"]
+            for f in factors.get("factors") or []
+            if f.get("verdict") in ("DEMOTE", "DROP_CANDIDATE")
+        ]
+        if demote:
+            attn.append("factor DEMOTE/DROP candidates: " + ", ".join(demote))
+    for n in notes:
+        if "skip" in n.lower():
+            attn.append(n)
+    if not attn:
+        attn.append("No critical attention flags (still review table).")
+    return attn
+
+
+def build_summary_md(
+    *,
+    db_path: Path,
+    scenario: str | None,
+    with_champion: bool,
+    with_factors: bool,
+    engine_payload: dict[str, Any],
+    champion_payload: dict[str, Any] | None,
+    factors_payload: dict[str, Any] | None,
+    notes: list[str],
+) -> str:
+    sc = scenario or "all"
+    lines = [
+        "# Challenge health report",
+        "",
+        f"- **DB:** `{db_path}`",
+        f"- **Engine:** screener · **scenario filter:** {sc}",
+        f"- **Recipe:** engine tune (equal_sleeves)"
+        f"{' + champion' if with_champion else ''}"
+        f"{' + factors' if with_factors else ''}",
+        "- **Disclaimer:** gross metrics · not investment advice · "
+        "**never auto-promotes** ai-saham",
+        "",
+        "## Engine rollup (tune)",
+        "",
+        "| scenario | policy | status | n | IC_prod | IC_ag |",
+        "|----------|--------|--------|---|---------|-------|",
+    ]
+    for r in engine_payload.get("rows") or []:
+        lines.append(
+            f"| {r.get('scenario')} | `{r.get('policy_id')}` | {r.get('status')} | "
+            f"{r.get('n_rows')} | {_fmt_ic(r.get('primary_ic_baseline'))} | "
+            f"{_fmt_ic(r.get('primary_ic_against'))} |"
+        )
+    if engine_payload.get("resolve_error"):
+        lines.append("")
+        lines.append(f"**Engine resolve error:** {engine_payload['resolve_error']}")
+
+    if with_champion:
+        lines.extend(["", "## Champion", ""])
+        if champion_payload is None:
+            lines.append("_Champion skipped or not run._")
+        else:
+            lines.append(
+                f"- **Policy:** `{champion_payload.get('policy_id')}` · "
+                f"**against:** `{champion_payload.get('against_id')}`"
+            )
+            lines.append(f"- **Status:** {champion_payload.get('status')}")
+            lines.append(
+                f"- **IC:** production={_fmt_ic(champion_payload.get('primary_ic_baseline'))} · "
+                f"champion={_fmt_ic(champion_payload.get('primary_ic_against'))}"
+            )
+            for n in (champion_payload.get("notes") or [])[-4:]:
+                lines.append(f"- note: {n}")
+
+    if with_factors:
+        lines.extend(["", "## Factors (accum)", ""])
+        if factors_payload is None:
+            lines.append("_Factors skipped or not run._")
+        elif factors_payload.get("blocked"):
+            lines.append(f"**Blocked:** {factors_payload.get('blocked')}")
+        else:
+            lines.append("| factor | verdict | ΔIC | uni IC |")
+            lines.append("|--------|---------|-----|--------|")
+            for f in factors_payload.get("factors") or []:
+                lines.append(
+                    f"| {f.get('factor')} | {f.get('verdict')} | "
+                    f"{_fmt_ic(f.get('mean_delta_ic'))} | "
+                    f"{_fmt_ic(f.get('mean_univariate_ic'))} |"
+                )
+
+    attn = _attention(
+        list(engine_payload.get("rows") or []),
+        champion_payload,
+        factors_payload,
+        notes,
+    )
+    lines.extend(["", "## Attention", ""])
+    for a in attn:
+        lines.append(f"- {a}")
+
+    lines.extend(
+        [
+            "",
+            "## Next digs",
+            "",
+            "```bash",
+            "ml-saham challenge engine screener",
+            "ml-saham challenge run screener.accum.score_weights --against equal_sleeves",
+            "ml-saham challenge champion screener.accum.score_weights --model lgbm_reweight",
+            "ml-saham challenge factor screener.accum.score_weights --all",
+            "ml-saham challenge promote-packet --from-json <export.json>",
+            "```",
+            "",
+            "## Never auto-promote",
+            "",
+            "This pack is **decision support only**. Do not write ai-saham configs from ml-saham.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def build_health_report(
+    db_path: Path | str,
+    *,
+    engine_id: str = DEFAULT_ENGINE,
+    scenario: str | None = None,
+    with_champion: bool = False,
+    with_factors: bool = False,
+    champion_model: str = DEFAULT_CHAMPION_MODEL,
+    write_artifact: bool = True,
+    artifacts_dir: Path | None = None,
+) -> HealthReportResult:
+    """Run health recipe; always prefer honest BLOCKED over crash."""
+    path = Path(db_path)
+    notes: list[str] = []
+    sc = normalize_scenario(scenario)
+
+    # Validate scenario early via resolve (engine still runs and may error too)
+    _pairs, resolve_err = resolve_engine_policies(engine_id, sc)
+    if resolve_err:
+        return HealthReportResult(
+            engine_id=engine_id,
+            scenario_filter=sc,
+            with_champion=with_champion,
+            with_factors=with_factors,
+            summary_md=f"# Health blocked\n\n{resolve_err}\n",
+            lines=[f"BLOCKED_POLICY: {resolve_err}"],
+            notes=[resolve_err],
+            resolve_error=resolve_err,
+        )
+
+    if not path.is_file():
+        err = f"DB file not found: {path}"
+        return HealthReportResult(
+            engine_id=engine_id,
+            scenario_filter=sc,
+            with_champion=with_champion,
+            with_factors=with_factors,
+            summary_md=f"# Health blocked\n\n{err}\n",
+            lines=[f"BLOCKED_DATA: {err}"],
+            notes=[err],
+            resolve_error=err,
+        )
+
+    eng = run_engine_portfolio(
+        path,
+        engine_id,
+        scenario=sc,
+        against=DEFAULT_TUNE_AGAINST,
+        write_artifact=False,
+        artifacts_dir=None,
+    )
+    engine_payload = _engine_payload(eng)
+    notes.extend(eng.notes)
+
+    champion_payload: dict[str, Any] | None = None
+    if with_champion:
+        # Champion requires accum policy; skip if scenario excludes accum
+        pairs, _ = resolve_engine_policies(engine_id, sc)
+        has_accum = any(pid == ACCUM_POLICY for _, pid in pairs)
+        if not has_accum:
+            notes.append(
+                "skip champion: requires accum policy "
+                f"({ACCUM_POLICY}); scenario filter excluded it"
+            )
+        else:
+            ch = run_policy_challenge(
+                path,
+                ACCUM_POLICY,
+                against=champion_model,
+                write_artifact=False,
+                artifacts_dir=None,
+            )
+            champion_payload = _challenge_payload(ch)
+
+    factors_payload: dict[str, Any] | None = None
+    if with_factors:
+        # Factors always target accum policy (document in notes)
+        notes.append(f"factors always target {ACCUM_POLICY} (independent of scenario filter)")
+        batch = run_factor_challenge_batch(
+            path,
+            ACCUM_POLICY,
+            write_artifact=False,
+            artifacts_dir=None,
+        )
+        factors_payload = _factors_payload(batch)
+
+    summary_md = build_summary_md(
+        db_path=path.resolve(),
+        scenario=sc,
+        with_champion=with_champion,
+        with_factors=with_factors,
+        engine_payload=engine_payload,
+        champion_payload=champion_payload,
+        factors_payload=factors_payload,
+        notes=notes,
+    )
+
+    index: list[dict[str, Any]] = []
+    for r in engine_payload.get("rows") or []:
+        index.append(
+            {
+                "section": "engine",
+                "policy_id": r.get("policy_id"),
+                "status": r.get("status"),
+                "against_id": r.get("against_id"),
+            }
+        )
+    if champion_payload:
+        index.append(
+            {
+                "section": "champion",
+                "policy_id": champion_payload.get("policy_id"),
+                "status": champion_payload.get("status"),
+                "against_id": champion_payload.get("against_id"),
+            }
+        )
+    if factors_payload and not factors_payload.get("blocked"):
+        for f in factors_payload.get("factors") or []:
+            index.append(
+                {
+                    "section": "factor",
+                    "policy_id": factors_payload.get("policy_id"),
+                    "factor": f.get("factor"),
+                    "status": f.get("verdict"),
+                }
+            )
+
+    lines = [
+        "=== CHALLENGE HEALTH (control tower) ===",
+        f"DB: {path}",
+        f"Scenario: {sc or 'all'} · champion={with_champion} · factors={with_factors}",
+        "",
+    ]
+    lines.extend(summary_md.splitlines()[:40])
+    if len(summary_md.splitlines()) > 40:
+        lines.append("… (full summary in artifact summary.md)")
+
+    result = HealthReportResult(
+        engine_id=engine_id,
+        scenario_filter=sc,
+        with_champion=with_champion,
+        with_factors=with_factors,
+        summary_md=summary_md,
+        lines=lines,
+        notes=notes,
+        index=index,
+        engine_payload=engine_payload,
+        champion_payload=champion_payload,
+        factors_payload=factors_payload,
+    )
+    if write_artifact:
+        write_health_artifact(result, db_path=path, artifacts_root=artifacts_dir)
+        if result.artifact_dir:
+            result.lines.append(f"Artifact: {result.artifact_dir}")
+    return result
