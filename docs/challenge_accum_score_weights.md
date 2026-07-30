@@ -40,7 +40,7 @@ Mirrored from ai-saham `ScoreAccumUseCase.AccumScorePolicy` defaults. Hash is em
 ## Never
 
 - Auto-promote weights into ai-saham  
-- Treat curriculum `compare accum-policy` as product authority (synthetic demo)
+- Treat curriculum `learn compare accum-policy` as product authority (synthetic demo)
 
 ## Artifacts
 

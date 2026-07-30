@@ -101,6 +101,40 @@ def test_learn_namespace_cutover(fixture_db: Path):
     assert "DB:" in st.stdout
 
 
+def test_orientasi_demo_summary_uses_learn_and_challenge_health(
+    fixture_db: Path, tmp_path: Path
+):
+    """Shipped demo artifact must not advertise retired root compare / challenge all."""
+    from ml_saham.chapters.loader import load_chapter
+    from ml_saham.chapters.types import ChapterContext
+
+    result = load_chapter("orientasi").run_demo(
+        ChapterContext(db_path=fixture_db, universe=[])
+    )
+    summary = result.summary_md or ""
+    assert "ml-saham learn compare data-integrity" in summary
+    assert "ml-saham challenge health" in summary
+    assert "challenge all" not in summary
+    # bare retired path
+    assert "`compare data-integrity`" not in summary
+    assert "compare data-integrity" not in summary.replace(
+        "ml-saham learn compare data-integrity", ""
+    )
+
+    r = runner.invoke(
+        app,
+        [
+            "--db",
+            str(fixture_db),
+            "--artifacts-dir",
+            str(tmp_path / "arts"),
+            "learn",
+            "demo",
+            "orientasi",
+            "--no-artifact",
+        ],
+    )
+    assert r.exit_code == 0, r.stdout
 
 
 def test_error_ux_no_traceback_missing_db(tmp_path: Path):

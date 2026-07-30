@@ -33,7 +33,7 @@ Curriculum acceptance (historical): [mvp_acceptance.md](./mvp_acceptance.md) · 
 | `challenge health` | Control tower pack | engine ± champion ± factors |
 | `vet` / `doctor --deep` | Data-plane gate | fixture + maintainer DB |
 
-Curriculum `compare <slug>` remains for learning labs — **not** promotion authority.
+Curriculum `learn compare <slug>` remains for learning labs — **not** promotion authority.
 
 ---
 
