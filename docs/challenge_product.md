@@ -143,7 +143,7 @@ Prefer **tune vs champion** for purpose (not a third product axis).
 | Layer | Product surface |
 |-------|-----------------|
 | Accum sleeves (7; BB off) | `screener.accum.score_weights` |
-| Signal | `signal.accum.raw_score` · `flags` · `classification` |
+| Signal | `raw_score` · `flags` · `classification` · **`evidence_group_weights`** |
 | Risk hard gates | `risk.accum.hard_gates` (+ `gate_off:<gate>`; mean excess open) |
 | Weekly cron | `scripts/install_challenge_health_cron.sh` → `health --with-diagnostics` |
 | Diagnostics | `challenge diagnostic` (display/promote-candidate only) |
@@ -172,6 +172,7 @@ Live judgment inventory (ai-saham): `docs/evidence_diagnostic_factor_accum.md`.
 | `accum` | `signal.accum.raw_score` | `accum_path_v1` | [challenge_signal_raw_score.md](./challenge_signal_raw_score.md) |
 | `accum` | `signal.accum.flags` | `accum_path_v1` | vs `flags_off` (penalties 10/8/12) |
 | `accum` | `signal.accum.classification` | `accum_path_v1` | vs `threshold_shift` (70/45 bands) |
+| `accum` | `signal.accum.evidence_group_weights` | `accum_path_v1` | setup 0.60 / flow 0.40; [note](./challenge_signal_evidence_group_weights.md) |
 
 ### Engine: `risk`
 

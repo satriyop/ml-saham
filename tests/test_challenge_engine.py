@@ -37,7 +37,8 @@ def test_list_engines():
     assert "signal.accum.raw_score" in sig["policies"]["accum"]
     assert "signal.accum.flags" in sig["policies"]["accum"]
     assert "signal.accum.classification" in sig["policies"]["accum"]
-    assert sig["n_policies"] == 3
+    assert "signal.accum.evidence_group_weights" in sig["policies"]["accum"]
+    assert sig["n_policies"] == 4
     risk = next(e for e in engines if e["engine_id"] == "risk")
     assert "risk.accum.hard_gates" in risk["policies"]["accum"]
 

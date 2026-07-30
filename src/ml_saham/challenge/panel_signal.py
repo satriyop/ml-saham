@@ -80,25 +80,45 @@ def extract_signal_components(
 ) -> dict[str, float] | None:
     signal = payload.get("signal") if isinstance(payload.get("signal"), dict) else {}
     raw = _extract_raw(payload, signal)
-    if raw is None:
-        return None
-
-    found: dict[str, float] = {"production_raw_score": raw}
 
     if policy.panel_kind == "accum_signal_flags" or policy.score_kind in (
         "flag_penalty_adjusted",
         "classification_band",
     ):
+        if raw is None:
+            return None
+        found: dict[str, float] = {"production_raw_score": raw}
         for c in policy.components:
             if c.key in ("production_raw_score", "strong_min", "moderate_min"):
                 continue
-            if c.key in ("strong_min", "moderate_min"):
-                continue
             found[c.key] = _flag_fires(payload, signal, c.key, c.aliases)
-        # thresholds stored as weights in policy, not row features
         return found
 
     groups = _group_scores(payload)
+    # Alias production flow_confirmation ← institutional_flow common on captures
+    if "institutional_flow" in groups and "flow_confirmation" not in groups:
+        groups["flow_confirmation"] = groups["institutional_flow"]
+
+    if policy.score_kind == "evidence_group_weights":
+        # Group-only score: require at least one enabled group present
+        found_eg: dict[str, float] = {}
+        if raw is not None:
+            found_eg["production_raw_score"] = raw
+        for c in policy.enabled_components():
+            if c.key in groups:
+                found_eg[c.key] = groups[c.key]
+                continue
+            for a in c.aliases:
+                if a.lower() in groups:
+                    found_eg[c.key] = groups[a.lower()]
+                    break
+        if not any(c.key in found_eg for c in policy.enabled_components()):
+            return None
+        return found_eg
+
+    if raw is None:
+        return None
+    found = {"production_raw_score": raw}
     for c in policy.components:
         if c.key == "production_raw_score":
             continue

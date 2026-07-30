@@ -100,6 +100,7 @@ Suggested policy evolution:
 | `signal.accum.raw_score` | Production raw_score (+ group features) vs excess@H | **Shipped** |
 | `signal.accum.flags` | raw − do-no-harm penalties vs `flags_off` | **Shipped (P2 deepen)** |
 | `signal.accum.classification` | 70/45 band score vs `threshold_shift` (+5) | **Shipped (P2 deepen)** |
+| `signal.accum.evidence_group_weights` | setup **0.60** / flow **0.40** vs equal / drop_setup / drop_flow | **Shipped** |
 
 CLI: `challenge engine signal --scenario accum`.
 

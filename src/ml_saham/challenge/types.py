@@ -90,6 +90,8 @@ class PolicySnapshot:
             return ("production_raw_score",)
         if self.score_kind == "gate_block":
             return tuple(c.key for c in self.enabled_components())
+        if self.score_kind == "evidence_group_weights":
+            return tuple(c.key for c in self.enabled_components())
         return tuple(c.key for c in self.enabled_components())
 
 

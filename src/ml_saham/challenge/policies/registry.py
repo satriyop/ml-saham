@@ -17,6 +17,7 @@ _POLICY_FILES: dict[str, str] = {
     "signal.accum.raw_score": "signal_accum_raw_score.v1.json",
     "signal.accum.flags": "signal_accum_flags.v1.json",
     "signal.accum.classification": "signal_accum_classification.v1.json",
+    "signal.accum.evidence_group_weights": "signal_accum_evidence_group_weights.v1.json",
     "risk.accum.hard_gates": "risk_accum_hard_gates.v1.json",
 }
 

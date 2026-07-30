@@ -31,6 +31,7 @@ ENGINE_POLICIES: dict[str, dict[str, list[str]]] = {
             "signal.accum.raw_score",
             "signal.accum.flags",
             "signal.accum.classification",
+            "signal.accum.evidence_group_weights",
         ],
     },
     "risk": {

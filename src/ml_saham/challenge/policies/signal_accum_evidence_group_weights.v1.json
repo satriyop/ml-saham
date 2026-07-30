@@ -1,0 +1,41 @@
+{
+  "policy_id": "signal.accum.evidence_group_weights",
+  "version": "v1",
+  "hash": "sigevg05a9b3c2d1",
+  "protocol_id": "accum_path_v1",
+  "panel_kind": "accum_signal",
+  "score_kind": "evidence_group_weights",
+  "source": "ai-saham signal_engine.yaml evidence_groups (production setup 0.60 / flow 0.40)",
+  "source_ref": "config/signal_engine.yaml evidence_groups.setup_quality|flow_confirmation",
+  "max_score": 100.0,
+  "components": [
+    {
+      "key": "setup_quality",
+      "aliases": ["setup"],
+      "weight": 0.60,
+      "enabled": true,
+      "note": "Production evidence_groups.setup_quality.weight"
+    },
+    {
+      "key": "flow_confirmation",
+      "aliases": ["flow", "institutional_flow", "institutional_flow_score"],
+      "weight": 0.40,
+      "enabled": true,
+      "note": "Production flow_confirmation; panel often labels institutional_flow"
+    },
+    {
+      "key": "sector_context",
+      "aliases": ["sector_context_score"],
+      "weight": 0.0,
+      "enabled": false,
+      "note": "Alpha-trigger diagnostic slot — not production evidence_groups weight"
+    },
+    {
+      "key": "company_quality_context",
+      "aliases": ["company_quality", "cq_group"],
+      "weight": 0.0,
+      "enabled": false,
+      "note": "Diagnostic registration — excluded from production evidence_groups score"
+    }
+  ]
+}

@@ -30,12 +30,17 @@ Same as accum path: `accum_path_v1` (H=10 primary; report 3/10/20).
 |-----------|---------|------|
 | `signal.accum.flags` | `flags_off` | raw − flag penalties (10/8/12) |
 | `signal.accum.classification` | `threshold_shift` | 70/45 band scores vs +5 floors |
+| `signal.accum.evidence_group_weights` | `equal_sleeves` / `drop_setup` / `drop_flow` | production setup **0.60** / flow **0.40** |
 
 ```bash
 ml-saham challenge run signal.accum.flags --against flags_off
 ml-saham challenge run signal.accum.classification --against threshold_shift
+ml-saham challenge run signal.accum.evidence_group_weights --against equal_sleeves
+ml-saham challenge run signal.accum.evidence_group_weights --against drop_setup
 ml-saham challenge engine signal --scenario accum
 ```
+
+Operator note: [challenge_signal_evidence_group_weights.md](./challenge_signal_evidence_group_weights.md)
 
 ## Not this policy
 

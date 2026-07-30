@@ -23,6 +23,8 @@ from ml_saham.challenge.scorers import (
     mean_excess_allowed,
     score_classification_shift,
     score_equal_sleeves,
+    score_evidence_equal_groups,
+    score_evidence_group_weights,
     score_flags_off,
     score_gate_off,
     score_gate_off_named,
@@ -537,7 +539,65 @@ def run_policy_challenge(
             continue
 
         scored = False
-        if policy.score_kind == "flag_penalty_adjusted":
+        if policy.score_kind == "evidence_group_weights":
+            if against in ("equal_sleeves", "equal"):
+                ag_s = score_evidence_equal_groups(test, policy)
+                coefs = {c.key: 1.0 for c in policy.enabled_components()}
+            elif against in ("drop_setup", "drop_setup_quality", "setup_off"):
+                against = "drop_setup"
+                ag_s = score_evidence_group_weights(
+                    test, policy, drop_key="setup_quality"
+                )
+                coefs = {
+                    c.key: (0.0 if c.key == "setup_quality" else c.weight)
+                    for c in policy.enabled_components()
+                }
+                notes.append("evidence groups: drop setup_quality (renormalize flow)")
+            elif against in (
+                "drop_flow",
+                "drop_flow_confirmation",
+                "flow_off",
+            ):
+                against = "drop_flow"
+                ag_s = score_evidence_group_weights(
+                    test, policy, drop_key="flow_confirmation"
+                )
+                coefs = {
+                    c.key: (0.0 if c.key == "flow_confirmation" else c.weight)
+                    for c in policy.enabled_components()
+                }
+                notes.append(
+                    "evidence groups: drop flow_confirmation (renormalize setup)"
+                )
+            elif against in ("ridge_reweight", "ridge"):
+                # ridge on group feature keys → excess
+                ag_s, coefs = score_ridge_reweight(
+                    train, test, policy, primary_horizon=protocol.primary_horizon
+                )
+                last_coefs = coefs
+            elif against == "production":
+                ag_s = score_production(test, policy)
+                coefs = policy.weight_map()
+            else:
+                return ChallengeResult(
+                    status=ChallengeStatus.BLOCKED_POLICY,
+                    policy_id=policy.policy_id,
+                    protocol_id=protocol.protocol_id,
+                    baseline_id=baseline,
+                    against_id=against,
+                    policy_hash=policy.hash,
+                    n_rows=len(rows),
+                    primary_horizon=protocol.primary_horizon,
+                    lines=[
+                        f"Unknown evidence-group challenger {against!r}. "
+                        "Use equal_sleeves | drop_setup | drop_flow | ridge_reweight."
+                    ],
+                    notes=[f"unknown evidence_group against={against}"],
+                )
+            if against not in ("ridge_reweight", "ridge"):
+                last_coefs = coefs
+            scored = True
+        elif policy.score_kind == "flag_penalty_adjusted":
             if against in (
                 "flags_off",
                 "flag_off",

@@ -61,8 +61,54 @@ def score_production(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[f
             blocked = any(float(r.components.get(k, 0.0)) > 0.0 for k in keys)
             out.append(0.0 if blocked else 1.0)
         return out
+    if policy.score_kind == "evidence_group_weights":
+        return score_evidence_group_weights(rows, policy)
     keys = enabled_keys(policy)
     return [float(sum(r.components.get(k, 0.0) for k in keys)) for r in rows]
+
+
+def score_evidence_group_weights(
+    rows: Sequence[PanelRow],
+    policy: PolicySnapshot,
+    *,
+    weight_override: dict[str, float] | None = None,
+    drop_key: str | None = None,
+) -> list[float]:
+    """Weighted mean of group scores; renormalize over enabled weights > 0.
+
+    Mirrors production: missing groups drop out of the weight sum (not zero-filled).
+    Group values are expected on a ~0–100 score scale.
+    """
+    wmap = dict(weight_override) if weight_override is not None else {
+        c.key: float(c.weight) for c in policy.enabled_components()
+    }
+    if drop_key is not None:
+        wmap = {k: (0.0 if k == drop_key else v) for k, v in wmap.items()}
+    out: list[float] = []
+    for r in rows:
+        num = 0.0
+        den = 0.0
+        for k, w in wmap.items():
+            if w <= 0:
+                continue
+            if k not in r.components:
+                continue
+            v = float(r.components[k])
+            # treat pure missing zeros only if key absent — present 0 is real
+            num += w * v
+            den += w
+        out.append(float(num / den) if den > 0 else 0.0)
+    return out
+
+
+def score_evidence_equal_groups(
+    rows: Sequence[PanelRow],
+    policy: PolicySnapshot,
+) -> list[float]:
+    """Equal weight on every enabled group key that is present on the row."""
+    keys = enabled_keys(policy)
+    equal = {k: 1.0 for k in keys}
+    return score_evidence_group_weights(rows, policy, weight_override=equal)
 
 
 def score_flags_off(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[float]:
@@ -166,7 +212,10 @@ def score_equal_sleeves(rows: Sequence[PanelRow], policy: PolicySnapshot) -> lis
 
     weighted_sleeves: mean of component/weight fractions on enabled sleeves.
     rank_primary / raw_score_primary: within-date z-score mean of feature_keys().
+    evidence_group_weights: equal group weights (renormalized).
     """
+    if policy.score_kind == "evidence_group_weights":
+        return score_evidence_equal_groups(rows, policy)
     if policy.score_kind in ("rank_primary", "raw_score_primary"):
         return score_feature_equal_z(rows, policy)
 
