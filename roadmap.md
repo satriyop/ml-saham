@@ -30,10 +30,14 @@ Historical curriculum phase checklists (MVP / v1.1 / phase-2): local **`archive/
 
 ```text
 doctor / vet
-  → challenge run | factor | engine | champion | diagnostic | health | promote-packet
+  → challenge list                         # catalog entry point
+  → challenge health --with-diagnostics    # weekly tower
+  → challenge engine signal|risk …         # dig only when retuning
   → English artifacts + human decision memos
-  → never auto-promote into ai-saham
+  → never auto-promote · diagnostics never set Action
 ```
+
+**Operator ritual SSOT:** [docs/challenge_product.md](./docs/challenge_product.md) (§ Operator ritual).
 
 Learning: `ml-saham learn list|explore|demo|compare`.
 

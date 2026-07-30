@@ -8,6 +8,47 @@ Sibling ownership vs ai-saham: **[BOUNDARY.md](../BOUNDARY.md)** (ingest/corpus 
 
 ---
 
+## Operator ritual (SSOT)
+
+Recommended maintainer path — same Typer verbs; no TUI.
+
+| Step | When | Command | Purpose |
+|------|------|---------|---------|
+| **1. Catalog** | Always start here | `ml-saham challenge list` | **One entry point** for all production PolicySpecs + dig hints (screener / signal / gate / factor / diagnostic) |
+| **2. Weekly tower** | Weekly (or after big capture refresh) | `ml-saham challenge health --with-diagnostics` | Screener tune rollup + **display bags** (not Action). Optional: `--with-factors` / `--with-champion` |
+| **3. Deep dig** | Only when retuning that knob | `challenge engine signal --scenario accum` · `challenge engine risk --scenario accum` · `challenge run …` | Signal / risk / single-policy tournaments — **not** the weekly default |
+| **4. Diagnostics → production?** | After `PROMOTE_CANDIDATE` | Design a **new PolicySpec** → `challenge run` / `factor` (tune) → human memo | **Never** treat diagnostic verdicts as TradeSetup Action |
+| **5. Action ENTER (P4)** | Only when ready | Deferred | Needs dense Action + labels and a real ENTER H0 — **not** more rank IC |
+
+```bash
+# 1 — catalog
+ml-saham challenge list
+
+# 2 — weekly ritual
+ml-saham challenge health --with-diagnostics
+# optional deeper weekly: --with-factors --with-champion
+
+# 3 — on-demand digs (when retuning)
+ml-saham challenge engine signal --scenario accum
+ml-saham challenge engine risk --scenario accum --against gate_off
+ml-saham challenge run screener.accum.score_weights --against equal_sleeves
+
+# 4 — diagnostic promote ladder (never Action)
+ml-saham challenge diagnostic run mce.screen_display --all
+# PROMOTE_CANDIDATE ⇒ write PolicySpec design ⇒ challenge run/factor ⇒ human ai-saham change
+```
+
+Hard rules:
+
+- **`challenge list`** is the catalog; do not invent a parallel inventory of policies.  
+- **Signal/risk engines** are dig surfaces after list — not the weekly default.  
+- **`PROMOTE_CANDIDATE` / KEEP_DISPLAY never set ENTER/Action** (ADR-057).  
+- **P4 Action desk** stays deferred until data + H0 exist ([challenge_product_roadmap.md](./challenge_product_roadmap.md)).
+
+Related: [challenge_health.md](./challenge_health.md) · [challenge_diagnostic_validity.md](./challenge_diagnostic_validity.md)
+
+---
+
 ## What it is
 
 `ml-saham` **challenge** stress-tests **frozen production-like policies** (PolicySpecs) from the personal IDX stack against clean challengers, on **read-only** `ai-saham` SQLite.
@@ -69,7 +110,8 @@ Operator: [challenge_champion.md](./challenge_champion.md).
 
 | Command | Purpose |
 |---------|---------|
-| **`challenge health`** | Weekly-style recipe: engine tune ± champion ± factors → one pack |
+| **`challenge health --with-diagnostics`** | **Weekly ritual:** screener tune + display bags (see Operator ritual) |
+| **`challenge health --with-factors` / `--with-champion`** | Optional deeper weekly pack |
 | **`challenge promote-packet`** | Human checklist from export JSON / artifact (never applies) |
 
 Operator: [challenge_health.md](./challenge_health.md).
@@ -215,11 +257,16 @@ ml-saham challenge champion screener.accum.score_weights --model lgbm_reweight
 ### Health + promote (shipped)
 
 ```bash
-ml-saham challenge health --with-champion --with-factors
+# Weekly default (screener + display diagnostics)
+ml-saham challenge health --with-diagnostics
+
+# Deeper optional weekly pack
+ml-saham challenge health --with-diagnostics --with-factors --with-champion
+
 ml-saham challenge promote-packet --from-json /tmp/champ.json
 ```
 
-See [challenge_health.md](./challenge_health.md).
+See [challenge_health.md](./challenge_health.md) · ritual SSOT above.
 
 ### Data-tolerant policies
 

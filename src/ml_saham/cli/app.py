@@ -583,11 +583,11 @@ def learn_leaderboard_cmd(
 
 @challenge_app.command("list")
 def challenge_list_cmd() -> None:
-    """List ADR-002 policy challenges."""
+    """Catalog entry point: all PolicySpecs + dig hints (start here)."""
     from ml_saham.challenge import list_policies
 
     rows = list_policies()
-    table = Table(title="Policy challenges (ADR-002)")
+    table = Table(title="Policy catalog (ADR-002) — start here")
     table.add_column("policy_id")
     table.add_column("version")
     table.add_column("hash")
@@ -596,32 +596,38 @@ def challenge_list_cmd() -> None:
         table.add_row(r["policy_id"], r["version"], r["hash"], r["protocol"])
     console.print(table)
     console.print(
+        "[bold]Operator ritual:[/bold] catalog → weekly health --with-diagnostics "
+        "→ dig engine signal|risk only when retuning"
+    )
+    console.print(
+        "[dim]Weekly: ml-saham challenge health --with-diagnostics[/dim]"
+    )
+    console.print(
+        "[dim]Dig (on demand): challenge engine signal|risk --scenario accum[/dim]"
+    )
+    console.print(
         "[dim]Run: ml-saham challenge run screener.accum.score_weights "
-        "--against ridge_reweight[/dim]"
-    )
-    console.print(
-        "[dim]Run: ml-saham challenge run screener.pre_open.iev_rank "
         "--against equal_sleeves[/dim]"
     )
     console.print(
-        "[dim]Run: ml-saham challenge run screener.pre_open.directional_score "
+        "[dim]Run: ml-saham challenge run signal.accum.raw_score "
         "--against equal_sleeves[/dim]"
+    )
+    console.print(
+        "[dim]Run: ml-saham challenge run risk.accum.hard_gates "
+        "--against gate_off[/dim]"
     )
     console.print(
         "[dim]Factor: ml-saham challenge factor screener.accum.score_weights "
         "--factor consistency[/dim]"
     )
     console.print(
-        "[dim]Diagnostic: ml-saham challenge diagnostic list | "
-        "run mce.screen_display --all[/dim]"
+        "[dim]Diagnostic bags (not Action): challenge diagnostic list | "
+        "health --with-diagnostics[/dim]"
     )
     console.print(
-        "[dim]Signal: ml-saham challenge run signal.accum.raw_score "
-        "--against equal_sleeves[/dim]"
-    )
-    console.print(
-        "[dim]Gate:   ml-saham challenge run risk.accum.hard_gates "
-        "--against gate_off[/dim]"
+        "[yellow]PROMOTE_CANDIDATE ≠ ENTER — design PolicySpec then "
+        "challenge run/factor.[/yellow]"
     )
 
 
@@ -1078,7 +1084,11 @@ def challenge_health_cmd(
         help="Print summary only; skip artifacts/challenge/health pack",
     ),
 ) -> None:
-    """Control tower: engine rollup ± champion ± factors ± diagnostics → English pack."""
+    """Weekly control tower: screener rollup ± diagnostics ± champion ± factors.
+
+    Recommended weekly: --with-diagnostics. Dig signal/risk engines only when
+    retuning those knobs (see challenge list ritual). Diagnostics never set Action.
+    """
     from ml_saham.challenge.health import build_health_report
 
     db_path: Path = ctx.obj["db"]

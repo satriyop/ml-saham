@@ -57,6 +57,44 @@ def test_health_cli(fixture_db: Path, tmp_path: Path):
     assert "HEALTH" in r.stdout or "health" in r.stdout.lower()
 
 
+def test_challenge_list_is_catalog_entry_with_ritual_digs(fixture_db: Path):
+    """CLI catalog surfaces all policies + weekly/dig ritual (not a parallel catalog)."""
+    r = runner.invoke(app, ["--db", str(fixture_db), "challenge", "list"])
+    assert r.exit_code == 0, r.stdout
+    out = r.stdout
+    assert "catalog" in out.lower() or "Policy catalog" in out
+    for pid in (
+        "screener.accum.score_weights",
+        "signal.accum.raw_score",
+        "risk.accum.hard_gates",
+    ):
+        assert pid in out
+    assert "health --with-diagnostics" in out
+    assert "engine signal" in out or "signal|risk" in out
+    assert "PROMOTE_CANDIDATE" in out
+    assert "ENTER" in out or "Action" in out
+
+
+def test_health_next_digs_codify_ritual_and_no_action_from_diagnostics(
+    fixture_db: Path,
+):
+    result = build_health_report(
+        fixture_db,
+        with_diagnostics=True,
+        write_artifact=False,
+    )
+    assert result.exit_code() == 0
+    md = result.summary_md
+    assert "challenge list" in md
+    assert "health --with-diagnostics" in md
+    assert "engine signal" in md
+    assert "engine risk" in md
+    assert "never set TradeSetup Action" in md.lower() or "never Action" in md
+    assert "P4" in md or "ENTER" in md
+    assert "Diagnostics (display bags" in md
+    assert "not Action authority" in md
+
+
 def test_health_champion_flag(fixture_db: Path, tmp_path: Path):
     result = build_health_report(
         fixture_db,

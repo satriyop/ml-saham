@@ -116,7 +116,15 @@ CLI: `challenge run risk.accum.hard_gates --against gate_off` · `challenge engi
 
 ### P4 — Setup readiness & Action — **deferred**
 
-Different product from sleeve/signal IC. No fake ENTER accuracy path until dense Action labels exist. Diagnostics stay non-Action (ADR-057).
+Different product from sleeve/signal IC. **Do not** ship rank-IC “ENTER” tournaments as a substitute.
+
+| Prerequisite | Status |
+|--------------|--------|
+| Dense Action + path labels in captures | Required before any ENTER H0 |
+| Real ENTER protocol (not sleeve IC) | Not started |
+| Diagnostics as Action authority | **Never** by default (ADR-057) |
+
+Operator ritual: [challenge_product.md](./challenge_product.md) § Operator ritual.
 
 ---
 

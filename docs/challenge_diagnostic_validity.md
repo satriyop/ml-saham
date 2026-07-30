@@ -1,12 +1,22 @@
 # Product: Diagnostic validity track
 
-**Status:** Shipped (v1 — two bags)  
+**Status:** Shipped (v1 — four bags)  
 **Date:** 2026-07-30  
 **Axis:** Challenge (third **purpose**, not a fourth top-level product)  
 **SSOT:** `src/ml_saham/challenge/diagnostic_validity.py` · `src/ml_saham/challenge/diagnostics/`  
-**Related:** [challenge_product.md](./challenge_product.md) · [challenge_factor_validity.md](./challenge_factor_validity.md) · [challenge_product_roadmap.md](./challenge_product_roadmap.md) · ai-saham ADR-057 · `evidence_diagnostic_factor_accum.md`
+**Related:** [challenge_product.md](./challenge_product.md) (**operator ritual**) · [challenge_factor_validity.md](./challenge_factor_validity.md) · [challenge_product_roadmap.md](./challenge_product_roadmap.md) · ai-saham ADR-057 · `evidence_diagnostic_factor_accum.md`
 
 **Never auto-promotes into ai-saham. Never sets TradeSetup Action authority.**
+
+### Place in the weekly ritual
+
+| Surface | Role |
+|---------|------|
+| `challenge list` | Catalog of **production** PolicySpecs (not diagnostic bags) |
+| `challenge health --with-diagnostics` | **Weekly** display-bag slice (separate from sleeve KEEP/DEMOTE) |
+| `challenge diagnostic …` | On-demand bag calibration |
+| `PROMOTE_CANDIDATE` | **Only** opens: design PolicySpec → `challenge run` / `factor` → human ai-saham change |
+| P4 Action ENTER | **Deferred** — needs dense Action labels + real ENTER H0; **not** more rank IC |
 
 ---
 
