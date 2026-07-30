@@ -1,27 +1,45 @@
 {
   "policy_id": "risk.accum.hard_gates",
   "version": "v1",
-  "hash": "riskgate02b7d5c1",
+  "hash": "riskgate03f8a1b9",
   "protocol_id": "accum_path_v1",
   "panel_kind": "accum_gates",
   "score_kind": "gate_block",
-  "source": "ai-saham RiskEngine hard blocks on accum trade_setup (thin PolicySpec)",
-  "source_ref": "learning_observations trade_setup.blocking_gates / action",
+  "source": "ai-saham risk_engine.yaml hard gates on accum trade_setup (P3 deepen)",
+  "source_ref": "config/risk_engine.yaml gates; observation trade_setup.blocking_gates",
   "max_score": 1.0,
   "components": [
     {
       "key": "bandar_gate",
       "aliases": ["BandarGate", "bandar"],
       "weight": 1.0,
-      "enabled": true,
-      "note": "1.0 if BandarGate fired on observation"
+      "enabled": true
     },
     {
       "key": "liquidity_gate",
       "aliases": ["LiquidityGate", "liquidity"],
       "weight": 1.0,
+      "enabled": true
+    },
+    {
+      "key": "fundamental_gate",
+      "aliases": ["FundamentalGate", "fundamental", "PiotroskiGate"],
+      "weight": 1.0,
       "enabled": true,
-      "note": "1.0 if LiquidityGate fired"
+      "note": "P3 deepen — structural; fire when named in blocking_gates"
+    },
+    {
+      "key": "free_float_gate",
+      "aliases": ["FreeFloatGate", "free_float", "FreeFloat"],
+      "weight": 1.0,
+      "enabled": true
+    },
+    {
+      "key": "technical_gate",
+      "aliases": ["TechnicalGate", "technical"],
+      "weight": 1.0,
+      "enabled": true,
+      "note": "Production technical is opt-in; still challengeable when present on observations"
     }
   ]
 }
