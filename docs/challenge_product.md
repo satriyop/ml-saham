@@ -40,7 +40,16 @@ ml-saham
 └── Challenge             English audit lab (production baseline, no auto-promote)
       ├── tune            factor worth? · weights/combo OK?     ← shipped
       │     policy tournament · factor validity · engine rollup
-      └── champion        better score rule than production?  ← shipped
+      ├── champion        better score rule than production?  ← shipped
+      └── diagnostic      explain-only bags: keep/hide display · promote-candidate  ← shipped v1
+```
+
+Diagnostic validity: [challenge_diagnostic_validity.md](./challenge_diagnostic_validity.md) — **not** Action authority; `PROMOTE_CANDIDATE` only opens a tune PolicySpec design.
+
+```bash
+ml-saham challenge diagnostic list
+ml-saham challenge diagnostic run mce.screen_display --all
+ml-saham challenge diagnostic health --scenario accum
 ```
 
 | | **Tune** | **Champion** |
@@ -81,6 +90,15 @@ Operator: [challenge_health.md](./challenge_health.md).
 
 Prefer **`--scenario`**, not “track,” for accum vs pre-open.  
 Prefer **tune vs champion** for purpose (not a third product axis).
+
+---
+
+## Coverage (honest)
+
+**Accum enter stack:** product challenge covers **AccumScore weighted sleeves** only (five enabled factors on `screener.accum.score_weights`). Hard filters, signal groups/flags/DecisionPolicy, setup readiness, risk gates, diagnostics, and TradeSetup **Action** are **not** product-challenged yet.
+
+Expansion plan (P0–P4): **[challenge_product_roadmap.md](./challenge_product_roadmap.md)**.  
+Live judgment inventory (ai-saham): `docs/evidence_diagnostic_factor_accum.md`.
 
 ---
 
@@ -207,6 +225,8 @@ Pre-ADR-002 chapter-loop batch (`challenge legacy` / `ENGINE_FACTORS`) is **reti
 | Doc | Role |
 |-----|------|
 | This file | Product map + commands |
+| [challenge_product_roadmap.md](./challenge_product_roadmap.md) | Planned PolicySpec expansion (P0–P4); not a ship gate |
+| [challenge_diagnostic_validity.md](./challenge_diagnostic_validity.md) | Diagnostic track (display keep/hide / promote-candidate) — shipped v1 |
 | [challenge_champion.md](./challenge_champion.md) | Champion track (learned vs production) |
 | [challenge_health.md](./challenge_health.md) | Health report + promote-packet control tower |
 | [challenge_engine_screener.md](./challenge_engine_screener.md) | Engine portfolio operator note |

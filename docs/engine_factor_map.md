@@ -6,6 +6,9 @@ Product: [ADR-002](./adr/ADR-002-ideal-challenge-system.md) · SSOT: `src/ml_sah
 **Rule:** new `ai-saham` factor/evidence → decide: (a) existing **PolicySpec** covers it, (b) extend factor track / scorer, or (c) new policy (+ optional `learn explore` / `learn compare`).  
 Do **not** invent curriculum for pure plumbing. Curriculum `compare` is **not** promotion authority.
 
+**Expansion plan:** [challenge_product_roadmap.md](./challenge_product_roadmap.md) (P0 Accum sleeves honesty → P2 signal → P3 risk → P4 Action).  
+**Today (accum):** only `screener.accum.score_weights` is product; Signal / Risk / MCE rows below remain empty until those phases ship.
+
 ---
 
 ## Engines (ai-saham) → product challenge
@@ -16,7 +19,7 @@ Do **not** invent curriculum for pure plumbing. Curriculum `compare` is **not** 
 | **Screener (pre-open)** | Opening auction / IEV rank | `iev_snapshots` / `iev_snapshot_history`, `learning_observations` (PRE_OPEN…), `candles` | `screener.pre_open.iev_rank` · `screener.pre_open.directional_score` | `pre-open-rank`, `pre-open-heuristic`, `pre-open-direction`, `pre-open-participation`, `pre-open-auction`, `pre-open-macro` |
 | **SignalEngine** | Alpha / evidence groups → raw score | observations + fundamentals + flow fingerprints | *(no PolicySpec portfolio yet)* | `meta-ensemble`, `factor-score`, `relative-strength`, `ichimoku-cloud`, `pattern-fail`, `earnings-surprise`, `financial-quality`, `forward-valuation`, `analyst-consensus`, `seasonality-drift` |
 | **RiskEngine** | Gates, sizing, block/allow | notations, financials, vol fingerprints | *(no PolicySpec portfolio yet)* | `volatility-sizing`, `portfolio-small`, `special-monitoring`, `financial-distress` |
-| **MarketContextEngine** | Regime / breadth / macro inputs | `market_context_snapshots`, `regime_observations`, `candles` (IHSG) | *(no PolicySpec portfolio yet)* | `market-regime`, `sector-breadth`, `nowcasting`, `microstructure-impact` |
+| **MarketContextEngine** | Regime / breadth / macro inputs | `market_context_snapshots`, `regime_observations`, `candles` (IHSG) | *(no PolicySpec yet)* · **diagnostic** `mce.screen_display` | `market-regime`, `sector-breadth`, `nowcasting`, `microstructure-impact` |
 | **Data plane / DQ** | Trust of caches & observations | all tiers + `learning_observations` | `doctor` / `vet` | `data-integrity` |
 | Supporting labs | Hygiene / honesty | various | — | `cluster-peers`, `broker-network`, `volume-anomaly`, `walk-forward`, `research-pipeline`, `rl-sandbox`, `corp-events`, `survival-analysis` |
 
@@ -29,7 +32,7 @@ Factors / evidence that exist or are growing in **ai-saham** but are **thin or m
 | ai-saham factor / evidence | Status in ml-saham | Recommendation |
 |----------------------------|--------------------|----------------|
 | **Sector macro context** (ADR-053) | No dedicated policy | New PolicySpec or diagnostic when scoring uses it |
-| **Sector context (peer-relative)** | Partial via curriculum `sector-breadth` / `cluster-peers` | Extend product later if gate input |
+| **Sector context (peer-relative)** | Diagnostic `sector.peer_context` + curriculum `sector-breadth` / `cluster-peers` | `PROMOTE_CANDIDATE` → PolicySpec if residual earns it |
 | **Insider selling flags** | Curriculum `insider` only | Policy/gate when heavily used in SignalEngine |
 | **Corporate action event risk** | Curriculum `corp-events` | Covered for learning |
 | **Opening track / paper outcomes** | Pre-open policies + curriculum pre-open suite | Product: IEV + directional |
@@ -54,5 +57,6 @@ Factors / evidence that exist or are growing in **ai-saham** but are **thin or m
 | `ml-saham vet` | English data-integrity audit |
 | `ml-saham challenge engine screener [--scenario …]` | ADR-002 PolicySpec portfolio rollup |
 | `ml-saham challenge run / factor / health / champion` | Policy product surface |
+| `ml-saham challenge diagnostic list\|run\|health` | Explain-only bag calibration (not Action) |
 | `ml-saham learn compare <slug> …` | Single-factor curriculum lab (not promotion) |
 | `ml-saham learn list` | Curriculum catalog + progress |

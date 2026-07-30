@@ -34,13 +34,16 @@ Discussion context: early drafts in local `archive/` (gitignored).
 
 ## Candidate problems (from ai-saham factor inventory)
 
-See also: [docs/engine_factor_map.md](./docs/engine_factor_map.md).
+See also: [docs/engine_factor_map.md](./docs/engine_factor_map.md) · product expansion: [docs/challenge_product_roadmap.md](./docs/challenge_product_roadmap.md).
 
 | Idea | Tier | Why | Data | Slot |
 |---|---|---|---|---|
-| **Sector macro context** (routed macros per sector group; ADR-053) | Hard | Distinct from peer breadth; may become score input later | macro series + sector group map; fingerprints `smc_*` | New challenge slug `sector-macro` under `market_context` when ready |
-| Insider as **policy / gate** input | Medium | Already a curriculum chapter; SignalEngine penalties | `insider_cache` | Add PolicySpec or gate track if scoring uses insider heavily |
-| Setup phase / readiness | Hard | Swing lens / phase gates | observation labels | Deepdive / later slug — not scheduled |
+| **BCI + sector breadth as Accum sleeves** | Medium | Production uses them; PolicySpec v1 disables / omits | observation accum breakdown + peer breadth | **P0** on challenge roadmap — prefer product PolicySpec before new chapter |
+| **Sector macro context** (routed macros per sector group; ADR-053) | Hard | Distinct from peer breadth; may become score input later | macro series + sector group map; fingerprints `smc_*` | After MCE product lane; roadmap P4-ish / backlog |
+| Insider as **policy / gate** input | Medium | Already a curriculum chapter; SignalEngine penalties | `insider_cache` | **P2** signal flags PolicySpec if scoring uses insider heavily |
+| Setup phase / readiness | Hard | Swing lens / phase gates | observation labels | **P4** challenge roadmap — not scheduled for build |
+| Screen hard filters / min_accum | Medium | Veto path before score | screen config + observations | **P1** only if production knobs move |
+| Risk gate FP/FN | Hard | Hard Action override | risk fields + forward outcomes | **P3** challenge roadmap |
 | Source-field / reconciliation DQ | Medium | Trust of caches | DQ tables / contracts | Prefer `data-integrity` + doctor (shipped Ch.45) |
 
 When promoting a candidate, write:
