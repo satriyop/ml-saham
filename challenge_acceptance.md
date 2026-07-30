@@ -12,7 +12,7 @@ Curriculum phase checklists (historical, local only): `archive/mvp_acceptance.md
 
 - [x] Challenge outranks curriculum polish when priorities conflict (ADR-001)  
 - [x] Policy registry loads every registered `policy_id` with a known protocol  
-- [x] Engine portfolio `screener` covers registered PolicySpecs only  
+- [x] Engine portfolio `screener` / `signal` / `risk` covers registered PolicySpecs only  
 - [x] CLI: `challenge list` / `run` / `engine` / `factor` / `health` / `champion` / `promote-packet`  
 - [x] CLI: `challenge diagnostic list` / `run` / `health` (display / promote-candidate; never Action)  
 - [x] Chapter-loop product surface **retired** (`challenge legacy` removed; no `ENGINE_FACTORS` batch)  
@@ -29,7 +29,7 @@ Curriculum phase checklists (historical, local only): `archive/mvp_acceptance.md
 | Policy registry | Frozen PolicySnapshots | `list_policy_ids` / `load_policy` |
 | Protocols | Horizons, folds, win margin | `accum_path_v1`, `pre_open_session_v1` |
 | `challenge run` | Production vs challenger (tune) | fixture + maintainer DB |
-| `challenge engine` | PolicySpec portfolio rollup | `screener` ± scenario |
+| `challenge engine` | PolicySpec portfolio rollup | `screener` / `signal` / `risk` ± scenario |
 | `challenge factor` | KEEP / DEMOTE / DROP_CANDIDATE | accum sleeves |
 | `challenge diagnostic` | KEEP_DISPLAY / DEMOTE_DISPLAY / PROMOTE_CANDIDATE | explain-only bags (v1: MCE, sector) |
 | `challenge health` | Control tower pack | engine ± champion ± factors |

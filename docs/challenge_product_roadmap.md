@@ -38,15 +38,15 @@ Legend: **Product** = ADR-002 `challenge run` / `factor` / `engine` / `champion`
 
 | Inventory area (ai-saham) | Status | Notes |
 |---------------------------|--------|--------|
-| Hard filters (§3) | **None** product | Window multi-payload pick only; no filter tournament |
-| Accum sleeves cons/streak/vwap/rsi/flow (§4) | **Product** | `screener.accum.score_weights` + factor + champion |
-| BB / BCI (§4) | In PolicySpec, **not** enabled | BB `enabled: false`; BCI weight 0 + excluded note |
-| Sector breadth bonus (§4) | **None** product | Curriculum `sector-breadth` only; not even a PolicySpec stub |
-| Signal groups / flags / DecisionPolicy (§5) | **None** product | Curriculum partial; engine map: “no PolicySpec yet” |
-| Named setups / phase / readiness (§6–7) | **None** product | Parked in [problem_backlog.md](../problem_backlog.md) |
-| Risk gates (§8) | **None** product | Curriculum risk-ish labs only |
-| Diagnostic bags / MCE (§9) | **None** product (by design on desk) | Do not promote diagnostics to Action authority |
-| TradeSetup Action composition (§10-ish) | **None** | Different product from sleeve IC |
+| Hard filters (§3) | **P1 skipped (thin)** | Production floors often 0/off — no unused filter tournament |
+| Accum sleeves (§4) | **Product** | 7 enabled: cons/streak/vwap/rsi/flow/**bci**/**sector_breadth**; **BB off** |
+| BB (§4) | Disabled | Matches production BB-off — not inventing BB-on |
+| BCI + sector breadth (§4) | **Product (P0)** | Enabled sleeves on `screener.accum.score_weights` |
+| Signal raw score / groups (§5) | **Product (P2 thin)** | `signal.accum.raw_score` — raw_score + group features vs excess@H |
+| Named setups / phase / readiness (§6–7) | **None** product | Parked; P4 later |
+| Risk hard gates (§8) | **Product (P3 thin)** | `risk.accum.hard_gates` — gate_off ablation (not sleeve IC) |
+| Diagnostic bags / MCE (§9) | **Diagnostic track** | `challenge diagnostic` display/promote-candidate — **not** Action |
+| TradeSetup Action composition | **P4 deferred** | Different product; no fake ENTER accuracy path |
 
 Pre-open (not this inventory): `screener.pre_open.iev_rank`, `screener.pre_open.directional_score` — keep on a **separate lane**.
 
@@ -87,77 +87,36 @@ Suggested policy evolution:
 
 ---
 
-### P1 — Screen knobs that veto candidates *(when you retune them)*
+### P1 — Screen hard filters — **SKIPPED (thin / unused knobs)**
 
-**Goal:** Challenge eligibility / board filters as **gates**, not sleeve IC.
-
-| Candidate policy_id | Decision type | Question |
-|---------------------|---------------|----------|
-| `screener.accum.hard_filters` (name TBD) | `gate` | Does raising/lowering `min_net_buy_days`, mcap/Piotroski floors, `min_accum_score` change path quality under protocol? |
-
-| # | Work | Exit when |
-|---|------|-----------|
-| P1.1 | Define gate protocol (universe in/out + forward excess or path-label join) | Spec + min-N / BLOCKED_DATA rules written |
-| P1.2 | Challengers: `threshold_shift`, `gate_off:<name>` | Tournament runs on maintainer DB or honest thin-data |
-| P1.3 | Register under engine `screener` / scenario `accum` when stable | `challenge engine list` shows it |
-
-**Skip P1** if production keeps floors at 0 / off and you never move them.
+**Decision:** Do not ship filter tournaments while production floors stay 0/off. Revisit only when knobs are actually retuned.
 
 ---
 
-### P2 — Signal score path *(score that moves Action)*
+### P2 — Signal score path — **shipped thin**
 
-**Goal:** PolicySpecs for production signal evidence — still not full TradeSetup.
+| policy_id | Focus | Status |
+|-----------|--------|--------|
+| `signal.accum.raw_score` | Production raw_score (+ group features for equal/ridge) vs excess@H | **Shipped** |
+| flags / 70–45 cuts / full group weights | Later | Open |
 
-| Candidate policy_id | Focus |
-|---------------------|--------|
-| `signal.accum.flow_setup_weights` (TBD) | Flow group weight / cap, setup quality weight when attached |
-| `signal.accum.flags` (TBD) | VALUATION / ANALYST / INSIDER penalties |
-| `signal.accum.classification` (TBD) | 70 / 45 cutoffs → preliminary ENTER/WATCH/AVOID **as score bands**, not Action desk |
-
-| # | Work | Exit when |
-|---|------|-----------|
-| P2.0 | **Data contract:** confirm observation payloads embed group scores / flags / raw signal | Extractors green or documented gaps |
-| P2.1 | First Signal PolicySpec + protocol (reuse excess@H or add path-label protocol later) | `challenge list` includes signal policy |
-| P2.2 | Engine portfolio: new engine_id `signal` **or** scenario under screener — pick one and document | `challenge engine list` truthful |
-| P2.3 | Factor track only where multi-sleeve weights exist | KEEP/DEMOTE meaningful |
-
-**Curriculum stays secondary:** insider / forward-valuation / analyst-consensus chapters do not replace P2.
-
-Pre-open `directional_score` already challenges `signal.raw_score` on the **pre-open** path — do not conflate with accum Action.
+CLI: `challenge run signal.accum.raw_score --against equal_sleeves` · `challenge engine signal`.
 
 ---
 
-### P3 — Risk gates *(hard Action override)*
+### P3 — Risk hard gates — **shipped thin**
 
-**Goal:** `gate` policies for RiskEngine hard blocks.
+| policy_id | Against | Metric (not sleeve IC) |
+|-----------|---------|-------------------------|
+| `risk.accum.hard_gates` | `gate_off` | Mean excess among **allowed** names; report block rate |
 
-| Candidate | Challengers | Label idea |
-|-----------|-------------|------------|
-| Fundamental / liquidity / free float / bandar | `gate_off`, threshold ± | Forward bad path, or “blocked would have avoided large loss” honesty metrics |
-| Technical (opt-in re-judge) | same | Only if production uses it |
-
-| # | Work | Exit when |
-|---|------|-----------|
-| P3.1 | Protocol for gate FP/FN vs forward outcomes (not rank IC alone) | Written + min-N |
-| P3.2 | First risk PolicySpec registered | Engine map updates Signal/Risk rows |
-| P3.3 | Health recipe can include risk row | Optional control-tower extension |
-
-Engine map today: **RiskEngine — no PolicySpec portfolio yet** — P3 is what flips that.
+CLI: `challenge run risk.accum.hard_gates --against gate_off` · `challenge engine risk`.
 
 ---
 
-### P4 — Setup readiness & Action *(last; different product)*
+### P4 — Setup readiness & Action — **deferred**
 
-Only after P2–P3 have honest data:
-
-| Work | Why last |
-|------|----------|
-| Named setup match / phase / readiness tournaments | Needs stable family + phase in captures (ADR-058) |
-| **Action-level protocol** (ENTER universe vs excess / path labels) | Different H0 from sleeve IC; risk-first composer |
-| MCE / diagnostic bags as score authority | Only if production DecisionPolicy wires them |
-
-Parked ideas remain in [problem_backlog.md](../problem_backlog.md) until promoted with a one-sentence H0.
+Different product from sleeve/signal IC. No fake ENTER accuracy path until dense Action labels exist. Diagnostics stay non-Action (ADR-057).
 
 ---
 
@@ -167,7 +126,7 @@ Explain-only bags are **not** P0–P4 PolicySpecs. They use a separate Challenge
 
 **[challenge_diagnostic_validity.md](./challenge_diagnostic_validity.md)** — `KEEP_DISPLAY` / `DEMOTE_DISPLAY` / `PROMOTE_CANDIDATE` (never Action; promote only by starting a tune PolicySpec).
 
-**Shipped bags:** `mce.screen_display`, `sector.peer_context` · CLI: `challenge diagnostic list|run|health`.
+**Shipped bags:** `mce.screen_display`, `sector.peer_context`, `institutional.accumulation_bag`, `company_quality.bag` · CLI: `challenge diagnostic list|run|health` · `challenge health --with-diagnostics`.
 
 `PROMOTE_CANDIDATE` feeds this roadmap (e.g. sector bag residual strength → P0 breadth sleeve design).
 
@@ -204,14 +163,15 @@ Copy into the PR / decision memo:
 ## Suggested build order (one line)
 
 ```text
-P0 Accum sleeves honesty (BCI + sector breadth + docs)
-  → P1 hard filters (only if knobs move)
-  → P2 signal score / flags / cuts
-  → P3 risk gates
-  → P4 readiness + Action protocol
+P0 Accum sleeves honesty          ✅
+P1 hard filters                   ⏭️ skipped (unused knobs)
+P2 signal.accum.raw_score         ✅ thin
+P3 risk.accum.hard_gates          ✅ thin (gate_off metric)
+P4 readiness + Action protocol    ⏸️ deferred
+diagnostic validity (parallel)    ✅ v1
 ```
 
-Pre-open lane: maintain / densify data for existing policies; optional feature sleeves on `directional_score` when captures stabilize — **parallel**, not blocking P0–P3.
+Pre-open lane: maintain denser captures for existing IEV/directional policies — parallel.
 
 ---
 

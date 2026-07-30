@@ -39,10 +39,12 @@ Learning: `ml-saham learn list|explore|demo|compare`.
 
 | Purpose | Question | Status |
 |---------|----------|--------|
-| **Tune** | Factor worth? Weights / combo sensible? | **Shipped** |
+| **Tune** | Factor worth? Weights / combo sensible? | **Shipped** (accum sleeves + signal raw_score) |
 | **Champion** | Better score rule than production (same protocol)? | **Shipped** (accum default) |
-| **Diagnostic** | Display / promote-candidate bags (never Action) | **Shipped** (v1) |
+| **Gate** | Hard-block open-book quality vs gate_off? | **Shipped thin** (`risk.accum.hard_gates`) |
+| **Diagnostic** | Display / promote-candidate bags (never Action) | **Shipped** (v1, 4 bags) |
 
-Expand policies only via **[docs/challenge_product_roadmap.md](./docs/challenge_product_roadmap.md)** + data readiness — not by growing curriculum first.
+Roadmap status: **P0–P3 thin complete**; **P1 skipped**; **P4 Action deferred**.  
+Details: **[docs/challenge_product_roadmap.md](./docs/challenge_product_roadmap.md)**.
 
 Not investment advice. Artifacts never write ai-saham YAML/code.

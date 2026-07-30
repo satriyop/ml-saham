@@ -95,9 +95,18 @@ Prefer **tune vs champion** for purpose (not a third product axis).
 
 ## Coverage (honest)
 
-**Accum enter stack:** product challenge covers **AccumScore weighted sleeves** only (seven enabled factors on `screener.accum.score_weights`, including P0 **bci** + **sector_breadth**; BB still off). Hard filters, signal groups/flags/DecisionPolicy, setup readiness, risk gates, and TradeSetup **Action** are **not** product-challenged as PolicySpecs. Diagnostics use a separate display/promote-candidate track.
+**Accum enter stack (honest):**
 
-Expansion plan (P0–P4): **[challenge_product_roadmap.md](./challenge_product_roadmap.md)**.  
+| Layer | Product surface |
+|-------|-----------------|
+| Accum sleeves (7; BB off) | `screener.accum.score_weights` |
+| Signal raw score | `signal.accum.raw_score` |
+| Risk hard gates | `risk.accum.hard_gates` (mean excess open — not sleeve IC) |
+| Diagnostics | `challenge diagnostic` (display/promote-candidate only) |
+| Screen hard filters (P1) | **Skipped** (unused knobs) |
+| Action ENTER desk (P4) | **Deferred** |
+
+Expansion plan: **[challenge_product_roadmap.md](./challenge_product_roadmap.md)**.  
 Live judgment inventory (ai-saham): `docs/evidence_diagnostic_factor_accum.md`.
 
 ---
@@ -112,8 +121,21 @@ Live judgment inventory (ai-saham): `docs/evidence_diagnostic_factor_accum.md`.
 | `pre-open` | `screener.pre_open.iev_rank` | `pre_open_session_v1` (same-session open→close, H=0) | [challenge_pre_open_iev_rank.md](./challenge_pre_open_iev_rank.md) |
 | `pre-open` | `screener.pre_open.directional_score` | `pre_open_session_v1` | [challenge_pre_open_directional_score.md](./challenge_pre_open_directional_score.md) |
 
-**Engine portfolio:** [challenge_engine_screener.md](./challenge_engine_screener.md)  
-**Factor validity (accum):** [challenge_factor_validity.md](./challenge_factor_validity.md)  
+### Engine: `signal`
+
+| Scenario | Policy id | Protocol | Operator note |
+|----------|-----------|----------|---------------|
+| `accum` | `signal.accum.raw_score` | `accum_path_v1` | [challenge_signal_raw_score.md](./challenge_signal_raw_score.md) |
+
+### Engine: `risk`
+
+| Scenario | Policy id | Protocol | Operator note |
+|----------|-----------|----------|---------------|
+| `accum` | `risk.accum.hard_gates` | `accum_path_v1` (metric: mean excess among allowed) | [challenge_risk_hard_gates.md](./challenge_risk_hard_gates.md) |
+
+**Engine portfolio:** `challenge engine list` · [challenge_engine_screener.md](./challenge_engine_screener.md)  
+**Factor validity (accum sleeves):** [challenge_factor_validity.md](./challenge_factor_validity.md)  
+**Diagnostics:** [challenge_diagnostic_validity.md](./challenge_diagnostic_validity.md)  
 **Engine → data map:** [engine_factor_map.md](./engine_factor_map.md)
 
 ### Outcomes
@@ -143,11 +165,14 @@ ml-saham challenge engine list
 ml-saham challenge run screener.accum.score_weights --against equal_sleeves
 ml-saham challenge run screener.pre_open.iev_rank --against equal_sleeves
 ml-saham challenge run screener.pre_open.directional_score --against equal_sleeves
+ml-saham challenge run signal.accum.raw_score --against equal_sleeves
+ml-saham challenge run risk.accum.hard_gates --against gate_off
 
-# Engine rollup (all scenarios, or one)
+# Engine rollup
+ml-saham challenge engine list
 ml-saham challenge engine screener
-ml-saham challenge engine screener --scenario accum
-ml-saham challenge engine screener --scenario pre-open
+ml-saham challenge engine signal --scenario accum
+ml-saham challenge engine risk --scenario accum
 
 # Factor validity (accum only)
 ml-saham challenge factor screener.accum.score_weights --list-factors
