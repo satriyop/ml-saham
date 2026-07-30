@@ -24,11 +24,11 @@ Mirrored from ai-saham `ScoreAccumUseCase.AccumScorePolicy` defaults, with **P0 
 | Sleeve | Enabled | Notes |
 |--------|---------|--------|
 | consistency, streak, vwap_discount, rsi_headroom, foreign_flow_ratio | yes | Original weighted book |
-| **bci** (`inst`) | **yes (P0)** | Production points-based additive; challenged as sleeve weight 8.3 |
-| **sector_breadth** | **yes (P0)** | Production soft +10 peer-breadth add-on; extractable points |
-| bb_squeeze | **no** | Matches production BB off — not inventing BB-on |
+| **bci** (`inst`) | **yes (P0 polish)** | Production `BciEvidencePolicy` cluster=**12.5** / stable=4.2; sleeve weight = **12.5** |
+| **sector_breadth** | **yes (P0)** | Soft +**10** when peer breadth high (extractable) |
+| bb_squeeze | **no** | Production `BollingerSqueezePolicy.enabled=False` |
 
-Hash is embedded in artifacts (bumped when components change).
+`max_score` mirror: **100** (production AccumScorePolicy). Hash bumped on P0 polish.
 
 ## Protocol `accum_path_v1`
 

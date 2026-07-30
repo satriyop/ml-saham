@@ -4,9 +4,9 @@
   "protocol_id": "accum_path_v1",
   "panel_kind": "accum_components",
   "score_kind": "weighted_sleeves",
-  "source": "ai-saham ScoreAccumUseCase.AccumScorePolicy defaults + P0 BCI/sector_breadth sleeves",
-  "source_ref": "src/application/use_case/score_accum_use_case.py (mirrored snapshot); P0 enables bci + sector_breadth",
-  "max_score": 110.0,
+  "source": "ai-saham ScoreAccumUseCase.AccumScorePolicy (live mirror 2026-07-30 polish)",
+  "source_ref": "ai-saham src/application/use_case/score_accum_use_case.py AccumScorePolicy + BciEvidencePolicy; sector breadth soft +10 when present on payload",
+  "max_score": 100.0,
   "components": [
     {
       "key": "consistency",
@@ -41,24 +41,24 @@
     {
       "key": "bci",
       "aliases": ["bci", "inst"],
-      "weight": 8.3,
+      "weight": 12.5,
       "enabled": true,
-      "note": "P0: first-class sleeve; production is points-based additive — weight mirrors soft sleeve scale"
+      "note": "Production BciEvidencePolicy: cluster_points=12.5, stable_points=4.2 (points-based additive); sleeve weight = cluster max"
     },
     {
       "key": "sector_breadth",
       "aliases": ["breadth", "sector_breadth_bonus", "peer_breadth"],
       "weight": 10.0,
       "enabled": true,
-      "note": "P0: production soft add-on (+10 when peer breadth high); scored as extractable sleeve points"
+      "note": "Production soft add-on (+10 when peer breadth high); not a core AccumScorePolicy field but challenged when extractable"
     },
     {
       "key": "bb_squeeze",
       "aliases": ["bb"],
       "weight": 8.3,
       "enabled": false,
-      "note": "Matches production BB off — not inventing BB-on"
+      "note": "BollingerSqueezePolicy.enabled=False in production"
     }
   ],
-  "hash": "6b5bc2fef45338b4"
+  "hash": "acp0pol7a2b9c4d1"
 }

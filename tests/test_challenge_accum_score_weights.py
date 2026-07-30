@@ -32,11 +32,15 @@ def test_policy_registry_loads():
     pol = load_policy("screener.accum.score_weights")
     assert pol.hash
     assert any(c.key == "consistency" and c.enabled for c in pol.components)
-    assert any(c.key == "bci" and c.enabled and c.weight > 0 for c in pol.components)
     assert any(
-        c.key == "sector_breadth" and c.enabled and c.weight > 0 for c in pol.components
+        c.key == "bci" and c.enabled and abs(c.weight - 12.5) < 1e-9 for c in pol.components
+    )
+    assert any(
+        c.key == "sector_breadth" and c.enabled and abs(c.weight - 10.0) < 1e-9
+        for c in pol.components
     )
     assert any(c.key == "bb_squeeze" and not c.enabled for c in pol.components)
+    assert abs(pol.max_score - 100.0) < 1e-9
 
 
 def test_production_scorer_sums_components():

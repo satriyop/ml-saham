@@ -74,19 +74,26 @@ artifacts/challenge/health/<ts>/
 | 0 | Recipe finished (BLOCKED rows allowed) |
 | 2 | Bad scenario / missing DB / resolve error |
 
-### Cron example
+### Cron install (recommended)
 
 ```bash
-#!/usr/bin/env bash
-set -euo pipefail
-export ML_SAHAM_DB="${ML_SAHAM_DB:-$HOME/dev/ai-saham/data/db/data.db}"
-export ML_SAHAM_ARTIFACTS="${ML_SAHAM_ARTIFACTS:-$HOME/dev/ml-saham/artifacts}"
-cd "$HOME/dev/ml-saham"
-source .venv/bin/activate
-ml-saham challenge health --with-diagnostics --with-champion --with-factors
-# inspect latest:
-ls -t "$ML_SAHAM_ARTIFACTS/challenge/health" | head -1
+# from repo root (uses default Sun 07:15 local)
+./scripts/install_challenge_health_cron.sh
+
+# custom schedule / deeper weekly pack
+CHALLENGE_HEALTH_CRON_SCHEDULE='0 8 * * 1' \
+CHALLENGE_HEALTH_EXTRA_FLAGS='--with-factors --with-champion' \
+  ./scripts/install_challenge_health_cron.sh
+
+# dry-run once
+./scripts/challenge_health_weekly.sh
+
+# remove
+./scripts/uninstall_challenge_health_cron.sh
 ```
+
+Job script: `scripts/challenge_health_weekly.sh`  
+Logs: `$ML_SAHAM_ARTIFACTS/logs/challenge_health_weekly_*.log` (+ `…_latest.log` symlink).
 
 ---
 
