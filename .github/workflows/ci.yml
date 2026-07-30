@@ -48,6 +48,9 @@ jobs:
       - name: ADR-002 champion track tests
         run: pytest tests/test_challenge_champion.py -q --tb=short
 
+      - name: ADR-002 health + promote-packet tests
+        run: pytest tests/test_challenge_health.py tests/test_challenge_promote.py -q --tb=short
+
       - name: Challenge CLI smoke on fixture
         run: |
           python - <<'PY'

@@ -71,6 +71,7 @@ ai-saham `research pre-open evaluate` is **not** required for ml-saham challenge
 | Policy tournament WIN / LOSE / rank IC / folds (**tune**) | — | **owns** |
 | Factor KEEP / DEMOTE / DROP_CANDIDATE (**tune**) | — | **owns** |
 | Champion / beat-production scorer hunt | — | **owns** (`challenge champion`; no auto-promote) |
+| Health report / promote packet packs | — | **owns** (artifacts only; never write ai-saham) |
 | Curriculum explore / demo | light / optional | **primary onboarding** |
 | Decision memos for tuning | may link | **`docs/decisions/`** |
 | Auto-promote config into production | human policy path only | **never** |

@@ -105,6 +105,10 @@ ml-saham challenge engine screener --scenario pre-open
 # Champion (learned score rule vs production)
 ml-saham challenge champion screener.accum.score_weights --model lgbm_reweight
 
+# Control tower
+ml-saham challenge health --with-champion --with-factors
+# ml-saham challenge promote-packet --from-json /tmp/export.json
+
 # Factor validity (accum sleeves)
 ml-saham challenge factor screener.accum.score_weights --all
 ml-saham challenge factor screener.accum.score_weights --factor consistency
@@ -115,6 +119,8 @@ ml-saham challenge factor screener.accum.score_weights --factor consistency
 | `challenge list` | Policy ids + protocols |
 | `challenge run <policy>` | Production vs challenger (tune) |
 | `challenge champion` | Learned score rule vs production |
+| `challenge health` | Control tower pack (engine ± champion ± factors) |
+| `challenge promote-packet` | Human promote/reject checklist from export |
 | `challenge engine screener` | PolicySpec portfolio (`--scenario` optional) |
 | `challenge factor …` | KEEP / DEMOTE / DROP_CANDIDATE (accum) |
 | `vet` / `doctor --deep` | Data-plane gate |

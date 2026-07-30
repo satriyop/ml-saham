@@ -19,6 +19,7 @@ Sibling ownership vs ai-saham: **[BOUNDARY.md](../BOUNDARY.md)** (ingest/corpus 
 | Engine portfolio rollups | Curriculum demos as promotion authority |
 | English audit reports + artifacts | Live trading / paper broker |
 | **Champion track** — beat production with a learned score rule | Treating curriculum “Default” models as production authority |
+| **Health / promote-packet** — control tower packs | Auto-writing ai-saham YAML |
 
 Learning (`explore` / chapters) is **secondary** and mostly Indonesian for pedagogy.
 
@@ -54,6 +55,15 @@ ml-saham
 **Champion is not Learning.** Curriculum LightGBM demos stay non-authority.  
 **Champion is not “SOTA.”** It is “beats production under protocol → human promote review.”  
 Operator: [challenge_champion.md](./challenge_champion.md).
+
+### Control tower (shipped)
+
+| Command | Purpose |
+|---------|---------|
+| **`challenge health`** | Weekly-style recipe: engine tune ± champion ± factors → one pack |
+| **`challenge promote-packet`** | Human checklist from export JSON / artifact (never applies) |
+
+Operator: [challenge_health.md](./challenge_health.md).
 
 ---
 
@@ -159,6 +169,15 @@ ml-saham challenge champion screener.accum.score_weights --model lgbm_reweight
 3. If **WIN** (and folds/stability OK) → promote-candidate **memo** only — human may redesign ai-saham scoring; ml-saham does not write config.  
 4. See [challenge_champion.md](./challenge_champion.md).
 
+### Health + promote (shipped)
+
+```bash
+ml-saham challenge health --with-champion --with-factors
+ml-saham challenge promote-packet --from-json /tmp/champ.json
+```
+
+See [challenge_health.md](./challenge_health.md).
+
 ### Data-tolerant policies
 
 Some products are **complete** even when the maintainer DB is thin:
@@ -188,6 +207,7 @@ That is intentional, not a failed install.
 |-----|------|
 | This file | Product map + commands |
 | [challenge_champion.md](./challenge_champion.md) | Champion track (learned vs production) |
+| [challenge_health.md](./challenge_health.md) | Health report + promote-packet control tower |
 | [challenge_engine_screener.md](./challenge_engine_screener.md) | Engine portfolio operator note |
 | [challenge_accum_score_weights.md](./challenge_accum_score_weights.md) | Accum policy |
 | [challenge_pre_open_iev_rank.md](./challenge_pre_open_iev_rank.md) | Pre-open IEV rank |
