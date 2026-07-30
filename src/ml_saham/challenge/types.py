@@ -27,6 +27,18 @@ class FactorVerdict(str, Enum):
     BLOCKED_POLICY = "BLOCKED_POLICY"
 
 
+class DiagnosticVerdict(str, Enum):
+    """Diagnostic validity track — display / promote-candidate only (never Action)."""
+
+    KEEP_DISPLAY = "KEEP_DISPLAY"
+    DEMOTE_DISPLAY = "DEMOTE_DISPLAY"
+    DROP_DISPLAY = "DROP_DISPLAY"
+    PROMOTE_CANDIDATE = "PROMOTE_CANDIDATE"
+    INCONCLUSIVE = "INCONCLUSIVE"
+    BLOCKED_DATA = "BLOCKED_DATA"
+    BLOCKED_SPEC = "BLOCKED_SPEC"
+
+
 @dataclass(frozen=True)
 class ComponentWeight:
     key: str
@@ -238,5 +250,91 @@ class BatchFactorResult:
 
     def exit_code(self) -> int:
         if self.blocked in (FactorVerdict.BLOCKED_DATA, FactorVerdict.BLOCKED_POLICY):
+            return 2
+        return 0
+
+
+@dataclass(frozen=True)
+class DiagnosticFeature:
+    key: str
+    aliases: tuple[str, ...] = ()
+    enabled: bool = True
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class DiagnosticSpec:
+    """Frozen explain-only bag (ADR-057) — not a production PolicySpec."""
+
+    diagnostic_id: str
+    version: str
+    hash: str
+    engine: str
+    scenario: str
+    protocol_id: str
+    features: tuple[DiagnosticFeature, ...]
+    source: str = ""
+    source_ref: str = ""
+    control_score: str = "accum_production"
+    kind: str = "diagnostic"
+    banner: str = "ADR-057: not Action authority — display / promote-candidate only"
+
+    def enabled_features(self) -> tuple[DiagnosticFeature, ...]:
+        return tuple(f for f in self.features if f.enabled)
+
+
+@dataclass
+class DiagnosticChallengeResult:
+    """Result of diagnostic validity for one bag field (or bag-level rollup)."""
+
+    verdict: DiagnosticVerdict
+    diagnostic_id: str
+    protocol_id: str
+    diagnostic_hash: str
+    feature: str  # bag field key, or "_bag" for aggregate
+    n_rows: int
+    primary_horizon: int
+    coverage: float | None = None
+    mean_univariate_ic: float | None = None
+    mean_residual_ic: float | None = None
+    mean_redundancy: float | None = None  # |corr| vs production score
+    fold_agree_residual_positive: float | None = None
+    horizon_metrics: dict[str, Any] = field(default_factory=dict)
+    fold_metrics: list[dict[str, Any]] = field(default_factory=list)
+    lines: list[str] = field(default_factory=list)
+    summary_md: str = ""
+    notes: list[str] = field(default_factory=list)
+    artifact_dir: Path | None = None
+
+    def exit_code(self) -> int:
+        if self.verdict in (
+            DiagnosticVerdict.BLOCKED_DATA,
+            DiagnosticVerdict.BLOCKED_SPEC,
+        ):
+            return 2
+        return 0
+
+
+@dataclass
+class BatchDiagnosticResult:
+    """Batch diagnostic validity over enabled bag fields (shared prep)."""
+
+    diagnostic_id: str
+    protocol_id: str
+    diagnostic_hash: str
+    n_rows: int
+    primary_horizon: int
+    results: list[DiagnosticChallengeResult] = field(default_factory=list)
+    blocked: DiagnosticVerdict | None = None
+    lines: list[str] = field(default_factory=list)
+    summary_md: str = ""
+    notes: list[str] = field(default_factory=list)
+    artifact_dir: Path | None = None
+
+    def exit_code(self) -> int:
+        if self.blocked in (
+            DiagnosticVerdict.BLOCKED_DATA,
+            DiagnosticVerdict.BLOCKED_SPEC,
+        ):
             return 2
         return 0

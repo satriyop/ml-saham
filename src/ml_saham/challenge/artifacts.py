@@ -10,8 +10,10 @@ from zoneinfo import ZoneInfo
 
 from ml_saham.artifacts.writer import resolve_artifacts_root
 from ml_saham.challenge.types import (
+    BatchDiagnosticResult,
     BatchFactorResult,
     ChallengeResult,
+    DiagnosticChallengeResult,
     EnginePortfolioResult,
     FactorChallengeResult,
     HealthReportResult,
@@ -171,6 +173,118 @@ def write_batch_factor_artifact(
     )
     (out / "metrics.json").write_text(
         json.dumps({"factors": factors_payload}, indent=2) + "\n", encoding="utf-8"
+    )
+    (out / "summary.md").write_text(result.summary_md or "", encoding="utf-8")
+    result.artifact_dir = out
+    return out
+
+
+def write_diagnostic_artifact(
+    result: DiagnosticChallengeResult,
+    *,
+    db_path: Path,
+    artifacts_root: Path | None = None,
+) -> Path:
+    root = resolve_artifacts_root(artifacts_root)
+    ts = datetime.now(tz=JAKARTA).strftime("%Y%m%d_%H%M%S")
+    feat = result.feature.replace("/", ".")
+    out = (
+        root
+        / "challenge"
+        / "diagnostic"
+        / result.diagnostic_id.replace("/", ".")
+        / feat
+        / ts
+    )
+    out.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "schema_version": 2,
+        "mode": "challenge_diagnostic",
+        "track": "diagnostic_validity",
+        "diagnostic_id": result.diagnostic_id,
+        "protocol_id": result.protocol_id,
+        "diagnostic_hash": result.diagnostic_hash,
+        "feature": result.feature,
+        "verdict": result.verdict.value,
+        "n_rows": result.n_rows,
+        "primary_horizon": result.primary_horizon,
+        "banner": "ADR-057: not Action authority",
+        "db_path": str(db_path),
+        "created_at": datetime.now(tz=JAKARTA).isoformat(),
+    }
+    (out / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    metrics = {
+        "verdict": result.verdict.value,
+        "coverage": result.coverage,
+        "mean_univariate_ic": result.mean_univariate_ic,
+        "mean_residual_ic": result.mean_residual_ic,
+        "mean_redundancy": result.mean_redundancy,
+        "fold_agree_residual_positive": result.fold_agree_residual_positive,
+        "horizon_metrics": result.horizon_metrics,
+        "fold_metrics": result.fold_metrics,
+    }
+    (out / "metrics.json").write_text(
+        json.dumps(metrics, indent=2) + "\n", encoding="utf-8"
+    )
+    (out / "summary.md").write_text(result.summary_md or "", encoding="utf-8")
+    result.artifact_dir = out
+    return out
+
+
+def write_batch_diagnostic_artifact(
+    result: BatchDiagnosticResult,
+    *,
+    db_path: Path,
+    artifacts_root: Path | None = None,
+) -> Path:
+    root = resolve_artifacts_root(artifacts_root)
+    ts = datetime.now(tz=JAKARTA).strftime("%Y%m%d_%H%M%S")
+    out = (
+        root
+        / "challenge"
+        / "diagnostic"
+        / result.diagnostic_id.replace("/", ".")
+        / "_all"
+        / ts
+    )
+    out.mkdir(parents=True, exist_ok=True)
+    factors_payload = [
+        {
+            "feature": r.feature,
+            "diagnostic_id": r.diagnostic_id,
+            "verdict": r.verdict.value,
+            "coverage": r.coverage,
+            "mean_univariate_ic": r.mean_univariate_ic,
+            "mean_residual_ic": r.mean_residual_ic,
+            "mean_redundancy": r.mean_redundancy,
+            "notes": r.notes[-3:],
+        }
+        for r in result.results
+    ]
+    manifest = {
+        "schema_version": 2,
+        "mode": "challenge_diagnostic_batch",
+        "track": "diagnostic_validity_batch",
+        "diagnostic_id": result.diagnostic_id,
+        "protocol_id": result.protocol_id,
+        "diagnostic_hash": result.diagnostic_hash,
+        "n_rows": result.n_rows,
+        "primary_horizon": result.primary_horizon,
+        "n_features": len(result.results),
+        "blocked": result.blocked.value if result.blocked else None,
+        "banner": "ADR-057: not Action authority",
+        "db_path": str(db_path),
+        "created_at": datetime.now(tz=JAKARTA).isoformat(),
+        "features": [f["feature"] for f in factors_payload],
+        "verdicts": {f["feature"]: f["verdict"] for f in factors_payload},
+    }
+    (out / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    (out / "metrics.json").write_text(
+        json.dumps({"features": factors_payload}, indent=2) + "\n", encoding="utf-8"
     )
     (out / "summary.md").write_text(result.summary_md or "", encoding="utf-8")
     result.artifact_dir = out

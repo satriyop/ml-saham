@@ -14,6 +14,7 @@
 |-------------------|----------|--------|
 | **Tune** | Factor worth it? Weights/combo OK? | **Shipped** |
 | **Champion** | Better score rule than production (internals optional)? | **Shipped** (`challenge champion`) |
+| **Diagnostic** | Explain-only bag worth display / promote-candidate? | **Shipped v1** (`challenge diagnostic`) |
 
 Not investment advice. **Never auto-promotes** configs into `ai-saham`.
 
@@ -112,6 +113,11 @@ ml-saham challenge health --with-champion --with-factors
 # Factor validity (accum sleeves)
 ml-saham challenge factor screener.accum.score_weights --all
 ml-saham challenge factor screener.accum.score_weights --factor consistency
+
+# Diagnostic validity (explain-only — not Action)
+ml-saham challenge diagnostic list
+ml-saham challenge diagnostic run mce.screen_display --all
+ml-saham challenge diagnostic health --scenario accum
 ```
 
 | Command | Job |
@@ -123,6 +129,7 @@ ml-saham challenge factor screener.accum.score_weights --factor consistency
 | `challenge promote-packet` | Human promote/reject checklist from export |
 | `challenge engine screener` | PolicySpec portfolio (`--scenario` optional) |
 | `challenge factor …` | KEEP / DEMOTE / DROP_CANDIDATE (accum) |
+| `challenge diagnostic …` | KEEP_DISPLAY / DEMOTE_DISPLAY / PROMOTE_CANDIDATE (explain-only) |
 | `vet` / `doctor --deep` | Data-plane gate |
 | `learn compare <slug>` | Curriculum lab — **not** ADR-002 authority |
 

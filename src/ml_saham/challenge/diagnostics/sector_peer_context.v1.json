@@ -1,0 +1,27 @@
+{
+  "diagnostic_id": "sector.peer_context",
+  "version": "v1",
+  "hash": "diagsec02b91f0d3a",
+  "engine": "sector",
+  "scenario": "accum",
+  "kind": "diagnostic",
+  "protocol_id": "accum_path_v1",
+  "control_score": "accum_production",
+  "source": "ai-saham sector / peer-relative context bag (ADR-057 diagnostic)",
+  "source_ref": "observation signal.alpha_trigger / group sector_context; peer breadth when present",
+  "banner": "ADR-057: not Action authority — display / promote-candidate only",
+  "features": [
+    {
+      "key": "sector_context_score",
+      "aliases": ["sector_context", "sector"],
+      "enabled": true,
+      "note": "group_contributions.sector_context score when present"
+    },
+    {
+      "key": "peer_breadth",
+      "aliases": ["breadth", "sector_breadth"],
+      "enabled": true,
+      "note": "peer net-buy breadth fraction when present; else missing"
+    }
+  ]
+}

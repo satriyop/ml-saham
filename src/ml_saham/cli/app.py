@@ -42,7 +42,15 @@ app = typer.Typer(
 )
 challenge_app = typer.Typer(
     name="challenge",
-    help="ADR-002 policy challenges (run/list/engine/factor/health/champion).",
+    help="ADR-002 policy challenges (run/list/engine/factor/diagnostic/health/champion).",
+    no_args_is_help=True,
+)
+diagnostic_app = typer.Typer(
+    name="diagnostic",
+    help=(
+        "Diagnostic validity (explain-only bags): KEEP_DISPLAY / DEMOTE_DISPLAY / "
+        "PROMOTE_CANDIDATE — never Action authority."
+    ),
     no_args_is_help=True,
 )
 learn_app = typer.Typer(
@@ -51,6 +59,7 @@ learn_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(challenge_app, name="challenge")
+challenge_app.add_typer(diagnostic_app, name="diagnostic")
 app.add_typer(learn_app, name="learn")
 console = Console()
 
@@ -602,6 +611,272 @@ def challenge_list_cmd() -> None:
         "[dim]Factor: ml-saham challenge factor screener.accum.score_weights "
         "--factor consistency[/dim]"
     )
+    console.print(
+        "[dim]Diagnostic: ml-saham challenge diagnostic list | "
+        "run mce.screen_display --all[/dim]"
+    )
+
+
+@diagnostic_app.command("list")
+def challenge_diagnostic_list_cmd() -> None:
+    """List registered DiagnosticSpecs (explain-only bags)."""
+    from ml_saham.challenge import list_diagnostic_catalog
+
+    rows = list_diagnostic_catalog()
+    table = Table(title="Diagnostic bags (ADR-057 — not Action authority)")
+    table.add_column("diagnostic_id")
+    table.add_column("version")
+    table.add_column("hash")
+    table.add_column("engine")
+    table.add_column("scenario")
+    table.add_column("protocol")
+    table.add_column("n_feat", justify="right")
+    for r in rows:
+        table.add_row(
+            str(r["diagnostic_id"]),
+            str(r["version"]),
+            str(r["hash"]),
+            str(r["engine"]),
+            str(r["scenario"]),
+            str(r["protocol"]),
+            str(r["n_features"]),
+        )
+    console.print(table)
+    console.print(
+        "[dim]Run: ml-saham challenge diagnostic run mce.screen_display --all[/dim]"
+    )
+    console.print(
+        "[dim]Run: ml-saham challenge diagnostic run sector.peer_context "
+        "--feature sector_context_score[/dim]"
+    )
+    console.print(
+        "[yellow]Verdicts are display/promote-candidate only — never set Action.[/yellow]"
+    )
+
+
+@diagnostic_app.command("run")
+def challenge_diagnostic_run_cmd(
+    ctx: typer.Context,
+    diagnostic_id: str = typer.Argument(
+        ...,
+        help="Diagnostic id (see: ml-saham challenge diagnostic list)",
+    ),
+    feature: Optional[str] = typer.Option(
+        None,
+        "--feature",
+        "-f",
+        help="Bag field key or alias (e.g. regime_score, vix)",
+    ),
+    all_features: bool = typer.Option(
+        False,
+        "--all",
+        help="Run validity for every enabled feature in the bag",
+    ),
+    list_features: bool = typer.Option(
+        False,
+        "--list-features",
+        help="List enabled features for the diagnostic and exit",
+    ),
+    export_json: Optional[Path] = typer.Option(
+        None,
+        "--export-json",
+        help="Write full result JSON",
+    ),
+    export_md: Optional[Path] = typer.Option(
+        None,
+        "--export-md",
+        help="Write summary markdown",
+    ),
+    no_artifact: bool = typer.Option(
+        False,
+        "--no-artifact",
+        help="Skip artifact pack under artifacts/challenge/diagnostic/",
+    ),
+) -> None:
+    """Calibrate explain-only bag: KEEP_DISPLAY / DEMOTE / DROP / PROMOTE_CANDIDATE."""
+    from ml_saham.challenge import (
+        list_enabled_diagnostic_features,
+        run_diagnostic_challenge,
+        run_diagnostic_challenge_batch,
+    )
+
+    if list_features:
+        try:
+            rows = list_enabled_diagnostic_features(diagnostic_id)
+        except KeyError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=2) from None
+        table = Table(title=f"Enabled features — {diagnostic_id}")
+        table.add_column("key")
+        table.add_column("aliases")
+        table.add_column("note")
+        for r in rows:
+            table.add_row(
+                str(r["key"]),
+                ", ".join(str(a) for a in (r.get("aliases") or [])),
+                str(r.get("note") or ""),
+            )
+        console.print(table)
+        raise typer.Exit(code=0)
+
+    if all_features and feature:
+        console.print("[red]Use either --all or --feature, not both.[/red]")
+        raise typer.Exit(code=2)
+    if not all_features and not feature:
+        console.print(
+            "[red]Require --feature KEY or --all (or use --list-features).[/red]"
+        )
+        raise typer.Exit(code=2)
+
+    db_path: Path = ctx.obj["db"]
+    arts = ctx.obj.get("artifacts_dir")
+
+    if all_features:
+        batch = run_diagnostic_challenge_batch(
+            db_path,
+            diagnostic_id,
+            write_artifact=not no_artifact,
+            artifacts_dir=Path(arts) if arts else None,
+        )
+        for line in batch.lines:
+            console.print(line)
+        if export_json:
+            export_json.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "diagnostic_id": batch.diagnostic_id,
+                "protocol_id": batch.protocol_id,
+                "diagnostic_hash": batch.diagnostic_hash,
+                "n_rows": batch.n_rows,
+                "primary_horizon": batch.primary_horizon,
+                "blocked": batch.blocked.value if batch.blocked else None,
+                "features": [
+                    {
+                        "feature": r.feature,
+                        "verdict": r.verdict.value,
+                        "coverage": r.coverage,
+                        "mean_univariate_ic": r.mean_univariate_ic,
+                        "mean_residual_ic": r.mean_residual_ic,
+                        "mean_redundancy": r.mean_redundancy,
+                        "notes": r.notes[-3:],
+                    }
+                    for r in batch.results
+                ],
+                "artifact_dir": str(batch.artifact_dir) if batch.artifact_dir else None,
+                "banner": "ADR-057: not Action authority",
+            }
+            export_json.write_text(
+                json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+            )
+            console.print(f"\n[green]Saved JSON to {export_json}[/green]")
+        if export_md:
+            export_md.parent.mkdir(parents=True, exist_ok=True)
+            export_md.write_text(batch.summary_md, encoding="utf-8")
+            console.print(f"[green]Saved Markdown to {export_md}[/green]")
+        raise typer.Exit(code=batch.exit_code())
+
+    result = run_diagnostic_challenge(
+        db_path,
+        diagnostic_id,
+        feature=feature or "",
+        write_artifact=not no_artifact,
+        artifacts_dir=Path(arts) if arts else None,
+    )
+    for line in result.lines:
+        console.print(line)
+    if export_json:
+        export_json.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "verdict": result.verdict.value,
+            "diagnostic_id": result.diagnostic_id,
+            "protocol_id": result.protocol_id,
+            "diagnostic_hash": result.diagnostic_hash,
+            "feature": result.feature,
+            "n_rows": result.n_rows,
+            "primary_horizon": result.primary_horizon,
+            "coverage": result.coverage,
+            "mean_univariate_ic": result.mean_univariate_ic,
+            "mean_residual_ic": result.mean_residual_ic,
+            "mean_redundancy": result.mean_redundancy,
+            "horizon_metrics": result.horizon_metrics,
+            "fold_metrics": result.fold_metrics,
+            "notes": result.notes,
+            "artifact_dir": str(result.artifact_dir) if result.artifact_dir else None,
+            "banner": "ADR-057: not Action authority",
+        }
+        export_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        console.print(f"\n[green]Saved JSON to {export_json}[/green]")
+    if export_md:
+        export_md.parent.mkdir(parents=True, exist_ok=True)
+        export_md.write_text(result.summary_md, encoding="utf-8")
+        console.print(f"[green]Saved Markdown to {export_md}[/green]")
+    raise typer.Exit(code=result.exit_code())
+
+
+@diagnostic_app.command("health")
+def challenge_diagnostic_health_cmd(
+    ctx: typer.Context,
+    scenario: str = typer.Option(
+        "accum",
+        "--scenario",
+        help="Scenario filter for registered diagnostics (default: accum)",
+    ),
+    export_json: Optional[Path] = typer.Option(
+        None,
+        "--export-json",
+        help="Write full result JSON",
+    ),
+    export_md: Optional[Path] = typer.Option(
+        None,
+        "--export-md",
+        help="Write summary markdown",
+    ),
+    no_artifact: bool = typer.Option(
+        False,
+        "--no-artifact",
+        help="Skip artifact pack",
+    ),
+) -> None:
+    """Control-tower style rollup of all diagnostic bags for a scenario."""
+    from ml_saham.challenge import run_diagnostic_health
+
+    db_path: Path = ctx.obj["db"]
+    arts = ctx.obj.get("artifacts_dir")
+    batch = run_diagnostic_health(
+        db_path,
+        scenario=scenario,
+        write_artifact=not no_artifact,
+        artifacts_dir=Path(arts) if arts else None,
+    )
+    for line in batch.lines:
+        console.print(line)
+    if export_json:
+        export_json.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "diagnostic_id": batch.diagnostic_id,
+            "protocol_id": batch.protocol_id,
+            "n_rows": batch.n_rows,
+            "blocked": batch.blocked.value if batch.blocked else None,
+            "features": [
+                {
+                    "feature": r.feature,
+                    "diagnostic_id": r.diagnostic_id,
+                    "verdict": r.verdict.value,
+                    "coverage": r.coverage,
+                    "mean_residual_ic": r.mean_residual_ic,
+                    "mean_univariate_ic": r.mean_univariate_ic,
+                }
+                for r in batch.results
+            ],
+            "artifact_dir": str(batch.artifact_dir) if batch.artifact_dir else None,
+            "banner": "ADR-057: not Action authority",
+        }
+        export_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        console.print(f"\n[green]Saved JSON to {export_json}[/green]")
+    if export_md:
+        export_md.parent.mkdir(parents=True, exist_ok=True)
+        export_md.write_text(batch.summary_md, encoding="utf-8")
+        console.print(f"[green]Saved Markdown to {export_md}[/green]")
+    raise typer.Exit(code=batch.exit_code())
 
 
 @challenge_app.command("factor")

@@ -14,6 +14,7 @@ Curriculum acceptance (historical): [mvp_acceptance.md](./mvp_acceptance.md) · 
 - [x] Policy registry loads every registered `policy_id` with a known protocol  
 - [x] Engine portfolio `screener` covers registered PolicySpecs only  
 - [x] CLI: `challenge list` / `run` / `engine` / `factor` / `health` / `champion` / `promote-packet`  
+- [x] CLI: `challenge diagnostic list` / `run` / `health` (display / promote-candidate; never Action)  
 - [x] Chapter-loop product surface **retired** (`challenge legacy` removed; no `ENGINE_FACTORS` batch)  
 - [x] Honest statuses: WIN / LOSE / INCONCLUSIVE / BLOCKED_* (no silent fake wins)  
 - [x] CI installs `pip install -e ".[ml,dev]"` and runs challenge + core tests  
@@ -30,6 +31,7 @@ Curriculum acceptance (historical): [mvp_acceptance.md](./mvp_acceptance.md) · 
 | `challenge run` | Production vs challenger (tune) | fixture + maintainer DB |
 | `challenge engine` | PolicySpec portfolio rollup | `screener` ± scenario |
 | `challenge factor` | KEEP / DEMOTE / DROP_CANDIDATE | accum sleeves |
+| `challenge diagnostic` | KEEP_DISPLAY / DEMOTE_DISPLAY / PROMOTE_CANDIDATE | explain-only bags (v1: MCE, sector) |
 | `challenge health` | Control tower pack | engine ± champion ± factors |
 | `vet` / `doctor --deep` | Data-plane gate | fixture + maintainer DB |
 
