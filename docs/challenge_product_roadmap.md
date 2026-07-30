@@ -7,7 +7,7 @@
 Shipped catalog: [challenge_product.md](./challenge_product.md)  
 Engine gaps: [engine_factor_map.md](./engine_factor_map.md)  
 Live enter-stack inventory (ai-saham): `docs/evidence_diagnostic_factor_accum.md`  
-Curriculum build order: [roadmap.md](../roadmap.md) (orthogonal — learning chapters)
+Root pointer: [roadmap.md](../roadmap.md) · Curriculum catalog: [chapters.md](../chapters.md) (orthogonal — learning)
 
 **Never auto-promote into ai-saham.** Challenge output = human decision support only ([BOUNDARY.md](../BOUNDARY.md)).
 
@@ -20,7 +20,7 @@ Ship **versioned PolicySpec tournaments** for production decisions you actually 
 ```text
 ai-saham live judgment map  →  evidence_diagnostic_factor_accum.md
 ml-saham product challenge  →  PolicySpec + protocol + English artifact
-curriculum                  →  explore / demo / compare (never promotion authority)
+curriculum                  →  learn explore / demo / compare (never promotion authority)
 ```
 
 | Question | Product answer today |

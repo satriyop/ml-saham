@@ -5,8 +5,8 @@ Final curriculum for `ml-saham`: problem-centric, IDX-only, personal self-teachi
 Frozen design docs (this set). Early drafts live locally under `archive/` (gitignored).  
 Ideas not scheduled: [problem_backlog.md](./problem_backlog.md)  
 CLI UX: [ux.md](./ux.md)  
-Architecture: [architecture.md](./architecture.md) · Data: [data_contract.md](./data_contract.md) · Artifacts: [artifacts.md](./artifacts.md) · MVP: [mvp_acceptance.md](./mvp_acceptance.md)  
-Roadmap: [roadmap.md](./roadmap.md)  
+Architecture: [architecture.md](./architecture.md) · Data: [data_contract.md](./data_contract.md) · Artifacts: [artifacts.md](./artifacts.md)  
+Roadmap pointer: [roadmap.md](./roadmap.md) · Product expansion: [docs/challenge_product_roadmap.md](./docs/challenge_product_roadmap.md)  
 SOTA vocabulary (not literature frontier): [docs/sota_vocabulary_and_literature.md](./docs/sota_vocabulary_and_literature.md)
 
 ---

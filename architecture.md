@@ -56,10 +56,10 @@ ml-saham/
 ├── ux.md
 ├── data_contract.md
 ├── artifacts.md
-├── mvp_acceptance.md
 ├── problem_backlog.md
-├── roadmap.md
-├── archive/                  # local drafts only (gitignored)
+├── roadmap.md                # short pointer → challenge_product_roadmap
+├── challenge_acceptance.md
+├── archive/                  # local only (gitignored): drafts + historical acceptance
 ├── src/ml_saham/
 │   ├── __init__.py
 │   ├── cli/

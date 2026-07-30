@@ -4,7 +4,7 @@ Definition of **done** for the challenge product axis of `ml-saham`.
 Product decision: [docs/adr/ADR-002-ideal-challenge-system.md](./docs/adr/ADR-002-ideal-challenge-system.md) · map: [docs/challenge_product.md](./docs/challenge_product.md)
 
 **Product SSOT:** `src/ml_saham/challenge/` — PolicySpecs, protocols, runner, engines, health.  
-Curriculum acceptance (historical): [mvp_acceptance.md](./mvp_acceptance.md) · [v1_1_acceptance.md](./v1_1_acceptance.md) · [phase2_acceptance.md](./phase2_acceptance.md)
+Curriculum phase checklists (historical, local only): `archive/mvp_acceptance.md` · `archive/v1_1_acceptance.md` · `archive/phase2_acceptance.md` (gitignored `archive/`)
 
 ---
 
