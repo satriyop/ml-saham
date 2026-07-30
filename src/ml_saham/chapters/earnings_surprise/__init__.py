@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import (
     forward_returns_by_ticker,
@@ -44,7 +43,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nPIT: selalu catat fetched_date vs signal_date.")
     return "\n".join(lines)
-
 
 def _surprise_score(e: dict) -> tuple[float, str] | None:
     try:
@@ -279,11 +277,4 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
             f"# Compare earnings-surprise\n\n`{baseline}` vs `{against}` as_of={as_of}.\n"
         ),
         scoreboard=True,
-    )
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="earnings_cache / surprise pipeline ai-saham",
-        bring_back="surprise (atau YoY proxy) rank IC + fetched_date PIT habit",
     )

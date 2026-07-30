@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 META = get_meta("accum-policy")
 
-
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
         f"Ch.{META.number}  {META.title}",
@@ -31,7 +30,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nDetail: Eksperimen model LightGBM vs baseline manual.")
     return "\n".join(lines)
-
 
 def _prep_data(ctx: ChapterContext):
     # Simulate some accum components data: component A, B, C
@@ -59,7 +57,6 @@ def _prep_data(ctx: ChapterContext):
             }
         )
     return data
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
@@ -101,7 +98,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         scoreboard_kind="long_only",
         top_names=data[:10],
     )
-
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
     import json

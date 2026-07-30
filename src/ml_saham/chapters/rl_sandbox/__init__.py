@@ -6,7 +6,6 @@ import math
 import random
 from collections import defaultdict
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError
 from ml_saham.chapters.panel import resolve_universe
 from ml_saham.chapters.registry import get as get_meta
@@ -21,7 +20,6 @@ _N_STEPS = 200
 _N_ARMS = 5
 _ALPHA = 0.1
 _GAMMA = 0.9
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -56,7 +54,6 @@ def explore_text(*, verbose: bool = False) -> str:
         )
     return "\n".join(lines)
 
-
 def _daily_returns(conn, tickers: list[str]) -> dict[str, list[float]]:
     candles = load_candles(conn, tickers)
     by_t: dict[str, list[tuple[str, float]]] = defaultdict(list)
@@ -70,7 +67,6 @@ def _daily_returns(conn, tickers: list[str]) -> dict[str, list[float]]:
         if len(rets) >= 30:
             out[t] = rets
     return out
-
 
 def _run_q_learning(rets_by_arm: list[list[float]], *, epsilon: float, steps: int, seed: int):
     rng = random.Random(seed)
@@ -99,7 +95,6 @@ def _run_q_learning(rets_by_arm: list[list[float]], *, epsilon: float, steps: in
         state = next_state
         
     return cum, q_table, counts, history
-
 
 def _run_ppo_mock(rets_by_arm: list[list[float]], *, steps: int, seed: int):
     rng = random.Random(seed)
@@ -138,7 +133,6 @@ def _run_ppo_mock(rets_by_arm: list[list[float]], *, steps: int, seed: int):
         history.append(reward)
         
     return cum, logits, counts, history
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
@@ -202,7 +196,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         scoreboard_kind="none",
     )
 
-
 def run_compare(ctx: ChapterContext) -> CompareResult:
     with connect(ctx.db_path) as conn:
         uni = ctx.universe or resolve_universe(conn, limit=20)
@@ -249,10 +242,3 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
         scoreboard=False,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="— (sandbox only; no production RL engine)",
-        bring_back="explore/exploit intuition — lanjut walk-forward / pipeline dulu",
-    )

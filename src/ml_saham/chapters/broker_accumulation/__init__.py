@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
@@ -15,7 +14,6 @@ from ml_saham.data.phase2_read import load_broker_distribution, load_shareholdin
 logger = logging.getLogger(__name__)
 
 META = get_meta("broker-accumulation")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -42,7 +40,6 @@ def explore_text(*, verbose: bool = False) -> str:
         lines.append("\nDetail: load_broker_distribution & load_shareholding di ai-saham.")
     return "\n".join(lines)
 
-
 def _gini_coefficient(values: list[float]) -> float:
     """Calculate Gini coefficient of a list of non-negative values."""
     if not values or sum(values) == 0:
@@ -51,7 +48,6 @@ def _gini_coefficient(values: list[float]) -> float:
     n = len(sorted_vals)
     index = range(1, n + 1)
     return (2.0 * sum(i * v for i, v in zip(index, sorted_vals, strict=True)) - (n + 1) * sum(sorted_vals)) / (n * sum(sorted_vals))
-
 
 def _prep_data(ctx: ChapterContext):
     with connect(ctx.db_path) as conn:
@@ -123,7 +119,6 @@ def _prep_data(ctx: ChapterContext):
         })
     return combined, b_rows, s_rows
 
-
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
         import numpy as np
@@ -179,7 +174,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         scoreboard_kind="long_only",
         top_names=combined[:10],
     )
-
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
     try:
@@ -241,10 +235,3 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         top_names=combined[:10],
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="broker_distribution_cache & shareholding_composition di ai-saham",
-        bring_back="Gini concentration index + LightGBM broker accumulation classifier",
-    )

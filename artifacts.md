@@ -39,14 +39,13 @@ Override root with `--artifacts-dir` or env `ML_SAHAM_ARTIFACTS`.
   "db_path": "/Users/…/ai-saham/data/db/data.db",
   "universe": "LQ45",
   "as_of": "2026-07-22",
-  "mode": "demo|compare|deepdive",
+  "mode": "demo|compare",
   "model": "elastic-net",
   "scoreboard": {
     "type": "long_only_vs_ihsg",
     "costs": "gross_banner",
     "disclaimer": "bukan_saran"
   },
-  "ai_saham_deepdive": false,
   "files": ["summary.md", "metrics.json", "top_names.csv"]
 }
 ```
@@ -64,31 +63,8 @@ For opening-session chapters, `"scoreboard.type": "open_session"`.
 | `top_names.csv` | rank demos | ticker, score, optional forward return |
 | `feature_list.json` | factor/flow/walk-forward | names + short definitions |
 | `compare.json` | compare | baseline vs against metrics side by side |
-| `suggestions.md` | deepdive only | Human notes for `ai-saham` (YAML keys as **text suggestions**, not applied patches) |
 
----
-
-## Deep-dive suggestions format (`suggestions.md`)
-
-```markdown
-# Suggestions for ai-saham (manual review)
-
-Related: foreign-flow / accum score components
-
-## Evidence
-- ML blend rank IC: …
-- Rule composite rank IC: …
-- Caveats: …
-
-## Possible knobs (do not apply blindly)
-- Consider raising weight on `…` relative to `…`
-- Validate on walk-forward before changing YAML
-
-## Not claimed
-- Live edge, auto-promote, or smart-money proof
-```
-
-No machine-applied patch files in MVP. If later you want structured diffs, add `suggestions.json` under a new schema_version — still human-gated.
+Curriculum artifacts are learning-only. Product promotion notes live under `artifacts/challenge/` and `challenge promote-packet` (ADR-002) — never auto-applied to ai-saham.
 
 ---
 
@@ -99,7 +75,7 @@ No machine-applied patch files in MVP. If later you want structured diffs, add `
 | `explore` | No |
 | `demo` | Yes (minimal: manifest + summary + metrics) unless `--no-artifact` |
 | `compare` | Yes |
-| `deepdive` | Yes (includes `suggestions.md` when applicable) |
+| `challenge …` | Yes under `artifacts/challenge/` (policy packs) |
 
 ---
 

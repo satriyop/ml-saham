@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import defaultdict
 import math
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
@@ -13,7 +12,6 @@ from ml_saham.data.aisaham_read import connect, load_candles
 from ml_saham.data.phase2_read import load_seasonality
 
 META = get_meta("seasonality-drift")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -39,7 +37,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nDetail: Menggunakan Prophet untuk memisahkan komponen musiman pada return harian.")
     return "\n".join(lines)
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
@@ -115,7 +112,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         scoreboard=False,
         scoreboard_kind="none",
     )
-
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
     try:
@@ -230,10 +226,3 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         scoreboard_kind="none",
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="seasonality_cache di ai-saham",
-        bring_back="Prophet seasonality forecast & OOS comparison",
-    )

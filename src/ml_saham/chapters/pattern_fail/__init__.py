@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import resolve_universe
 from ml_saham.chapters.registry import get as get_meta
@@ -12,7 +11,6 @@ from ml_saham.chapters.types import ChapterContext, DemoResult, CompareResult
 from ml_saham.data.aisaham_read import connect, load_candles
 
 META = get_meta("pattern-fail")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -48,7 +46,6 @@ def explore_text(*, verbose: bool = False) -> str:
         )
     return "\n".join(lines)
 
-
 def _prepare_data(ctx: ChapterContext) -> tuple[list[list[float]], list[int], int]:
     with connect(ctx.db_path) as conn:
         uni = ctx.universe or resolve_universe(conn, limit=15)
@@ -77,7 +74,6 @@ def _prepare_data(ctx: ChapterContext) -> tuple[list[list[float]], list[int], in
         raise ChapterDataError(f"Sample terlalu kecil (n={len(X_list)}).")
     
     return X_list, y_list, len(by_t)
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
@@ -149,7 +145,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         ),
         scoreboard=False,  # accuracy lab, not IHSG scoreboard
     )
-
 
 def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareResult:
     try:
@@ -232,10 +227,3 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
         scoreboard=False,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="— (failure lab; tidak ada engine claim)",
-        bring_back="ingat framing salah → lanjut factor-score / broker-flow / walk-forward",
-    )

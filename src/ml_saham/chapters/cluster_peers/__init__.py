@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import resolve_universe
 from ml_saham.chapters.registry import get as get_meta
@@ -12,7 +11,6 @@ from ml_saham.chapters.types import ChapterContext, DemoResult
 from ml_saham.data.aisaham_read import connect, load_candles, load_sector_map
 
 META = get_meta("cluster-peers")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -36,10 +34,9 @@ def explore_text(*, verbose: bool = False) -> str:
         f"Lanjut:  ml-saham demo {META.slug}  |  ml-saham compare {META.slug}",
     ]
     if verbose:
-        lines.append("\nDetail: deepdive boleh menyinggung sector diagnostics ai-saham.")
+        lines.append("\nDetail: sector diagnostics ai-saham bisa dibahas di compare / challenge.")
         lines.append("Optional: pip install umap-learn  (atau extras ml yang menyertakannya).")
     return "\n".join(lines)
-
 
 def _load_data_aligned(ctx: ChapterContext, window: int = 40):
     with connect(ctx.db_path) as conn:
@@ -83,7 +80,6 @@ def _load_data_aligned(ctx: ChapterContext, window: int = 40):
         )
     return keep, X_rows, sectors, window
 
-
 def _try_umap_hdbscan():
     """Return (umap_mod, HDBSCAN) or (None, None) if optional deps missing."""
     try:
@@ -92,7 +88,6 @@ def _try_umap_hdbscan():
     except ImportError:
         return None, None
     return umap, HDBSCAN
-
 
 def _kmeans_demo(keep, X_rows, sectors, window) -> DemoResult:
     import numpy as np
@@ -140,7 +135,6 @@ def _kmeans_demo(keep, X_rows, sectors, window) -> DemoResult:
         scoreboard=True,
         extra_files={"top_names.csv": "\n".join(csv) + "\n"},
     )
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
@@ -200,7 +194,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         scoreboard=True,
         extra_files={"top_names.csv": "\n".join(csv) + "\n"},
     )
-
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
     try:
@@ -309,10 +302,3 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         extra_files={"compare.csv": "\n".join(csv) + "\n"},
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="sector-context diagnostics di ai-saham",
-        bring_back="peer clusters sebagai sanity check diversifikasi / sektor bias",
-    )

@@ -43,7 +43,6 @@ ml-saham
 ├── doctor                # DB path, data-tier coverage before audits
 ├── explore <topic>       # secondary: problem → options → caveats
 ├── demo <topic>          # secondary: light real-data illustration
-├── deepdive <topic>      # optional: kaitkan ke ai-saham + artifact
 ├── chapters / status     # curriculum path + progress
 ├── leaderboard           # cross-topic scoreboard helper
 ├── glossary [term]       # kamus bertahap
@@ -88,8 +87,8 @@ Do **not** name topics after engines (`signal-engine`, `mce`, `risk-engine`).
 ml-saham chapters
 ml-saham explore <topic>
 ml-saham demo <topic> [flags]
-ml-saham compare <topic> --baseline … --against …   # when useful
-ml-saham deepdive <topic>                           # optional
+ml-saham compare <topic> --baseline … --against …   # curriculum lab
+ml-saham challenge run|engine|factor|health …        # product authority
 ```
 
 Progress stored lightly (e.g. `~/.ml-saham/progress.json`): explored / demoed per topic — no gamification noise.
@@ -137,17 +136,6 @@ Artifact (opsional):  artifacts/<topic>/…
 
 Ch.18 (`pre-open-rank`) exception: opening-session scoreboard (not default IHSG long-only), still with biaya + disclaimer banners.
 
-### `deepdive` — clearly secondary
-
-```text
-Deep-dive · kaitkan ke ai-saham
-  Terkait: …
-  Yang bisa dibawa balik: …
-  Artifact: …
-```
-
-Must be skippable; chapter remains complete without it.
-
 ### `doctor` — data readiness
 
 Report DB path, MVP / v1.1 / phase-2 table coverage, and exact remediation (e.g. which `saham fetch …` to run). Fail demos with a pointer to `doctor`, not a stack trace dump.
@@ -172,7 +160,7 @@ Report DB path, MVP / v1.1 / phase-2 table coverage, and exact remediation (e.g.
 1. Section headers and teaching prose: **Indonesian**.  
 2. Flags, topic slugs, library names, metric names (`rank IC`, `walk-forward`): **English**.  
 3. Every scoreboard block includes: honesty banners (biaya and/or leakage as relevant) + **bukan saran trading/investasi**.  
-4. Deep-dive blocks labeled explicitly so they never look like the main lesson.
+4. Curriculum `compare` is not promotion authority; use `challenge` for policy audits.
 
 ---
 
@@ -181,7 +169,7 @@ Report DB path, MVP / v1.1 / phase-2 table coverage, and exact remediation (e.g.
 - TUI workbench  
 - Web UI  
 - Chat-first “AI tutor” as the main interface  
-- Forcing `deepdive` before `demo`  
+- Retired: `deepdive` command (stubs never became product)  
 - Notebook as primary path (optional `demo --export-notebook` later only)
 
 ---

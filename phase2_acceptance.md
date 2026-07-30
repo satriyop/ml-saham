@@ -12,7 +12,7 @@ Data: [data_contract.md](./data_contract.md) · Roadmap: [roadmap.md](./roadmap.
 
 - [x] `doctor` reports **Phase-2 data** (earnings, corp, IEV, labels hard; regime/candidates/headlines soft)  
 - [x] `required_data=phase2` gated on `phase2_hard_ok`  
-- [x] Phase-2 chapters implemented (`explore` + `demo` + deepdive stub) including `survival-analysis`, `nowcasting`, `broker-network` loadable via CLI  
+- [x] Phase-2 chapters implemented (`explore` + `demo`) including `survival-analysis`, `nowcasting`, `broker-network` loadable via CLI  
 - [x] Ch.18 (`pre-open-rank`) uses **open-session** scoreboard banners  
 - [x] No `ai-saham` Python imports  
 

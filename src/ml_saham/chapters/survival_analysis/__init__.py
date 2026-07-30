@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import (
     foreign_net_nday,
@@ -20,7 +19,6 @@ from ml_saham.data.aisaham_read import connect, load_candles
 from ml_saham.eval.metrics import metrics_bundle, rank_ic
 
 META = get_meta("survival-analysis")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -42,9 +40,8 @@ def explore_text(*, verbose: bool = False) -> str:
         f"Compare: ml-saham compare {META.slug} --baseline kaplan-meier --against xgboost",
     ]
     if verbose:
-        lines.append("\nDeepdive stub: insider_cache (waktu hingga profit).")
+        lines.append("\nCatatan: insider_cache (waktu hingga profit) di data plane.")
     return "\n".join(lines)
-
 
 def _panel_survival(ctx: ChapterContext):
     # Returns rows with features, event_time, event_occurred
@@ -117,7 +114,6 @@ def _panel_survival(ctx: ChapterContext):
 
     return as_of, rows, bench
 
-
 def _learned_scores(rows: list[dict], model_type: str = "xgboost") -> tuple[list[float], str, dict]:
     try:
         import numpy as np
@@ -186,7 +182,6 @@ def _learned_scores(rows: list[dict], model_type: str = "xgboost") -> tuple[list
             scores = model.predict(X).tolist()
             importances = {"mom_z": float(model.coef_[0]), "flow_z": float(model.coef_[1])}
             return scores, "xgboost-fallback(ridge)", importances
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     as_of, rows, bench = _panel_survival(ctx)
@@ -257,7 +252,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         extra_files={"top_names.csv": "\n".join(csv) + "\n"},
     )
 
-
 def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareResult:
     as_of, rows, bench = _panel_survival(ctx)
 
@@ -306,10 +300,3 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
         scoreboard=True,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="insider_cache (waktu hingga profit)",
-        bring_back="XGBoost survival embeddings vs Kaplan-Meier curves",
-    )

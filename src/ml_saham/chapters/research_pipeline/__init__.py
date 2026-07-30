@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError
 from ml_saham.chapters.panel import (
     forward_returns_by_ticker,
@@ -23,7 +22,6 @@ from ml_saham.eval.metrics import metrics_bundle, rank_ic
 META = get_meta("research-pipeline")
 
 FEATURES = ["momentum_20d", "value_neg_pe", "quality_roe"]
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -49,7 +47,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nOutput: feature_list.json di extra_files.")
     return "\n".join(lines)
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     import polars as pl
@@ -163,7 +160,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         },
     )
 
-
 def run_compare(ctx: ChapterContext, **kwargs) -> CompareResult:
     import time
     import polars as pl
@@ -251,10 +247,3 @@ def run_compare(ctx: ChapterContext, **kwargs) -> CompareResult:
         ),
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="full research DAG / artifact store ai-saham",
-        bring_back="feature_list.json + stacked metrics review habit",
-    )

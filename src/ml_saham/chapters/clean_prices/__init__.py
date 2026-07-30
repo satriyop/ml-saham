@@ -5,14 +5,12 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.panel import resolve_universe
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
 from ml_saham.data.aisaham_read import connect, load_candles
 
 META = get_meta("clean-prices")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -48,7 +46,6 @@ def explore_text(*, verbose: bool = False) -> str:
         )
     return "\n".join(lines)
 
-
 def _mad_bounds(xs: list[float], k: float = 4.0) -> tuple[float, float]:
     """Robust anomaly detection using Median Absolute Deviation."""
     if not xs:
@@ -60,7 +57,6 @@ def _mad_bounds(xs: list[float], k: float = 4.0) -> tuple[float, float]:
     if mad == 0:
         mad = 1e-8
     return median - k * mad, median + k * mad
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
@@ -173,7 +169,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         extra_files={"top_names.csv": "\n".join(csv_lines) + "\n"},
     )
 
-
 def run_compare(ctx: ChapterContext) -> DemoResult:
     """Compare IsolationForest (old) vs LOF (new)."""
     with connect(ctx.db_path) as conn:
@@ -245,10 +240,3 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         scoreboard=False,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="corp-action break hygiene di cache candles ai-saham",
-        bring_back="habit flag MAD/LOF sebelum train model harga",
-    )

@@ -14,7 +14,6 @@ try:
 except ImportError:
     HAS_SKLEARN = False
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError
 from ml_saham.chapters.panel import resolve_universe
 from ml_saham.chapters.registry import get as get_meta
@@ -23,7 +22,6 @@ from ml_saham.data.aisaham_read import connect, load_candles
 from ml_saham.data.phase2_read import load_corp_actions
 
 META = get_meta("corp-events")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -52,7 +50,6 @@ def explore_text(*, verbose: bool = False) -> str:
         lines.append("\nDetail: load_corp_actions dari corp_action_cache.")
     return "\n".join(lines)
 
-
 def _fwd_around(
     by_t: dict[str, list[tuple[str, float]]], ticker: str, ex_date: str, horizon: int = 5
 ) -> float | None:
@@ -75,7 +72,6 @@ def _fwd_around(
     if c0 == 0:
         return None
     return (c1 / c0) - 1.0
-
 
 def _build_dataset(ctx: ChapterContext):
     with connect(ctx.db_path) as conn:
@@ -126,7 +122,6 @@ def _build_dataset(ctx: ChapterContext):
         raise ChapterDataError("Tidak ada event dengan forward return valid.")
         
     return scored, type_counts, len(events), len(uni)
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     scored, type_counts, n_events, n_uni = _build_dataset(ctx)
@@ -187,7 +182,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         top_names=top,
     )
 
-
 def run_compare(ctx: ChapterContext) -> CompareResult:
     scored, _, _, _ = _build_dataset(ctx)
     if not HAS_SKLEARN or len(scored) < 10:
@@ -236,10 +230,3 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
         summary_md=f"# Compare Corp Events\n\nDefault MSE: {rf_mse:.6f}\nBaseline MSE: {dummy_mse:.6f}\n",
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="corp_action_cache / corporate_action_events di ai-saham",
-        bring_back="event study + ex_date hygiene habit",
-    )

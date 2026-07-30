@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import pick_as_of, resolve_universe
 from ml_saham.chapters.registry import get as get_meta
@@ -38,10 +37,9 @@ def explore_text(*, verbose: bool = False) -> str:
     ]
     if verbose:
         lines.append(
-            "\nDeepdive stub: Analisis `broker_daily_flow` Network lebih dalam (manual)."
+            "\nCatatan: Analisis `broker_daily_flow` network lebih dalam (manual / compare)."
         )
     return "\n".join(lines)
-
 
 def _build_network(ctx: ChapterContext):
     """Build co-occurrence network from broker_daily_flow (preferred) or compatible tables."""
@@ -121,7 +119,6 @@ def _build_network(ctx: ChapterContext):
         
     return as_of, nodes, edges
 
-
 def _learned_centrality(nodes: set, edges: dict, model_type: str = "pagerank"):
     try:
         import networkx as nx
@@ -158,7 +155,6 @@ def _learned_centrality(nodes: set, edges: dict, model_type: str = "pagerank"):
         model_name = "Simple Degree"
         
     return scores, model_name, G
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     as_of, nodes, edges = _build_network(ctx)
@@ -210,7 +206,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         extra_files={"top_brokers.csv": "\n".join(csv) + "\n"},
     )
 
-
 def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareResult:
     as_of, nodes, edges = _build_network(ctx)
     
@@ -258,10 +253,3 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
         scoreboard=False,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="broker_daily_flow Network, komunitas modularitas",
-        bring_back="Ekspor subgraph broker yang dicurigai (Gephi/GML)",
-    )

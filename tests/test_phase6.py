@@ -70,7 +70,7 @@ def test_phase2_modules(slug: str):
     assert has_chapter_module(slug)
     mod = load_chapter(slug)
     assert "Masalah" in mod.explore_text()
-    assert "Deep-dive" in mod.deepdive_text()
+    assert not hasattr(mod, "deepdive_text")
 
 
 @pytest.mark.parametrize("slug", PHASE2_SLUGS + OPTIONAL_SLUGS)

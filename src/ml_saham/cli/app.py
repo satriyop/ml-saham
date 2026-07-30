@@ -65,8 +65,6 @@ def _progress_cell(slug: str) -> str:
         bits.append("E✓")
     if flags["demo"]:
         bits.append("D✓")
-    if flags["deepdive"]:
-        bits.append("DV✓")
     return " ".join(bits) if bits else "—"
 
 
@@ -176,7 +174,7 @@ def chapters_cmd(
     if not all_phases:
         console.print(
             "\n[dim]MVP + v1.1 + phase-2. Opsional (Ch.20 rl-sandbox): ml-saham chapters --all. "
-            "Progress: E✓ D✓ DV✓.[/dim]"
+            "Progress: E✓ D✓.[/dim]"
         )
 
 
@@ -442,71 +440,6 @@ def compare_cmd(
             artifacts_root=root,
         )
         console.print(f"\nArtifact:  {pack.path}")
-
-
-@app.command("deepdive")
-def deepdive_cmd(
-    ctx: typer.Context,
-    topic: str = typer.Argument(help="Topic slug"),
-    no_artifact: bool = typer.Option(
-        False,
-        "--no-artifact",
-        help="Jangan tulis artifact pack",
-    ),
-) -> None:
-    """Opsional: kaitkan ke ai-saham + artifact."""
-    try:
-        ch = get_chapter(topic)
-    except KeyError as exc:
-        console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(code=1) from exc
-
-    console.print("[bold]Deep-dive · kaitkan ke ai-saham[/bold]")
-    console.print(f"topic={ch.slug}")
-    suggestions = None
-    summary = (
-        f"# Deep-dive · {ch.slug}\n\n"
-        "Human-applied suggestions only — tidak auto-edit ai-saham.\n"
-    )
-    if has_chapter_module(topic):
-        mod = load_chapter(topic)
-        if hasattr(mod, "deepdive_text"):
-            console.print(mod.deepdive_text())
-        else:
-            console.print(
-                "[yellow]Deep-dive singkat (stub OK untuk MVP).[/yellow]\n"
-                "Chapter utama sudah lengkap tanpa deep-dive."
-            )
-        suggestions = (
-            "# Suggestions for ai-saham (manual review)\n\n"
-            f"Related: {ch.slug}\n\n"
-            "## Evidence\n"
-            "- Lihat artifact demo/compare chapter ini.\n\n"
-            "## Possible knobs (do not apply blindly)\n"
-            "- Validate on walk-forward before changing YAML\n\n"
-            "## Not claimed\n"
-            "- Live edge, auto-promote, or smart-money proof\n"
-        )
-    else:
-        console.print("[yellow]Deep-dive belum diisi (di luar MVP).[/yellow]")
-
-    if not no_artifact:
-        root = resolve_artifacts_root(ctx.obj.get("artifacts_dir"))
-        pack = write_artifact_pack(
-            ArtifactWriteRequest(
-                topic=ch.slug,
-                chapter=ch.number,
-                mode="deepdive",
-                db_path=ctx.obj["db"],
-                ai_saham_deepdive=True,
-                summary_md=summary,
-                suggestions_md=suggestions,
-            ),
-            artifacts_root=root,
-        )
-        console.print(f"\nArtifact:  {pack.path}")
-
-    mark(topic, "deepdive")
 
 
 @app.command("leaderboard")

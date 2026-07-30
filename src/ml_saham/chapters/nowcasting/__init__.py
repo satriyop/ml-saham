@@ -5,14 +5,12 @@ from __future__ import annotations
 from collections import defaultdict
 import math
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.panel import resolve_universe
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
 from ml_saham.data.aisaham_read import connect, load_candles, load_latest_fundamentals
 
 META = get_meta("nowcasting")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -45,7 +43,6 @@ def explore_text(*, verbose: bool = False) -> str:
             ]
         )
     return "\n".join(lines)
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
@@ -128,7 +125,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         extra_files={"predictions.csv": "\n".join(csv_lines) + "\n"},
     )
 
-
 def run_compare(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
         uni = ctx.universe or resolve_universe(conn, limit=25)
@@ -167,10 +163,3 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         scoreboard=False,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="company_fundamentals As-Of Join",
-        bring_back="MIDAS pipeline mapping harian ke kuartalan",
-    )

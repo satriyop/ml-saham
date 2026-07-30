@@ -6,14 +6,12 @@ import json
 import sqlite3
 import numpy as np
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
 from ml_saham.data.aisaham_read import connect
 
 META = get_meta("special-monitoring")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -35,10 +33,8 @@ def explore_text(*, verbose: bool = False) -> str:
         lines.append("\nDetail: Evaluasi Gating Risk Engine.")
     return "\n".join(lines)
 
-
 def run_demo(ctx: ChapterContext) -> DemoResult:
     raise NotImplementedError("Gunakan mode challenge (run_compare) untuk evaluasi Risk Engine.")
-
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
     # 1. Tentukan purpose berdasarkan scenario (default: ACCUMULATION_DISCOVERY)
@@ -211,11 +207,4 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         model="logreg_vs_ai_saham",
         summary_md="\n".join(md_lines) + "\n",
         scoreboard=False,
-    )
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="risk engine / gating",
-        bring_back="Gating vs ML",
     )

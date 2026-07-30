@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError
 from ml_saham.chapters.panel import pick_as_of, resolve_universe
 from ml_saham.chapters.registry import get as get_meta
@@ -10,7 +9,6 @@ from ml_saham.chapters.types import ChapterContext, DemoResult
 from ml_saham.data.aisaham_read import connect, load_candles
 
 META = get_meta("ichimoku-cloud")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -36,7 +34,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nDetail: plugins/indicators/ichimoku.py di ai-saham.")
     return "\n".join(lines)
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
@@ -85,7 +82,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         scoreboard_kind="none",
     )
 
-
 def run_compare(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
         uni = ctx.universe or resolve_universe(conn, limit=40)
@@ -128,10 +124,3 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         scoreboard_kind="none",
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="plugins/indicators/ichimoku.py di ai-saham",
-        bring_back="Kumo cloud CNN/RNN tensor breakout habit",
-    )

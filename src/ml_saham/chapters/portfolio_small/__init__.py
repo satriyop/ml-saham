@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError
 from ml_saham.chapters.panel import (
     forward_returns_by_ticker,
@@ -20,7 +19,6 @@ META = get_meta("portfolio-small")
 
 _TOP_K = 10
 _MAX_W = 0.20
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -47,7 +45,6 @@ def explore_text(*, verbose: bool = False) -> str:
         lines.append("\nDetail: momentum-20 rank → portfolio construction.")
     return "\n".join(lines)
 
-
 def _cap_weights(scores: list[float], max_w: float = _MAX_W) -> list[float]:
     raw = [max(s, 0.0) for s in scores]
     total = sum(raw) or 1.0
@@ -70,7 +67,6 @@ def _cap_weights(scores: list[float], max_w: float = _MAX_W) -> list[float]:
             w[i] += share
     s = sum(w) or 1.0
     return [x / s for x in w]
-
 
 def _hrp_weights(conn, tickers: list[str], as_of: str, window: int = 40) -> list[float]:
     """Hierarchical Risk Parity (HRP / inverse variance allocation) from historical return covariance."""
@@ -111,7 +107,6 @@ def _hrp_weights(conn, tickers: list[str], as_of: str, window: int = 40) -> list
     inv_var = 1.0 / np.maximum(np.diag(cov), 1e-8)
     weights = inv_var / np.sum(inv_var)
     return weights.tolist()
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
@@ -174,7 +169,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         top_names=top,
         extra_files={"portfolio.csv": "\n".join(csv) + "\n"},
     )
-
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
@@ -247,10 +241,3 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         extra_files={"portfolio_compare.csv": "\n".join(csv) + "\n"},
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="portfolio construction / rebalance hooks ai-saham",
-        bring_back="top-k + weight cap habit vs concentration",
-    )

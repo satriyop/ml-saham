@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import (
     forward_returns_by_ticker,
@@ -18,7 +17,6 @@ from ml_saham.data.aisaham_read import connect, insider_date_stats, load_insider
 from ml_saham.eval.metrics import rank_ic
 
 META = get_meta("insider")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -43,9 +41,8 @@ def explore_text(*, verbose: bool = False) -> str:
         f"Lanjut:  ml-saham demo {META.slug}",
     ]
     if verbose:
-        lines.append("\nDetail: deepdive boleh menyinggung insider enrichment flags ai-saham.")
+        lines.append("\nDetail: insider enrichment flags di data plane ai-saham.")
     return "\n".join(lines)
-
 
 def _prepare_data(ctx: ChapterContext):
     with connect(ctx.db_path) as conn:
@@ -100,7 +97,6 @@ def _prepare_data(ctx: ChapterContext):
 
     rets = maybe_haircut([fwd[t] for t in tickers], with_costs=ctx.with_costs)
     return stats, as_of, lookback_start, tickers, net, buys, sells, rets
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     stats, as_of, lookback_start, tickers, net, buys, sells, rets = _prepare_data(ctx)
@@ -200,7 +196,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         extra_files={"top_names.csv": "\n".join(csv) + "\n"},
     )
 
-
 def run_compare(ctx: ChapterContext) -> CompareResult:
     stats, as_of, lookback_start, tickers, net, buys, sells, rets = _prepare_data(ctx)
 
@@ -275,10 +270,3 @@ def run_compare(ctx: ChapterContext) -> CompareResult:
         scoreboard=True,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="insider enrichment flags di ai-saham",
-        bring_back="scrub absurd dates + net BUY/SELL rank habit",
-    )

@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import defaultdict
 import math
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import (
     forward_returns_by_ticker,
@@ -20,7 +19,6 @@ from ml_saham.data.aisaham_read import connect, load_candles, load_sector_map
 from ml_saham.eval.metrics import rank_ic
 
 META = get_meta("sector-breadth")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -46,7 +44,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nDetail: load_sector_map + load_candles di ai-saham.")
     return "\n".join(lines)
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
@@ -148,7 +145,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         scoreboard_kind="long_only",
     )
 
-
 def run_compare(ctx: ChapterContext) -> DemoResult:
     try:
         import numpy as np
@@ -242,10 +238,3 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         scoreboard=False,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="sector_breadth script di ai-saham",
-        bring_back="sector breadth % + PCA primary factor rank IC habit",
-    )

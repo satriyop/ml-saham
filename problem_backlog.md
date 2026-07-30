@@ -1,7 +1,7 @@
 # Problem backlog — not yet in chapters
 
 Ideas that are **not** scheduled in [chapters.md](./chapters.md).  
-Keep this list small. Promote only with a generic IDX problem statement (then optional `ai-saham` deep-dive).
+Keep this list small. Promote only with a generic IDX problem statement (then curriculum `explore` / product `challenge` as needed).
 
 Discussion context: early drafts in local `archive/` (gitignored).
 
@@ -27,7 +27,7 @@ Discussion context: early drafts in local `archive/` (gitignored).
 | Idea | Park under | Notes |
 |---|---|---|
 | Full tick / order-book microstructure | **Ch.18** | Only if richer tape exists; opening-session ranking stays the headline |
-| Setup-gate / phase-detector threshold sweeps | **Ch.12** deep-dive | Research-card style; not a TA chapter |
+| Setup-gate / phase-detector threshold sweeps | **Ch.12** compare / notes | Research-card style; not a TA chapter |
 | Tracked “smart/noise” broker list quality | **Ch.6** lab | List hygiene + caveats; not smart-money mythology |
 
 ---
@@ -50,4 +50,4 @@ When promoting a candidate, write:
 3. **Why ML helps.**  
 4. **Data needed** (and whether `ai-saham` already has it).  
 5. **Suggested chapter slot** or “new chapter.”  
-6. **Optional `ai-saham` deep-dive** (engine/table) — never the title.
+6. **Optional `ai-saham` surface note** (engine/table) — never the title.

@@ -45,7 +45,7 @@ def test_v11_modules_load():
         assert has_chapter_module(slug)
         mod = load_chapter(slug)
         assert "Masalah" in mod.explore_text()
-        assert "STUB MVP" in mod.deepdive_text() or "Deep-dive" in mod.deepdive_text()
+        assert not hasattr(mod, "deepdive_text")
 
 
 @pytest.mark.parametrize("slug", V11_SLUGS)

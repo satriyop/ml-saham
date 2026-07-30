@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
 from ml_saham.data.aisaham_read import (
@@ -16,7 +15,6 @@ from ml_saham.data.doctor_checks import run_doctor
 from ml_saham.data.universe import default_universe
 
 META = get_meta("orientasi")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -63,7 +61,6 @@ def explore_text(*, verbose: bool = False) -> str:
             ]
         )
     return "\n".join(lines)
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     from ml_saham.data.doctor_checks import integrity_score
@@ -149,10 +146,3 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         scoreboard=True,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="path data ai-saham + PIT/fetched_date honesty",
-        bring_back="selalu doctor dulu; bedakan fetched_date vs tanggal ekonomi",
-    )

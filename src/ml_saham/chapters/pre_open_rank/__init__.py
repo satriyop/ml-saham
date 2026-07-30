@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
@@ -10,7 +9,6 @@ from ml_saham.data.aisaham_read import connect
 from ml_saham.data.phase2_read import load_iev_snapshots
 
 META = get_meta("pre-open-rank")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -36,7 +34,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nDetail: scoreboard_kind=open_session.")
     return "\n".join(lines)
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
@@ -151,7 +148,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         extra_files={"iev_against_top.csv": "\n".join(csv) + "\n"},
     )
 
-
 def run_compare(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
         rows = load_iev_snapshots(conn, as_of=ctx.as_of, limit_dates=3)
@@ -246,13 +242,5 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         summary_md=f"# Pre-open rank Compare\n\nDefault vs Baseline for {latest_date}.\n",
         scoreboard=True,
         scoreboard_kind="open_session",
-    )
-
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="iev_snapshots / pre-open pipeline ai-saham",
-        bring_back="IEV rank + open_session scoreboard habit",
     )
 

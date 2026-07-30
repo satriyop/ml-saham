@@ -25,7 +25,7 @@ SOTA vocabulary (not literature frontier): [docs/sota_vocabulary_and_literature.
 2. Per problem always cover: approach options → caveats → implementation sketch (libs, data flow).
 3. **ID-first** learner copy; code and core finance/ML terms stay **EN**.
 4. Glossary unlocks gradually with chapter difficulty.
-5. **Generic problem first**; any `ai-saham` engine/YAML/table link is an **optional deep-dive after** the core lesson. Removing the deep-dive must leave a complete ML chapter.
+5. **Generic problem first**; any `ai-saham` engine/YAML/table link is **optional after** the core lesson. Curriculum chapters must stand alone without product challenge or production YAML knowledge.
 6. Default scoreboard: **long-only vs IHSG** (gross + *belum termasuk biaya* banner). Optional long/short = “cara riset membaca faktor.” Ch.18 (`pre-open-rank`) uses an **opening-session** scoreboard instead.
 7. Ch.6 = *who* (broker / foreign flow rank); Ch.9 = *how much* (volume–price anomaly). No shared ownership of “burst” stories.
 8. Bandar / accum-style concentration = **lab inside Ch.6**, not a “smart money” chapter.
@@ -73,7 +73,7 @@ SOTA vocabulary (not literature frontier): [docs/sota_vocabulary_and_literature.
 
 ## Chapter list
 
-| # | Title (generic problem) | Tier | Shipped algorithms (code SSOT) | Optional deep-dive → `ai-saham` |
+| # | Title (generic problem) | Tier | Shipped algorithms (code SSOT) | Related `ai-saham` surface (optional) |
 |---|---|---|---|---|
 | 0 | **Orientasi** — how we judge “good” without fooling ourselves | — | Baselines (buy & hold, rules), PIT/`fetched_date` checks | Data paths, PIT/`fetched_date` honesty |
 | 1 | **Membersihkan harga saham** — missing bars, splits, spikes | Simple | LOF & MAD (default) vs Isolation Forest (compare) | Corp-action break hygiene in caches |
@@ -165,14 +165,15 @@ Every chapter CLI path should support:
 2. List ML/rule options with reasons and caveats.  
 3. Run a **real-data** demo.  
 4. Show a short implementation sketch (libs + data flow).  
-5. Optionally: `deepdive` linking to `ai-saham` + exportable artifact.
+5. Optional curriculum `compare` (lab only). Product audits use `ml-saham challenge …` (ADR-002).
 
 Example:
 
 ```text
 ml-saham --db … explore broker-flow
 ml-saham --db … demo broker-flow --universe LQ45
-ml-saham --db … deepdive broker-flow    # optional
+ml-saham --db … compare broker-flow
+ml-saham challenge run screener.accum.score_weights   # product authority
 ```
 
 ---

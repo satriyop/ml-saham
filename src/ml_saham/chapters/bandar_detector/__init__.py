@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import (
     forward_returns_by_ticker,
@@ -33,7 +32,6 @@ _ACCDIST_MAP = {
     "BIG DISTRIBUTION": -2.0,
 }
 
-
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
         f"Ch.{META.number}  {META.title}",
@@ -59,7 +57,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nDetail: bandar_detector di ai-saham.")
     return "\n".join(lines)
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
@@ -151,7 +148,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         top_names=top,
     )
 
-
 def run_compare(ctx: ChapterContext) -> DemoResult:
     try:
         import numpy as np
@@ -241,10 +237,3 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         scoreboard=False,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="bandar_detector di ai-saham",
-        bring_back="bandar anomaly scores (default)",
-    )

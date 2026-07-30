@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import math
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import pick_as_of, resolve_universe
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
 
 META = get_meta("volatility-squeeze")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -35,7 +33,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nDetail: strategies/bb-squeeze di ai-saham.")
     return "\n".join(lines)
-
 
 def _prepare_data(ctx: ChapterContext):
     from ml_saham.data.aisaham_read import connect, load_candles
@@ -116,7 +113,6 @@ def _prepare_data(ctx: ChapterContext):
 
     return X_samples, y_samples, as_of
 
-
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
         import numpy as np
@@ -177,7 +173,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         scoreboard=False,
         scoreboard_kind="none",
     )
-
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
     try:
@@ -260,10 +255,3 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         scoreboard_kind="none",
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="strategies/bb-squeeze di ai-saham",
-        bring_back="BB/KC Squeeze default model + LightGBM precision",
-    )

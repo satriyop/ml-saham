@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import (
     load_fundie_map,
@@ -17,7 +16,6 @@ from ml_saham.data.phase2_read import load_forward_labels
 from ml_saham.eval.metrics import rank_ic
 
 META = get_meta("walk-forward")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -43,7 +41,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nDetail: Purged Time-Series Split memastikan tidak ada overlap antara data train dan test.")
     return "\n".join(lines)
-
 
 def _from_labels(conn, uni: list[str]) -> list[dict]:
     rows = load_forward_labels(conn, uni, horizon=5, limit=3000)
@@ -76,7 +73,6 @@ def _from_labels(conn, uni: list[str]) -> list[dict]:
             continue
     return out
 
-
 def _from_panel(conn, uni: list[str]) -> list[dict]:
     as_of = pick_as_of(conn, uni, min_forward=5)
     if not as_of:
@@ -107,7 +103,6 @@ def _from_panel(conn, uni: list[str]) -> list[dict]:
         )
     return rows
 
-
 def _build_features(rows: list[dict]) -> tuple[list[list[float]], list[float], list[str]]:
     X, y, dates = [], [], []
     for r in rows:
@@ -121,7 +116,6 @@ def _build_features(rows: list[dict]) -> tuple[list[list[float]], list[float], l
         y.append(float(r["fwd"]))
         dates.append(r["date"])
     return X, y, dates
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
@@ -208,7 +202,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         scoreboard=True,
     )
 
-
 def run_compare(ctx: ChapterContext) -> DemoResult:
     try:
         import numpy as np
@@ -276,10 +269,3 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         scoreboard=True,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="signal_forward_labels / rolling re-fit pipeline ai-saham",
-        bring_back="time-ordered split + train/test IC habit",
-    )

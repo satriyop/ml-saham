@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import (
     forward_returns_by_ticker,
@@ -18,7 +17,6 @@ from ml_saham.data.aisaham_read import connect, load_candles
 from ml_saham.eval.metrics import rank_ic
 
 META = get_meta("relative-strength")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -43,7 +41,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nDetail: strategies/rs-momentum di ai-saham.")
     return "\n".join(lines)
-
 
 def _panel(ctx: ChapterContext):
     with connect(ctx.db_path) as conn:
@@ -109,10 +106,8 @@ def _panel(ctx: ChapterContext):
 
     return as_of, rows, bench
 
-
 def _baseline_scores(rows: list[dict]) -> list[float]:
     return [r["rs_mansfield"] for r in rows]
-
 
 def _against_scores(rows: list[dict]) -> tuple[list[float], str]:
     try:
@@ -130,7 +125,6 @@ def _against_scores(rows: list[dict]) -> tuple[list[float], str]:
     scores = model.predict(X).tolist()
     
     return scores, "ml_sota"
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     as_of, rows, bench = _panel(ctx)
@@ -178,7 +172,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         scoreboard_kind="long_only",
         top_names=top,
     )
-
 
 def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareResult:
     as_of, rows, bench = _panel(ctx)
@@ -230,10 +223,3 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
         scoreboard=True,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="strategies/rs-momentum di ai-saham",
-        bring_back="Mansfield RS relative strength + ML habit",
-    )

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import (
     forward_returns_by_ticker,
@@ -20,7 +19,6 @@ from ml_saham.data.phase2_read import load_company_financials
 from ml_saham.eval.metrics import rank_ic
 
 META = get_meta("financial-distress")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -47,7 +45,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nDetail: load_company_financials di ai-saham.")
     return "\n".join(lines)
-
 
 def _build_rows(ctx: ChapterContext):
     with connect(ctx.db_path) as conn:
@@ -99,7 +96,6 @@ def _build_rows(ctx: ChapterContext):
         })
     return as_of, rows, bench
 
-
 def _xgb_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], str, list[float]]:
     import numpy as np
 
@@ -129,7 +125,6 @@ def _xgb_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], str,
         coef = np.abs(model.coef_)
         imp = (coef / coef.sum()).tolist() if float(coef.sum()) > 0 else [0.0] * arr.shape[1]
         return pred.tolist(), "ridge-fallback", imp
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     as_of, rows, bench = _build_rows(ctx)
@@ -199,7 +194,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         top_names=top,
     )
 
-
 def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareResult:
     as_of, rows, bench = _build_rows(ctx)
     if len(rows) < 8:
@@ -256,10 +250,3 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
         scoreboard=True,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="company_financials di ai-saham",
-        bring_back="Altman Z'-Score EM formula / XGBoost components + Distress filter habit",
-    )

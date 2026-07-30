@@ -24,7 +24,7 @@ Curriculum: [chapters.md](./chapters.md) · UX: [ux.md](./ux.md) · Data: [data_
 |---|---|
 | **No import of `ai-saham` Python packages** | `ml-saham` talks to data via SQLite paths / exported files only |
 | **Ingest stays in `ai-saham`** | No Stockbit/Yahoo/IDX scrapers inside `ml-saham` |
-| **Chapters stay problem-centric** | Topic modules teach generic problems; `deepdive` is optional glue |
+| **Chapters stay problem-centric** | Topic modules teach generic problems; product authority is ADR-002 challenge, not curriculum glue |
 | **Challenge outranks curriculum polish** | When priorities conflict, ship `run_compare` / engine audits before soft demos (ADR-001) |
 | **Language by axis** | Challenge UI/reports **English**; learning `explore` narrative **Indonesian** (ADR-001 §6). Flags/slugs always EN |
 | **CLI is the product** | Typer (or Click) app; no web/TUI in MVP |
@@ -68,7 +68,6 @@ ml-saham/
 │   │   ├── explore.py
 │   │   ├── demo.py
 │   │   ├── compare.py
-│   │   ├── deepdive.py
 │   │   ├── glossary.py
 │   │   └── doctor.py
 │   ├── data/
@@ -111,8 +110,7 @@ Every chapter under `src/ml_saham/chapters/<slug>/` provides:
 | `META` | id, number, title (ID), tier, phase, topic slug |
 | `explore_text()` | markdown/plain sections for `explore` |
 | `run_demo(ctx) -> DemoResult` | real-data run |
-| `run_compare(ctx) -> CompareResult` | optional; else CLI says N/A |
-| `deepdive_text(ctx)` / `run_deepdive(ctx)` | optional; may write artifact |
+| `run_compare(ctx) -> CompareResult` | curriculum lab (not ADR-002 promotion authority) |
 | `required_data` | `"mvp"` / `"v1_1"` / `"phase2"` for `doctor` |
 
 `ctx` carries: db connection, universe, as_of, model flags, output dirs, cost flags.

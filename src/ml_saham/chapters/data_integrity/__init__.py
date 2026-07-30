@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, CompareResult, DemoResult
 from ml_saham.data.doctor_checks import (
@@ -12,7 +11,6 @@ from ml_saham.data.doctor_checks import (
 )
 
 META = get_meta("data-integrity")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     # Learning axis: Indonesian narrative
@@ -41,7 +39,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nPeta engine→tabel: docs/engine_factor_map.md")
     return "\n".join(lines)
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     report = run_doctor(ctx.db_path, deep=True)
@@ -82,7 +79,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         scoreboard=False,
         scoreboard_kind="none",
     )
-
 
 def run_compare(ctx: ChapterContext, **kwargs) -> CompareResult:
     """English challenge report: coverage baseline vs integrity score."""
@@ -151,10 +147,3 @@ def run_compare(ctx: ChapterContext, **kwargs) -> CompareResult:
         ),
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="ai-saham observation capture + fetch market/broker; docs/engine_factor_map.md",
-        bring_back="never challenge engines on empty learning_observations",
-    )

@@ -1,4 +1,4 @@
-"""Phase 4 — MVP harden: smoke, error UX, progress, deepdive stubs."""
+"""Phase 4 — MVP harden: smoke, error UX, progress."""
 
 from __future__ import annotations
 
@@ -64,18 +64,9 @@ def test_demo_smoke_fixture(fixture_db: Path, slug: str, tmp_path: Path):
     assert "Bukan saran" in r.stdout or "bukan saran" in r.stdout.lower()
 
 
-@pytest.mark.parametrize("slug", MVP_SLUGS)
-def test_deepdive_stub_labeled(fixture_db: Path, slug: str):
-    mod = load_chapter(slug)
-    assert hasattr(mod, "deepdive_text")
-    text = mod.deepdive_text()
-    assert "STUB MVP" in text or "Deep-dive" in text
-    r = runner.invoke(
-        app,
-        ["--db", str(fixture_db), "deepdive", slug, "--no-artifact"],
-    )
-    assert r.exit_code == 0, r.stdout
-    assert "Deep-dive" in r.stdout
+def test_deepdive_command_retired():
+    r = runner.invoke(app, ["deepdive", "orientasi", "--no-artifact"])
+    assert r.exit_code != 0
 
 
 def test_error_ux_no_traceback_missing_db(tmp_path: Path):

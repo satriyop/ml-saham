@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
@@ -10,7 +9,6 @@ from ml_saham.data.aisaham_read import connect
 from ml_saham.data.phase2_read import load_iev_snapshots
 
 META = get_meta("pre-open-heuristic")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -34,7 +32,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nDetail: klasifikasi XGBoost vs Baseline heuristic.")
     return "\n".join(lines)
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
@@ -161,7 +158,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         top_names=top,
         extra_files={"default_heuristic_top.csv": "\n".join(csv) + "\n"},
     )
-
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
     import json
@@ -312,10 +308,3 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         scoreboard=False,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="iev_snapshots / pre-open heuristic",
-        bring_back="Heuristic vs default",
-    )

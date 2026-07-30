@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import (
     forward_returns_by_ticker,
@@ -18,7 +17,6 @@ from ml_saham.data.aisaham_read import connect
 from ml_saham.eval.metrics import rank_ic
 
 META = get_meta("screen-rules")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -44,9 +42,8 @@ def explore_text(*, verbose: bool = False) -> str:
         f"Compare: ml-saham compare {META.slug} --baseline tree --against lgbm",
     ]
     if verbose:
-        lines.append("\nDetail: deepdive boleh menyinggung risk-gate precursors (stub OK).")
+        lines.append("\nDetail: risk-gate precursors bisa dilacak lewat compare / doctor.")
     return "\n".join(lines)
-
 
 def _panel(ctx: ChapterContext):
     with connect(ctx.db_path) as conn:
@@ -85,11 +82,9 @@ def _panel(ctx: ChapterContext):
         )
     return as_of, rows
 
-
 def _hand_score(row: dict) -> float:
     # lower PE better, higher ROE better
     return (-row["pe"]) + 10.0 * row["roe"]
-
 
 def _learned_scores(rows: list[dict], model_type: str = "lgbm") -> tuple[list[float], str, dict[str, float]]:
     try:
@@ -141,7 +136,6 @@ def _learned_scores(rows: list[dict], model_type: str = "lgbm") -> tuple[list[fl
         "roe_z": float(tree.feature_importances_[1]),
     }
     return scores, "decision_tree", importances
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     as_of, rows = _panel(ctx)
@@ -219,7 +213,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         extra_files={"top_names.csv": "\n".join(csv) + "\n"},
     )
 
-
 def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareResult:
     as_of, rows = _panel(ctx)
     hand = [_hand_score(r) for r in rows]
@@ -276,10 +269,3 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
         scoreboard=True,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="risk-gate precursors (fund/liquidity features) di ai-saham",
-        bring_back="kontrast hand screen vs learned rank + habit compare",
-    )

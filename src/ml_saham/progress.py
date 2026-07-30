@@ -55,7 +55,7 @@ def save_progress(data: dict[str, Any]) -> None:
 
 
 def mark(topic: str, action: str) -> None:
-    """Mark topic action: explore | demo | deepdive."""
+    """Mark topic action: explore | demo."""
     data = load_progress()
     topics: dict[str, Any] = data.setdefault("topics", {})
     entry = topics.setdefault(topic, {})
@@ -69,5 +69,4 @@ def topic_flags(topic: str) -> dict[str, bool]:
     return {
         "explore": bool(entry.get("explore")),
         "demo": bool(entry.get("demo")),
-        "deepdive": bool(entry.get("deepdive")),
     }

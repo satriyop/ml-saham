@@ -6,7 +6,6 @@ import json
 import sqlite3
 import numpy as np
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.registry import get as get_meta
 from ml_saham.chapters.types import ChapterContext, DemoResult
@@ -15,14 +14,11 @@ from ml_saham.eval.metrics import rank_ic
 
 META = get_meta("accum-macro")
 
-
 def explore_text(*, verbose: bool = False) -> str:
     return f"Explore {META.title}"
 
-
 def run_demo(ctx: ChapterContext) -> DemoResult:
     raise NotImplementedError("Gunakan run_compare.")
-
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
@@ -146,11 +142,4 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         model="macro_ensemble_ridge",
         summary_md="\n".join(md_lines) + "\n",
         scoreboard=False,
-    )
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="screener / accum",
-        bring_back="Macro vs ML",
     )

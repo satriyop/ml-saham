@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import resolve_universe
 from ml_saham.chapters.registry import get as get_meta
@@ -13,7 +12,6 @@ from ml_saham.chapters.types import ChapterContext, DemoResult
 from ml_saham.data.aisaham_read import connect, load_candles
 
 META = get_meta("volume-anomaly")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -38,9 +36,8 @@ def explore_text(*, verbose: bool = False) -> str:
         f"Atau:    ml-saham compare {META.slug} --baseline isolation-forest",
     ]
     if verbose:
-        lines.append("\nDetail: tidak ada deepdive engine khusus — fokus hygiene volume.")
+        lines.append("\nDetail: fokus hygiene volume (tidak ada engine policy khusus).")
     return "\n".join(lines)
-
 
 def _extract_features(candles: list[dict], uni: list[str]) -> tuple[dict, list, list]:
     by_t: dict[str, list] = defaultdict(list)
@@ -71,7 +68,6 @@ def _extract_features(candles: list[dict], uni: list[str]) -> tuple[dict, list, 
             feats.append([ret, vz, vratio])
             meta.append((t, rows[i]["date"], ret, vratio))
     return by_t, feats, meta
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
@@ -163,7 +159,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         extra_files={"top_names.csv": "\n".join(csv) + "\n"},
     )
 
-
 def run_compare(ctx: ChapterContext) -> DemoResult:
     try:
         import numpy as np
@@ -233,10 +228,3 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         scoreboard=False,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="— (volume–price hygiene; pisahkan dari broker-flow)",
-        bring_back="Autoencoder anomaly flag pada fitur volume tanpa klaim who/flow",
-    )

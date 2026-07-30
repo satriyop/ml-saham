@@ -48,13 +48,12 @@ class ScoreboardMeta:
 class ArtifactWriteRequest:
     topic: str
     chapter: int
-    mode: str  # demo | compare | deepdive
+    mode: str  # demo | compare
     db_path: Path | str
     universe: str = "LQ45"
     as_of: str | None = None
     model: str | None = None
     scoreboard: ScoreboardMeta = field(default_factory=ScoreboardMeta)
-    ai_saham_deepdive: bool = False
     summary_md: str = ""
     metrics: dict[str, Any] | None = None
     compare: dict[str, Any] | None = None
@@ -135,7 +134,6 @@ def write_artifact_pack(
         "mode": request.mode,
         "model": request.model,
         "scoreboard": request.scoreboard.as_dict(),
-        "ai_saham_deepdive": request.ai_saham_deepdive,
         "files": files,
     }
     (pack_dir / "manifest.json").write_text(

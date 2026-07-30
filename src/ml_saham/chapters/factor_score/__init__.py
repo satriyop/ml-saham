@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import (
     forward_returns_by_ticker,
@@ -21,7 +20,6 @@ from ml_saham.data.aisaham_read import connect
 from ml_saham.eval.metrics import metrics_bundle, rank_ic
 
 META = get_meta("factor-score")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -53,9 +51,8 @@ def explore_text(*, verbose: bool = False) -> str:
         f"Compare: ml-saham compare {META.slug} --baseline elastic-net --against lightgbm",
     ]
     if verbose:
-        lines.append("\nDetail: deepdive boleh menyinggung cache fundamentals ai-saham.")
+        lines.append("\nDetail: cache fundamentals ai-saham relevan untuk sleeve quality.")
     return "\n".join(lines)
-
 
 def _build_rows(ctx: ChapterContext):
     with connect(ctx.db_path) as conn:
@@ -106,7 +103,6 @@ def _build_rows(ctx: ChapterContext):
         )
     return as_of, rows, bench, ownership_used
 
-
 def _factor_matrix(rows: list[dict], *, use_ownership: bool):
     pe_z = zscore([r["pe"] for r in rows])
     # value = -z(PE)
@@ -132,7 +128,6 @@ def _factor_matrix(rows: list[dict], *, use_ownership: bool):
             X[-1].append(0.0)
     return hand, X
 
-
 def _elastic_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], str, list[float]]:
     try:
         import numpy as np
@@ -150,7 +145,6 @@ def _elastic_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], 
         pred = ridge.predict(arr)
         return pred.tolist(), "ridge-fallback", ridge.coef_.tolist()
     return pred.tolist(), "elastic-net", model.coef_.tolist()
-
 
 def _lgbm_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], str, list[float]]:
     try:
@@ -190,7 +184,6 @@ def _lgbm_scores(X: list[list[float]], y: list[float]) -> tuple[list[float], str
             else [0.0] * arr.shape[1]
         )
     return pred.tolist(), "lightgbm", importances
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     as_of, rows, bench, ownership_used = _build_rows(ctx)
@@ -274,7 +267,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         extra_files={"top_names.csv": "\n".join(csv) + "\n"},
     )
 
-
 def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareResult:
     as_of, rows, bench, ownership_used = _build_rows(ctx)
     hand, X = _factor_matrix(rows, use_ownership=ownership_used)
@@ -328,10 +320,3 @@ def run_compare(ctx: ChapterContext, *, baseline: str, against: str) -> CompareR
         scoreboard=True,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="fundamentals / shareholding caches di ai-saham",
-        bring_back="z-score factor blend + rank IC vs IHSG habit",
-    )

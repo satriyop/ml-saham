@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 
-from ml_saham.chapters.deepdive_stub import deepdive_stub
 from ml_saham.chapters.errors import ChapterDataError, ChapterError
 from ml_saham.chapters.panel import (
     forward_returns_by_ticker,
@@ -20,7 +19,6 @@ from ml_saham.data.aisaham_read import connect, load_candles
 from ml_saham.eval.metrics import rank_ic
 
 META = get_meta("microstructure-impact")
-
 
 def explore_text(*, verbose: bool = False) -> str:
     lines = [
@@ -45,7 +43,6 @@ def explore_text(*, verbose: bool = False) -> str:
     if verbose:
         lines.append("\nDetail: load_candles di ai-saham.")
     return "\n".join(lines)
-
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
     try:
@@ -136,7 +133,6 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
         top_names=top,
     )
 
-
 def run_compare(ctx: ChapterContext) -> DemoResult:
     try:
         import numpy as np
@@ -226,10 +222,3 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
         scoreboard=False,
     )
 
-
-def deepdive_text() -> str:
-    return deepdive_stub(
-        topic=META.slug,
-        related="candles di ai-saham",
-        bring_back="OFI & Hawkes Process microstructure impact habit",
-    )

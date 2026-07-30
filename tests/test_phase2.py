@@ -143,7 +143,7 @@ def test_demo_no_artifact(tmp_path: Path):
     assert not (tmp_path / "out").exists()
 
 
-def test_compare_and_deepdive_artifacts(tmp_path: Path):
+def test_compare_artifacts(tmp_path: Path):
     from tests.fixtures.build_mvp_fixture import build_mvp_fixture
 
     root = tmp_path / "out"
@@ -167,22 +167,6 @@ def test_compare_and_deepdive_artifacts(tmp_path: Path):
     packs = list((root / "factor-score").glob("*_compare"))
     assert packs
     assert (packs[0] / "compare.json").is_file()
-
-    dd = runner.invoke(
-        app,
-        [
-            "--db",
-            str(db),
-            "--artifacts-dir",
-            str(root),
-            "deepdive",
-            "broker-flow",
-        ],
-    )
-    assert dd.exit_code == 0, dd.stdout
-    dpacks = list((root / "broker-flow").glob("*_deepdive"))
-    assert dpacks
-    assert (dpacks[0] / "suggestions.md").is_file()
 
 
 def test_explore_no_pager_verbose():
