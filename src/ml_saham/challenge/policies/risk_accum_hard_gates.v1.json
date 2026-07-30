@@ -1,0 +1,27 @@
+{
+  "policy_id": "risk.accum.hard_gates",
+  "version": "v1",
+  "hash": "riskgate02b7d5c1",
+  "protocol_id": "accum_path_v1",
+  "panel_kind": "accum_gates",
+  "score_kind": "gate_block",
+  "source": "ai-saham RiskEngine hard blocks on accum trade_setup (thin PolicySpec)",
+  "source_ref": "learning_observations trade_setup.blocking_gates / action",
+  "max_score": 1.0,
+  "components": [
+    {
+      "key": "bandar_gate",
+      "aliases": ["BandarGate", "bandar"],
+      "weight": 1.0,
+      "enabled": true,
+      "note": "1.0 if BandarGate fired on observation"
+    },
+    {
+      "key": "liquidity_gate",
+      "aliases": ["LiquidityGate", "liquidity"],
+      "weight": 1.0,
+      "enabled": true,
+      "note": "1.0 if LiquidityGate fired"
+    }
+  ]
+}

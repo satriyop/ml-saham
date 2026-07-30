@@ -615,6 +615,14 @@ def challenge_list_cmd() -> None:
         "[dim]Diagnostic: ml-saham challenge diagnostic list | "
         "run mce.screen_display --all[/dim]"
     )
+    console.print(
+        "[dim]Signal: ml-saham challenge run signal.accum.raw_score "
+        "--against equal_sleeves[/dim]"
+    )
+    console.print(
+        "[dim]Gate:   ml-saham challenge run risk.accum.hard_gates "
+        "--against gate_off[/dim]"
+    )
 
 
 @diagnostic_app.command("list")
