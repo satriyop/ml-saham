@@ -1,0 +1,41 @@
+{
+  "policy_id": "signal.accum.flags",
+  "version": "v1",
+  "hash": "sigflg03c1d2e4a8",
+  "protocol_id": "accum_path_v1",
+  "panel_kind": "accum_signal_flags",
+  "score_kind": "flag_penalty_adjusted",
+  "source": "ai-saham signal_engine.yaml flags (do-no-harm penalties)",
+  "source_ref": "config/signal_engine.yaml flags.valuation_stretched|analyst_bearish|insider_selling",
+  "max_score": 100.0,
+  "components": [
+    {
+      "key": "production_raw_score",
+      "aliases": ["raw_score", "score"],
+      "weight": 1.0,
+      "enabled": true,
+      "note": "Base signal.raw_score before flag penalties"
+    },
+    {
+      "key": "valuation_stretched",
+      "aliases": ["VALUATION_STRETCHED", "valuation"],
+      "weight": 10.0,
+      "enabled": true,
+      "note": "score_penalty 10 when flag fired (0/1 in panel)"
+    },
+    {
+      "key": "analyst_bearish",
+      "aliases": ["ANALYST_BEARISH", "analyst"],
+      "weight": 8.0,
+      "enabled": true,
+      "note": "score_penalty 8"
+    },
+    {
+      "key": "insider_selling",
+      "aliases": ["INSIDER_SELLING", "insider"],
+      "weight": 12.0,
+      "enabled": true,
+      "note": "score_penalty 12"
+    }
+  ]
+}

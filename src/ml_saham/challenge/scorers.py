@@ -21,6 +21,38 @@ def score_production(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[f
         return [float(r.components.get("official_rank_score", 0.0)) for r in rows]
     if policy.score_kind == "raw_score_primary":
         return [float(r.components.get("production_raw_score", 0.0)) for r in rows]
+    if policy.score_kind == "flag_penalty_adjusted":
+        # raw_score − sum(weight_i) for each fired flag (component value 0/1)
+        flag_keys = [c.key for c in policy.enabled_components() if c.key != "production_raw_score"]
+        wmap = {c.key: c.weight for c in policy.enabled_components()}
+        out: list[float] = []
+        for r in rows:
+            raw = float(r.components.get("production_raw_score", 0.0))
+            pen = 0.0
+            for k in flag_keys:
+                if float(r.components.get(k, 0.0)) > 0.5:
+                    pen += float(wmap.get(k, 0.0))
+            out.append(raw - pen)
+        return out
+    if policy.score_kind == "classification_band":
+        # Map raw score through strong/moderate floors → 100 / 50 / 0
+        strong = 70.0
+        moderate = 45.0
+        for c in policy.components:
+            if c.key == "strong_min":
+                strong = float(c.weight)
+            elif c.key == "moderate_min":
+                moderate = float(c.weight)
+        out = []
+        for r in rows:
+            raw = float(r.components.get("production_raw_score", 0.0))
+            if raw >= strong:
+                out.append(100.0)
+            elif raw >= moderate:
+                out.append(50.0)
+            else:
+                out.append(0.0)
+        return out
     if policy.score_kind == "gate_block":
         # 1.0 = allowed (open), 0.0 = blocked by any enabled gate
         keys = enabled_keys(policy)
@@ -33,10 +65,59 @@ def score_production(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[f
     return [float(sum(r.components.get(k, 0.0) for k in keys)) for r in rows]
 
 
+def score_flags_off(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[float]:
+    """Challenger: ignore flag penalties — raw_score only."""
+    del policy
+    return [float(r.components.get("production_raw_score", 0.0)) for r in rows]
+
+
+def score_classification_shift(
+    rows: Sequence[PanelRow],
+    policy: PolicySnapshot,
+    *,
+    strong_delta: float = 5.0,
+    moderate_delta: float = 5.0,
+) -> list[float]:
+    """Challenger: shift STRONG/MODERATE floors (default +5 / +5)."""
+    strong = 70.0
+    moderate = 45.0
+    for c in policy.components:
+        if c.key == "strong_min":
+            strong = float(c.weight)
+        elif c.key == "moderate_min":
+            moderate = float(c.weight)
+    strong += strong_delta
+    moderate += moderate_delta
+    out: list[float] = []
+    for r in rows:
+        raw = float(r.components.get("production_raw_score", 0.0))
+        if raw >= strong:
+            out.append(100.0)
+        elif raw >= moderate:
+            out.append(50.0)
+        else:
+            out.append(0.0)
+    return out
+
+
 def score_gate_off(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[float]:
     """Challenger: never block — all names allowed (1.0)."""
     del policy
     return [1.0] * len(rows)
+
+
+def score_gate_off_named(
+    rows: Sequence[PanelRow],
+    policy: PolicySnapshot,
+    gate_key: str,
+) -> list[float]:
+    """Challenger: disable one gate; other enabled gates still block."""
+    keys = [k for k in enabled_keys(policy) if k != gate_key]
+    out: list[float] = []
+    for r in rows:
+        blocked = any(float(r.components.get(k, 0.0)) > 0.0 for k in keys)
+        out.append(0.0 if blocked else 1.0)
+    return out
 
 
 def mean_excess_allowed(

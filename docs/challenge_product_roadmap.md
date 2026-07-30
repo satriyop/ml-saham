@@ -97,10 +97,11 @@ Suggested policy evolution:
 
 | policy_id | Focus | Status |
 |-----------|--------|--------|
-| `signal.accum.raw_score` | Production raw_score (+ group features for equal/ridge) vs excess@H | **Shipped** |
-| flags / 70–45 cuts / full group weights | Later | Open |
+| `signal.accum.raw_score` | Production raw_score (+ group features) vs excess@H | **Shipped** |
+| `signal.accum.flags` | raw − do-no-harm penalties vs `flags_off` | **Shipped (P2 deepen)** |
+| `signal.accum.classification` | 70/45 band score vs `threshold_shift` (+5) | **Shipped (P2 deepen)** |
 
-CLI: `challenge run signal.accum.raw_score --against equal_sleeves` · `challenge engine signal`.
+CLI: `challenge engine signal --scenario accum`.
 
 ---
 
@@ -108,9 +109,9 @@ CLI: `challenge run signal.accum.raw_score --against equal_sleeves` · `challeng
 
 | policy_id | Against | Metric (not sleeve IC) |
 |-----------|---------|-------------------------|
-| `risk.accum.hard_gates` | `gate_off` | Mean excess among **allowed** names; report block rate |
+| `risk.accum.hard_gates` | `gate_off` / `gate_off:<gate>` | Mean excess among **allowed**; bandar/liquidity/fundamental/free_float/technical |
 
-CLI: `challenge run risk.accum.hard_gates --against gate_off` · `challenge engine risk`.
+CLI: `challenge run risk.accum.hard_gates --against gate_off` · `gate_off:bandar_gate` · `challenge engine risk`.
 
 ---
 

@@ -474,7 +474,20 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                     gates.append("BandarGate")
                 if seed % 11 == 0:
                     gates.append("LiquidityGate")
+                if seed % 13 == 0:
+                    gates.append("FundamentalGate")
+                if seed % 17 == 0:
+                    gates.append("FreeFloatGate")
+                if seed % 19 == 0:
+                    gates.append("TechnicalGate")
                 action = "BLOCKED" if gates else "ALLOW"
+                sig_flags = []
+                if seed % 5 == 0:
+                    sig_flags.append("VALUATION_STRETCHED")
+                if seed % 6 == 0:
+                    sig_flags.append("ANALYST_BEARISH")
+                if seed % 8 == 0:
+                    sig_flags.append("INSIDER_SELLING")
                 for purpose in (
                     "ACCUMULATION_DISCOVERY",
                     "PRE_OPEN_AUCTION_DIRECTION",
@@ -487,6 +500,7 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                             "raw_score": raw,
                             "raw_exact_score": raw,
                             "score": raw,
+                            "flags": sig_flags,
                             "alpha_trigger_score": {
                                 "group_contributions": group_contribs,
                             },

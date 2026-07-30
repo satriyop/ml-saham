@@ -24,6 +24,19 @@ ml-saham challenge engine signal --scenario accum
 
 Same as accum path: `accum_path_v1` (H=10 primary; report 3/10/20).
 
+## Related signal policies (P2 deepen)
+
+| policy_id | Against | Note |
+|-----------|---------|------|
+| `signal.accum.flags` | `flags_off` | raw − flag penalties (10/8/12) |
+| `signal.accum.classification` | `threshold_shift` | 70/45 band scores vs +5 floors |
+
+```bash
+ml-saham challenge run signal.accum.flags --against flags_off
+ml-saham challenge run signal.accum.classification --against threshold_shift
+ml-saham challenge engine signal --scenario accum
+```
+
 ## Not this policy
 
 - Sleeve AccumScore weights → `screener.accum.score_weights`

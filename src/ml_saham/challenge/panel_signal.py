@@ -39,11 +39,7 @@ def _group_scores(payload: dict[str, Any]) -> dict[str, float]:
     return out
 
 
-def extract_signal_components(
-    payload: dict[str, Any],
-    policy: PolicySnapshot,
-) -> dict[str, float] | None:
-    signal = payload.get("signal") if isinstance(payload.get("signal"), dict) else {}
+def _extract_raw(payload: dict[str, Any], signal: dict[str, Any]) -> float | None:
     raw = _f(signal.get("raw_score"))
     if raw is None:
         raw = _f(signal.get("raw_exact_score"))
@@ -53,10 +49,55 @@ def extract_signal_components(
         fp = payload.get("sub_signal_fingerprint")
         if isinstance(fp, dict):
             raw = _f(fp.get("raw_signal_score"))
+    return raw
+
+
+def _flag_fires(payload: dict[str, Any], signal: dict[str, Any], key: str, aliases: tuple[str, ...]) -> float:
+    """Return 1.0 if flag fired, else 0.0."""
+    names = {key.lower(), *(a.lower() for a in aliases)}
+    # list of flag codes
+    for src in (
+        signal.get("flags"),
+        payload.get("flags"),
+        signal.get("do_no_harm_flags"),
+        signal.get("active_flags"),
+    ):
+        if isinstance(src, list):
+            for item in src:
+                if str(item or "").lower().replace("-", "_") in names:
+                    return 1.0
+        if isinstance(src, dict):
+            for k, v in src.items():
+                kl = str(k).lower().replace("-", "_")
+                if kl in names and v not in (None, False, 0, "0", ""):
+                    return 1.0
+    return 0.0
+
+
+def extract_signal_components(
+    payload: dict[str, Any],
+    policy: PolicySnapshot,
+) -> dict[str, float] | None:
+    signal = payload.get("signal") if isinstance(payload.get("signal"), dict) else {}
+    raw = _extract_raw(payload, signal)
     if raw is None:
         return None
 
     found: dict[str, float] = {"production_raw_score": raw}
+
+    if policy.panel_kind == "accum_signal_flags" or policy.score_kind in (
+        "flag_penalty_adjusted",
+        "classification_band",
+    ):
+        for c in policy.components:
+            if c.key in ("production_raw_score", "strong_min", "moderate_min"):
+                continue
+            if c.key in ("strong_min", "moderate_min"):
+                continue
+            found[c.key] = _flag_fires(payload, signal, c.key, c.aliases)
+        # thresholds stored as weights in policy, not row features
+        return found
+
     groups = _group_scores(payload)
     for c in policy.components:
         if c.key == "production_raw_score":
@@ -148,5 +189,8 @@ def build_signal_panel(
             )
         if dropped:
             notes.append(f"dropped {dropped} rows missing primary H={primary_horizon}")
-        notes.append(f"signal_panel n={len(out)} policy={policy.policy_id}")
+        notes.append(
+            f"signal_panel n={len(out)} policy={policy.policy_id} "
+            f"panel_kind={policy.panel_kind}"
+        )
         return out, notes

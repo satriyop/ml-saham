@@ -15,6 +15,8 @@ _POLICY_FILES: dict[str, str] = {
     "screener.pre_open.iev_rank": "pre_open_iev_rank.v1.json",
     "screener.pre_open.directional_score": "pre_open_directional_score.v1.json",
     "signal.accum.raw_score": "signal_accum_raw_score.v1.json",
+    "signal.accum.flags": "signal_accum_flags.v1.json",
+    "signal.accum.classification": "signal_accum_classification.v1.json",
     "risk.accum.hard_gates": "risk_accum_hard_gates.v1.json",
 }
 

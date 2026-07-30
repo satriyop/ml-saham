@@ -21,8 +21,11 @@ from ml_saham.challenge.champion import (
 )
 from ml_saham.challenge.scorers import (
     mean_excess_allowed,
+    score_classification_shift,
     score_equal_sleeves,
+    score_flags_off,
     score_gate_off,
+    score_gate_off_named,
     score_production,
     score_ridge_reweight,
 )
@@ -224,7 +227,7 @@ def prepare_accum_panel(
             horizons=protocol.horizons_report,
             primary_horizon=protocol.primary_horizon,
         )
-    elif policy.panel_kind == "accum_signal":
+    elif policy.panel_kind in ("accum_signal", "accum_signal_flags"):
         ok, vet_notes = _vet_for_accum(path, protocol)
         if not ok:
             return AccumPanelPrep(
@@ -458,6 +461,34 @@ def run_policy_challenge(
             if against in ("gate_off", "off", "allow_all"):
                 ag_s = score_gate_off(test, policy)
                 coefs = {c.key: 0.0 for c in policy.enabled_components()}
+            elif against.startswith("gate_off:") or against.startswith("off:"):
+                gkey = against.split(":", 1)[1].strip().lower().replace("-", "_")
+                # resolve alias to canonical enabled key
+                canon = None
+                for c in policy.enabled_components():
+                    if c.key.lower() == gkey or gkey in {a.lower() for a in c.aliases}:
+                        canon = c.key
+                        break
+                if canon is None:
+                    known = ", ".join(c.key for c in policy.enabled_components())
+                    return ChallengeResult(
+                        status=ChallengeStatus.BLOCKED_POLICY,
+                        policy_id=policy.policy_id,
+                        protocol_id=protocol.protocol_id,
+                        baseline_id=baseline,
+                        against_id=against,
+                        policy_hash=policy.hash,
+                        n_rows=len(rows),
+                        primary_horizon=protocol.primary_horizon,
+                        lines=[
+                            f"Unknown gate for ablation {against!r}. "
+                            f"Enabled gates: {known}"
+                        ],
+                        notes=[f"unknown gate_off key in {against}"],
+                    )
+                ag_s = score_gate_off_named(test, policy, canon)
+                coefs = {c.key: (0.0 if c.key == canon else 1.0) for c in policy.enabled_components()}
+                notes.append(f"gate ablation: off {canon!r} only")
             elif against == "production":
                 ag_s = score_production(test, policy)
                 coefs = policy.weight_map()
@@ -473,7 +504,7 @@ def run_policy_challenge(
                     primary_horizon=protocol.primary_horizon,
                     lines=[
                         f"Unknown gate challenger {against!r}. "
-                        "Use gate_off (or ridge/equal remaps to gate_off)."
+                        "Use gate_off, gate_off:<gate_key>, or ridge/equal remaps to gate_off."
                     ],
                     notes=[f"unknown gate against={against}"],
                 )
@@ -505,18 +536,95 @@ def run_policy_challenge(
             last_coefs = coefs
             continue
 
-        if against in ("equal_sleeves", "equal"):
+        scored = False
+        if policy.score_kind == "flag_penalty_adjusted":
+            if against in (
+                "flags_off",
+                "flag_off",
+                "no_flags",
+                "equal_sleeves",
+                "equal",
+                "ridge_reweight",
+                "ridge",
+            ):
+                if against not in ("flags_off", "flag_off", "no_flags"):
+                    notes.append(f"flags policy: remapped against={against!r} → flags_off")
+                against = "flags_off"
+                ag_s = score_flags_off(test, policy)
+                coefs = {"production_raw_score": 1.0}
+            elif against == "production":
+                ag_s = score_production(test, policy)
+                coefs = policy.weight_map()
+            else:
+                return ChallengeResult(
+                    status=ChallengeStatus.BLOCKED_POLICY,
+                    policy_id=policy.policy_id,
+                    protocol_id=protocol.protocol_id,
+                    baseline_id=baseline,
+                    against_id=against,
+                    policy_hash=policy.hash,
+                    n_rows=len(rows),
+                    primary_horizon=protocol.primary_horizon,
+                    lines=[f"Unknown flags challenger {against!r}. Use flags_off."],
+                    notes=[f"unknown flags against={against}"],
+                )
+            last_coefs = coefs
+            scored = True
+        elif policy.score_kind == "classification_band":
+            if against in (
+                "threshold_shift",
+                "threshold_shift_up",
+                "equal_sleeves",
+                "equal",
+                "ridge_reweight",
+                "ridge",
+            ):
+                if against not in ("threshold_shift", "threshold_shift_up"):
+                    notes.append(
+                        f"classification policy: remapped against={against!r} "
+                        "→ threshold_shift"
+                    )
+                against = "threshold_shift"
+                ag_s = score_classification_shift(test, policy)
+                coefs = {"strong_min": 75.0, "moderate_min": 50.0}
+            elif against == "production":
+                ag_s = score_production(test, policy)
+                coefs = policy.weight_map()
+            else:
+                return ChallengeResult(
+                    status=ChallengeStatus.BLOCKED_POLICY,
+                    policy_id=policy.policy_id,
+                    protocol_id=protocol.protocol_id,
+                    baseline_id=baseline,
+                    against_id=against,
+                    policy_hash=policy.hash,
+                    n_rows=len(rows),
+                    primary_horizon=protocol.primary_horizon,
+                    lines=[
+                        f"Unknown classification challenger {against!r}. "
+                        "Use threshold_shift."
+                    ],
+                    notes=[f"unknown classification against={against}"],
+                )
+            last_coefs = coefs
+            scored = True
+        elif against in ("equal_sleeves", "equal"):
             ag_s = score_equal_sleeves(test, policy)
             coefs = {c.key: 1.0 for c in policy.enabled_components()}
+            scored = True
         elif against in ("ridge_reweight", "ridge"):
             ag_s, coefs = score_ridge_reweight(
                 train, test, policy, primary_horizon=protocol.primary_horizon
             )
             last_coefs = coefs
+            scored = True
         elif against == "production":
             ag_s = score_production(test, policy)
             coefs = policy.weight_map()
-        elif against in ("gate_off", "off", "allow_all"):
+            scored = True
+        elif against in ("gate_off", "off", "allow_all") or against.startswith(
+            "gate_off:"
+        ):
             return ChallengeResult(
                 status=ChallengeStatus.BLOCKED_POLICY,
                 policy_id=policy.policy_id,
@@ -531,6 +639,19 @@ def run_policy_challenge(
                     f"(this policy is {policy.score_kind!r})"
                 ],
                 notes=["gate_off on non-gate policy"],
+            )
+        elif against in ("flags_off", "threshold_shift"):
+            return ChallengeResult(
+                status=ChallengeStatus.BLOCKED_POLICY,
+                policy_id=policy.policy_id,
+                protocol_id=protocol.protocol_id,
+                baseline_id=baseline,
+                against_id=against,
+                policy_hash=policy.hash,
+                n_rows=len(rows),
+                primary_horizon=protocol.primary_horizon,
+                lines=[f"{against} not valid for score_kind={policy.score_kind!r}"],
+                notes=[f"wrong challenger {against} for {policy.score_kind}"],
             )
         elif champion_mode:
             ag_s_opt, coefs, ch_err = score_champion(
@@ -569,9 +690,11 @@ def run_policy_challenge(
                 f"champion fold={fi} n_train_ok={int(coefs.get('_n_train_ok', 0))} "
                 f"n_test={len(test)}"
             )
+            scored = True
         else:
             known = (
-                "equal_sleeves|ridge_reweight|lgbm_reweight|elastic_net_reweight|gate_off"
+                "equal_sleeves|ridge_reweight|lgbm_reweight|elastic_net_reweight|"
+                "gate_off|gate_off:<gate>|flags_off|threshold_shift"
             )
             return ChallengeResult(
                 status=ChallengeStatus.BLOCKED_POLICY,
@@ -584,6 +707,20 @@ def run_policy_challenge(
                 primary_horizon=protocol.primary_horizon,
                 lines=[f"Unknown challenger {against!r}. Use {known}"],
                 notes=[f"unknown against={against}"],
+            )
+
+        if not scored:
+            return ChallengeResult(
+                status=ChallengeStatus.BLOCKED_POLICY,
+                policy_id=policy.policy_id,
+                protocol_id=protocol.protocol_id,
+                baseline_id=baseline,
+                against_id=against,
+                policy_hash=policy.hash,
+                n_rows=len(rows),
+                primary_horizon=protocol.primary_horizon,
+                lines=["internal: challenger not scored"],
+                notes=["scored=False"],
             )
 
         ph = protocol.primary_horizon

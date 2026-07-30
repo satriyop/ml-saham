@@ -27,6 +27,7 @@ ml-saham challenge list
 # 2 — weekly ritual
 ml-saham challenge health --with-diagnostics
 # optional deeper weekly: --with-factors --with-champion
+# install cron: ./scripts/install_challenge_health_cron.sh
 
 # 3 — on-demand digs (when retuning)
 ml-saham challenge engine signal --scenario accum
@@ -142,8 +143,9 @@ Prefer **tune vs champion** for purpose (not a third product axis).
 | Layer | Product surface |
 |-------|-----------------|
 | Accum sleeves (7; BB off) | `screener.accum.score_weights` |
-| Signal raw score | `signal.accum.raw_score` |
-| Risk hard gates | `risk.accum.hard_gates` (mean excess open — not sleeve IC) |
+| Signal | `signal.accum.raw_score` · `flags` · `classification` |
+| Risk hard gates | `risk.accum.hard_gates` (+ `gate_off:<gate>`; mean excess open) |
+| Weekly cron | `scripts/install_challenge_health_cron.sh` → `health --with-diagnostics` |
 | Diagnostics | `challenge diagnostic` (display/promote-candidate only) |
 | Screen hard filters (P1) | **Skipped** (unused knobs) |
 | Action ENTER desk (P4) | **Deferred** |
@@ -168,6 +170,8 @@ Live judgment inventory (ai-saham): `docs/evidence_diagnostic_factor_accum.md`.
 | Scenario | Policy id | Protocol | Operator note |
 |----------|-----------|----------|---------------|
 | `accum` | `signal.accum.raw_score` | `accum_path_v1` | [challenge_signal_raw_score.md](./challenge_signal_raw_score.md) |
+| `accum` | `signal.accum.flags` | `accum_path_v1` | vs `flags_off` (penalties 10/8/12) |
+| `accum` | `signal.accum.classification` | `accum_path_v1` | vs `threshold_shift` (70/45 bands) |
 
 ### Engine: `risk`
 

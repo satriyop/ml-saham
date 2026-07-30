@@ -29,6 +29,8 @@ ENGINE_POLICIES: dict[str, dict[str, list[str]]] = {
     "signal": {
         "accum": [
             "signal.accum.raw_score",
+            "signal.accum.flags",
+            "signal.accum.classification",
         ],
     },
     "risk": {

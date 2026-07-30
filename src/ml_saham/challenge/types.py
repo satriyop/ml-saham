@@ -80,6 +80,16 @@ class PolicySnapshot:
                 for c in self.components
                 if c.key != "production_raw_score"
             )
+        if self.score_kind == "flag_penalty_adjusted":
+            return tuple(
+                c.key
+                for c in self.components
+                if c.enabled and c.key != "production_raw_score"
+            )
+        if self.score_kind == "classification_band":
+            return ("production_raw_score",)
+        if self.score_kind == "gate_block":
+            return tuple(c.key for c in self.enabled_components())
         return tuple(c.key for c in self.enabled_components())
 
 
