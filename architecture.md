@@ -10,7 +10,7 @@ Curriculum: [chapters.md](./chapters.md) · UX: [ux.md](./ux.md) · Data: [data_
 
 ## Goals that constrain architecture
 
-1. **Challenge first** — policy tournaments + factor keep/drop under fixed protocols (ADR-001, **ADR-002**). Legacy chapter-loop is not the target design.  
+1. **Challenge first** — policy tournaments + factor keep/drop under fixed protocols (ADR-001, **ADR-002**). Chapter-loop product surface is retired.  
 2. **Learning second** — chapter modules teach problems so audits are interpretable (`explore` / light `demo`).  
 3. Emit artifacts usable to tune `ai-saham` (**never auto-promote**).  
 4. Read real market data from `ai-saham` SQLite **or** a derived learning DB.  

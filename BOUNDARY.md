@@ -112,7 +112,7 @@ Challenge excess and corpus SUCCESS/FAILURE labels remain **different products**
 | **WIN / LOSE** | N/A for research accum | Challenge verdict only |
 | **primary 10d / H=10** | `price_path.accum_10d.v1` path label | Protocol primary horizon for IC |
 
-Curriculum `compare` / `challenge legacy` are **not** promotion authority (ADR-001 / ADR-002).
+Curriculum `compare` is **not** promotion authority (ADR-001 / ADR-002). Chapter-loop challenge batch is retired.
 
 ---
 

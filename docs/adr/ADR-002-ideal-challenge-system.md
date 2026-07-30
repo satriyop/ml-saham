@@ -1,8 +1,8 @@
 # ADR-002: Ideal Challenge System (greenfield)
 
-**Status:** Accepted (design target — replaces current chapter-loop runner)  
+**Status:** Accepted (product target; chapter-loop runner retired)  
 **Date:** 2026-07-29  
-**Supersedes (implementation intent):** ad-hoc `ENGINE_FACTORS` → `run_compare` slug dump in `eval/challenge.py`  
+**Supersedes:** ad-hoc `ENGINE_FACTORS` → `run_compare` slug dump in `eval/challenge.py` (removed)  
 **Related:** [ADR-001](./ADR-001-challenge-first-product-axis.md) · [engine_factor_map.md](../engine_factor_map.md) · ai-saham label contracts (e.g. ADR-056 accum path; signal horizon tags)
 
 ---
@@ -280,7 +280,7 @@ English only.
 | Now | ADR-002 is **source of truth** for design; stop extending the slug-dump runner except bugfixes |
 | Next | Implement `vet` + PolicySpec registry + one end-to-end accum policy challenge @ H=10 |
 | Then | `challenge factor` validity track; engine portfolios |
-| Last | Delete or quarantine chapter-loop `ENGINE_FACTORS` batch as non-product |
+| Done | Chapter-loop `ENGINE_FACTORS` / `challenge legacy` **retired** (removed from product) |
 
 Learning chapters may keep `run_compare` for pedagogy; **product challenge** must not depend on them.
 
@@ -309,7 +309,7 @@ Learning chapters may keep `run_compare` for pedagogy; **product challenge** mus
 - [x] Second policy: **pre-open IEV rank** (`screener.pre_open.iev_rank`, protocol `pre_open_session_v1`, same-session open→close)
 - [x] Pre-open **observation** policy (`screener.pre_open.directional_score`, raw_score + features; data-tolerant BLOCKED when thin)
 - [x] Engine portfolio `challenge engine screener` (+ `--scenario accum|pre-open`) on PolicySpecs only
-- [ ] Retire chapter-loop challenge CLI (`challenge legacy`)  
+- [x] Retire chapter-loop challenge CLI (`challenge legacy`) and `eval/challenge.py`  
 
 ---
 

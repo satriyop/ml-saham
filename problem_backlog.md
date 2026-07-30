@@ -39,7 +39,7 @@ See also: [docs/engine_factor_map.md](./docs/engine_factor_map.md).
 | Idea | Tier | Why | Data | Slot |
 |---|---|---|---|---|
 | **Sector macro context** (routed macros per sector group; ADR-053) | Hard | Distinct from peer breadth; may become score input later | macro series + sector group map; fingerprints `smc_*` | New challenge slug `sector-macro` under `market_context` when ready |
-| Insider as **engine-map** factor | Medium | Already a curriculum chapter; SignalEngine penalties | `insider_cache` | Add `insider` to `ENGINE_FACTORS` if batch audit desired |
+| Insider as **policy / gate** input | Medium | Already a curriculum chapter; SignalEngine penalties | `insider_cache` | Add PolicySpec or gate track if scoring uses insider heavily |
 | Setup phase / readiness | Hard | Swing lens / phase gates | observation labels | Deepdive / later slug — not scheduled |
 | Source-field / reconciliation DQ | Medium | Trust of caches | DQ tables / contracts | Prefer `data-integrity` + doctor (shipped Ch.45) |
 

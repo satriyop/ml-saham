@@ -195,9 +195,10 @@ That is intentional, not a failed install.
 
 | Surface | Role |
 |---------|------|
-| `challenge legacy …` | Pre-ADR-002 chapter-loop batch |
-| `compare <slug>` / `demo` | Curriculum / lab |
+| `compare <slug>` / `demo` | Curriculum / lab (chapter `run_compare` is pedagogy only) |
 | `explore` | Indonesian problem framing |
+
+Pre-ADR-002 chapter-loop batch (`challenge legacy` / `ENGINE_FACTORS`) is **retired** — not available as a product path.
 
 ---
 

@@ -1,9 +1,9 @@
-# Challenge acceptance (ADR-001)
+# Challenge acceptance (ADR-002)
 
-Definition of **done** for the challenge axis of `ml-saham`.  
-Product decision: [docs/adr/ADR-001-challenge-first-product-axis.md](./docs/adr/ADR-001-challenge-first-product-axis.md)  
-Engine map SSOT: `src/ml_saham/eval/challenge.py` → `ENGINE_FACTORS`
+Definition of **done** for the challenge product axis of `ml-saham`.  
+Product decision: [docs/adr/ADR-002-ideal-challenge-system.md](./docs/adr/ADR-002-ideal-challenge-system.md) · map: [docs/challenge_product.md](./docs/challenge_product.md)
 
+**Product SSOT:** `src/ml_saham/challenge/` — PolicySpecs, protocols, runner, engines, health.  
 Curriculum acceptance (historical): [mvp_acceptance.md](./mvp_acceptance.md) · [v1_1_acceptance.md](./v1_1_acceptance.md) · [phase2_acceptance.md](./phase2_acceptance.md)
 
 ---
@@ -11,24 +11,29 @@ Curriculum acceptance (historical): [mvp_acceptance.md](./mvp_acceptance.md) · 
 ## Global
 
 - [x] Challenge outranks curriculum polish when priorities conflict (ADR-001)  
-- [x] Every slug in `ENGINE_FACTORS` is loadable and implements **`run_compare`**  
-- [x] Fixture suite runs full `run_full_challenge` with **zero factor errors**  
-- [x] CLI: `ml-saham challenge all` exports JSON + Markdown  
-- [x] No silent weak models that invent wins: hard fail or documented fallback (e.g. ridge when XGBoost missing)  
+- [x] Policy registry loads every registered `policy_id` with a known protocol  
+- [x] Engine portfolio `screener` covers registered PolicySpecs only  
+- [x] CLI: `challenge list` / `run` / `engine` / `factor` / `health` / `champion` / `promote-packet`  
+- [x] Chapter-loop product surface **retired** (`challenge legacy` removed; no `ENGINE_FACTORS` batch)  
+- [x] Honest statuses: WIN / LOSE / INCONCLUSIVE / BLOCKED_* (no silent fake wins)  
 - [x] CI installs `pip install -e ".[ml,dev]"` and runs challenge + core tests  
-- [ ] **Language:** new challenge / compare learner-facing strings are **English** (learning `explore` stays Indonesian) — migrate legacy ID challenge copy over time (ADR-001 §5)  
+- [ ] **Language:** new challenge learner-facing strings are **English** (learning `explore` stays Indonesian)
 
 ---
 
-## Engine groups
+## Product surface
 
-| Group | Factors | Gate |
-|---|---|---|
-| `screener` | pre-open + accum factors | `challenge screener` / scenarios |
-| `signal_engine` | meta-ensemble, factor-score, … | `challenge engine --category signal` |
-| `risk_engine` | vol sizing, portfolio, gates, distress | `challenge engine --category risk` |
-| `market_context` | regime, breadth, nowcast, micro | `challenge engine --category market` |
-| `other_aspects` | clusters, graph, WF, RL, … | `challenge other` |
+| Surface | Role | Gate |
+|---------|------|------|
+| Policy registry | Frozen PolicySnapshots | `list_policy_ids` / `load_policy` |
+| Protocols | Horizons, folds, win margin | `accum_path_v1`, `pre_open_session_v1` |
+| `challenge run` | Production vs challenger (tune) | fixture + maintainer DB |
+| `challenge engine` | PolicySpec portfolio rollup | `screener` ± scenario |
+| `challenge factor` | KEEP / DEMOTE / DROP_CANDIDATE | accum sleeves |
+| `challenge health` | Control tower pack | engine ± champion ± factors |
+| `vet` / `doctor --deep` | Data-plane gate | fixture + maintainer DB |
+
+Curriculum `compare <slug>` remains for learning labs — **not** promotion authority.
 
 ---
 
@@ -37,12 +42,16 @@ Curriculum acceptance (historical): [mvp_acceptance.md](./mvp_acceptance.md) · 
 ```bash
 pip install -e ".[ml,dev]"
 pytest tests/test_challenge_acceptance.py -q
-ml-saham --db "$ML_SAHAM_DB" challenge all --export-md /tmp/challenge.md
+ml-saham challenge list
+ml-saham --db "$ML_SAHAM_DB" challenge run screener.accum.score_weights --against equal_sleeves
+ml-saham --db "$ML_SAHAM_DB" challenge engine screener --scenario accum
+ml-saham --db "$ML_SAHAM_DB" challenge health
 ```
 
 ---
 
 ## Status
 
-**Challenge acceptance suite shipped** (fixture-level).  
-Maintainer DB smoke remains optional and environment-specific.
+**ADR-002 acceptance suite** (fixture-level).  
+Maintainer DB smoke remains optional and environment-specific.  
+Pre-ADR-002 chapter-loop batch (`eval/challenge.py` / `challenge legacy`) is **retired**.

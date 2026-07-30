@@ -27,7 +27,7 @@ Default `--against` is **`equal_sleeves`** (shared across the portfolio).
 | **Scenario** | `accum` \| `pre-open` (same word as research CLI / ADR-047) |
 | **Policy** | One PolicySpec; dig with `challenge run <policy_id>` |
 
-Not `--track`. Not the legacy chapter-loop (`challenge legacy screener`).
+Not `--track`. Not curriculum `compare` (learning only).
 
 ## Registry (v1)
 
@@ -49,7 +49,7 @@ Omit `--scenario` → all of the above.
 
 - Auto-promote into ai-saham  
 - Average ICs across different protocols/horizons  
-- Confuse with `challenge legacy`  
+- Treat curriculum `compare` as engine portfolio authority  
 
 ## Related
 

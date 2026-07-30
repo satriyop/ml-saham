@@ -42,7 +42,7 @@ app = typer.Typer(
 )
 challenge_app = typer.Typer(
     name="challenge",
-    help="ADR-002 policy challenges (run/list/engine) + legacy batch audit.",
+    help="ADR-002 policy challenges (run/list/engine/factor/health/champion).",
     no_args_is_help=True,
 )
 app.add_typer(challenge_app, name="challenge")
@@ -1126,7 +1126,7 @@ def challenge_engine_cmd(
         help="Skip artifact pack under artifacts/challenge/engine/",
     ),
 ) -> None:
-    """ADR-002 engine portfolio: PolicySpecs rollup (not chapter-loop legacy)."""
+    """ADR-002 engine portfolio: PolicySpecs rollup."""
     from ml_saham.challenge.engines import list_engines, run_engine_portfolio
 
     name_clean = name.strip().lower()
@@ -1145,9 +1145,6 @@ def challenge_engine_cmd(
         console.print(
             "[dim]Run: ml-saham challenge engine screener "
             "[--scenario accum|pre-open] --against equal_sleeves[/dim]"
-        )
-        console.print(
-            "[dim]Legacy chapter loop: ml-saham challenge legacy screener[/dim]"
         )
         raise typer.Exit(code=0)
 
@@ -1200,118 +1197,6 @@ def challenge_engine_cmd(
         console.print(f"[green]Saved Markdown to {export_md}[/green]")
 
     raise typer.Exit(code=result.exit_code())
-
-
-@challenge_app.command("legacy")
-def challenge_legacy_cmd(
-    ctx: typer.Context,
-    target: str = typer.Argument(
-        "all",
-        help="Legacy engine target: screener, engine, other, or all",
-    ),
-    as_of: Optional[str] = typer.Option(
-        None,
-        "--as-of",
-        help="as_of date (YYYY-MM-DD)",
-    ),
-    export_json: Optional[Path] = typer.Option(
-        None,
-        "--export-json",
-        help="Write legacy batch JSON",
-    ),
-    export_md: Optional[Path] = typer.Option(
-        None,
-        "--export-md",
-        help="Write legacy batch markdown",
-    ),
-    scenario: Optional[str] = typer.Option(
-        None,
-        "--scenario",
-        help="Legacy scenario (pre-open, accum)",
-    ),
-    category: Optional[str] = typer.Option(
-        None,
-        "--category",
-        help="Legacy engine category (risk, signal, market)",
-    ),
-    eval_type: Optional[str] = typer.Option(
-        None,
-        "--type",
-        help="Legacy eval type",
-    ),
-) -> None:
-    """Legacy chapter-loop batch audit (pre-ADR-002). Prefer: challenge run."""
-    from ml_saham.eval.challenge import (
-        challenge_engine,
-        challenge_other,
-        challenge_screener,
-        run_full_challenge,
-    )
-
-    db_path: Path = ctx.obj["db"]
-    target_clean = target.lower().strip()
-    chapter_ctx = _build_ctx(ctx, with_costs=False, as_of=as_of)
-    chapter_ctx.scenario = scenario
-    chapter_ctx.eval_type = eval_type
-
-    console.print(
-        "[bold cyan]=== LEGACY ENGINE CHALLENGE (chapter loop) ===[/bold cyan]"
-    )
-    console.print("[dim]Prefer: ml-saham challenge run screener.accum.score_weights[/dim]")
-    console.print(f"Database: {db_path}\n")
-
-    results: dict = {}
-    if target_clean in ("screener", "screen"):
-        results = {"screener": challenge_screener(chapter_ctx, scenario)}
-    elif target_clean == "engine":
-        results = {"engine": challenge_engine(chapter_ctx, category, eval_type)}
-    elif target_clean in ("other", "other_aspects"):
-        results = {"other_aspects": challenge_other(chapter_ctx)}
-    else:
-        results = run_full_challenge(chapter_ctx)
-
-    for cat, res in results.items():
-        console.print(f"\n[bold yellow]=== Category: {cat.upper()} ===[/bold yellow]")
-        for k, v in res.items():
-            if "error" in v:
-                console.print(f"[bold red]❌ {k}[/bold red]")
-                console.print(f"  [red]Error: {v['error']}[/red]")
-            else:
-                title = v.get("title", k)
-                console.print(f"\n[bold green]✅ {title}[/bold green] ([cyan]{k}[/cyan])")
-                if "model" in v:
-                    console.print(f"   [dim]Model:[/dim] {v['model']}")
-                against_m = v.get("against_metrics") or v.get("sota_metrics") or {}
-                baseline_m = v.get("baseline_metrics", {})
-                if against_m or baseline_m:
-                    console.print("   [dim]Metrics:[/dim]")
-                    if against_m:
-                        console.print(
-                            f"     [bold blue]Against / default:[/bold blue] {against_m}"
-                        )
-                    if baseline_m:
-                        console.print(f"     [bold blue]Baseline:[/bold blue] {baseline_m}")
-                summary = v.get("summary")
-                if summary:
-                    console.print(
-                        Panel(Markdown(summary), title="Audit notes", border_style="dim")
-                    )
-        console.print("─" * 60)
-
-    if export_json:
-        export_json.parent.mkdir(parents=True, exist_ok=True)
-        export_json.write_text(
-            json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-        console.print(f"\n[green]Saved challenge audit JSON to {export_json}[/green]")
-    if export_md:
-        export_md.parent.mkdir(parents=True, exist_ok=True)
-        md_text = (
-            f"# Legacy ai-saham Engine Challenge Report\n\n"
-            f"```json\n{json.dumps(results, indent=2)}\n```\n"
-        )
-        export_md.write_text(md_text, encoding="utf-8")
-        console.print(f"[green]Saved challenge audit Markdown report to {export_md}[/green]")
 
 
 @app.command("glossary")

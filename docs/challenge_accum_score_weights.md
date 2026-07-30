@@ -16,12 +16,6 @@ ml-saham challenge run screener.accum.score_weights --against equal_sleeves
 ml-saham challenge run screener.accum.score_weights --against ridge_reweight
 ```
 
-Legacy chapter-loop batch (not ADR-002):
-
-```bash
-ml-saham challenge legacy all
-```
-
 ## Baseline
 
 Frozen snapshot: `src/ml_saham/challenge/policies/accum_score_weights.v1.json`  

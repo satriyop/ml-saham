@@ -1,4 +1,4 @@
-"""Challenge acceptance — ENGINE_FACTORS contract + fixture smoke (ADR-001)."""
+"""Challenge acceptance — ADR-002 PolicySpec product surface (not chapter-loop)."""
 
 from __future__ import annotations
 
@@ -7,23 +7,15 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from ml_saham.challenge.engines import ENGINE_POLICIES, list_engines
+from ml_saham.challenge.policies.registry import list_policy_ids, load_policy
+from ml_saham.challenge.protocols import PROTOCOLS, get_protocol
 from ml_saham.chapters.loader import has_chapter_module, load_chapter
 from ml_saham.chapters.types import ChapterContext
 from ml_saham.cli.app import app
-from ml_saham.eval.challenge import (
-    ENGINE_FACTORS,
-    all_engine_slugs,
-    challenge_engine,
-    challenge_other,
-    challenge_screener,
-    challenge_summary,
-    run_full_challenge,
-)
 from tests.fixtures.build_mvp_fixture import build_mvp_fixture
 
 runner = CliRunner()
-
-ENGINE_SLUGS = all_engine_slugs()
 
 
 @pytest.fixture(autouse=True)
@@ -33,7 +25,6 @@ def _isolate_progress(tmp_path: Path, monkeypatch):
 
 @pytest.fixture
 def fixture_db(tmp_path: Path) -> Path:
-    # slightly longer history for walk-forward / seasonality-style splits
     return build_mvp_fixture(tmp_path / "challenge.db", min_bars=100)
 
 
@@ -42,121 +33,102 @@ def chapter_ctx(fixture_db: Path) -> ChapterContext:
     return ChapterContext(db_path=fixture_db, universe=[])
 
 
-def test_engine_factors_nonempty_and_unique():
-    assert set(ENGINE_FACTORS) >= {
-        "screener",
-        "signal_engine",
-        "risk_engine",
-        "market_context",
-        "other_aspects",
-    }
-    slugs = ENGINE_SLUGS
-    assert len(slugs) >= 30
-    assert len(slugs) == len(set(slugs))
+def test_policy_registry_nonempty_and_loadable():
+    ids = list_policy_ids()
+    assert len(ids) >= 3
+    assert "screener.accum.score_weights" in ids
+    assert "screener.pre_open.iev_rank" in ids
+    assert "screener.pre_open.directional_score" in ids
+    for pid in ids:
+        snap = load_policy(pid)
+        assert snap.policy_id
+        assert snap.protocol_id in PROTOCOLS
+        assert snap.components
 
 
-@pytest.mark.parametrize("slug", ENGINE_SLUGS)
-def test_engine_factor_has_run_compare(slug: str):
-    assert has_chapter_module(slug), slug
-    mod = load_chapter(slug)
-    assert hasattr(mod, "run_compare"), f"{slug} missing run_compare"
-    assert callable(mod.run_compare)
+def test_protocols_known():
+    assert "accum_path_v1" in PROTOCOLS
+    assert "pre_open_session_v1" in PROTOCOLS
+    accum = get_protocol("accum_path_v1")
+    assert accum.primary_horizon == 10
+    pre = get_protocol("pre_open_session_v1")
+    assert pre.primary_horizon == 0
 
 
-@pytest.mark.parametrize("slug", ENGINE_SLUGS)
-def test_engine_factor_compare_smoke(chapter_ctx: ChapterContext, slug: str):
-    """Every challenge factor must run_compare on the fixture without error."""
-    mod = load_chapter(slug)
-    from ml_saham.eval.challenge import _compare_kwargs
-
-    result = mod.run_compare(chapter_ctx, **_compare_kwargs(slug, mod.run_compare))
-    assert result is not None
-    assert getattr(result, "title", None)
-    # metrics dict present (may be empty for some labs)
-    assert hasattr(result, "metrics")
-
-
-def test_run_full_challenge_ok_rate(chapter_ctx: ChapterContext):
-    results = run_full_challenge(chapter_ctx)
-    # Flatten group maps
-    flat: dict = {}
-    for group, payload in results.items():
-        assert isinstance(payload, dict), group
-        flat.update(payload)
-
-    summary = {
-        "n_total": len(flat),
-        "n_ok": sum(1 for v in flat.values() if not v.get("error")),
-        "n_error": sum(1 for v in flat.values() if v.get("error")),
-        "errors": {k: v.get("error") for k, v in flat.items() if v.get("error")},
-    }
-    assert summary["n_total"] == len(ENGINE_SLUGS), summary
-    assert summary["n_error"] == 0, summary["errors"]
-    assert summary["n_ok"] == summary["n_total"]
+def test_engine_portfolio_covers_registered_policies():
+    engines = list_engines()
+    assert any(e["engine_id"] == "screener" for e in engines)
+    registered = set(list_policy_ids())
+    portfolio: set[str] = set()
+    for scenarios in ENGINE_POLICIES.values():
+        for pids in scenarios.values():
+            portfolio.update(pids)
+    assert portfolio <= registered
+    assert "screener.accum.score_weights" in portfolio
 
 
-def test_challenge_group_runners(chapter_ctx: ChapterContext):
-    scr = challenge_screener(chapter_ctx)
-    eng = challenge_engine(chapter_ctx)
-    oth = challenge_other(chapter_ctx)
-    assert scr and eng and oth
-    assert all(not v.get("error") for v in scr.values()), scr
-    assert all(not v.get("error") for v in eng.values()), eng
-    assert all(not v.get("error") for v in oth.values()), oth
+def test_challenge_list_cli():
+    r = runner.invoke(app, ["challenge", "list"])
+    assert r.exit_code == 0, r.stdout
+    assert "screener.accum.score_weights" in r.stdout
+    assert "accum_path_v1" in r.stdout or "protocol" in r.stdout.lower()
 
 
-def test_challenge_cli_exports(fixture_db: Path, tmp_path: Path):
-    json_path = tmp_path / "challenge.json"
-    md_path = tmp_path / "challenge.md"
+def test_challenge_run_cli(fixture_db: Path, tmp_path: Path):
     r = runner.invoke(
         app,
         [
             "--db",
             str(fixture_db),
+            "--artifacts-dir",
+            str(tmp_path / "arts"),
             "challenge",
-            "legacy",
-            "all",
-            "--export-json",
-            str(json_path),
-            "--export-md",
-            str(md_path),
+            "run",
+            "screener.accum.score_weights",
+            "--against",
+            "equal_sleeves",
         ],
     )
     assert r.exit_code == 0, r.stdout
-    assert "LEGACY ENGINE CHALLENGE" in r.stdout or "CHALLENGE" in r.stdout
-    text = json_path.read_text()
-    assert "screener" in text
-    assert "signal_engine" in text or "engine" in text or "meta-ensemble" in text
-    assert md_path.is_file() and md_path.stat().st_size > 50
+    out = r.stdout.upper()
+    assert any(
+        token in out
+        for token in ("WIN", "LOSE", "INCONCLUSIVE", "BLOCKED")
+    ), r.stdout
 
 
-def test_challenge_screener_scenario_cli(fixture_db: Path):
+def test_challenge_engine_cli(fixture_db: Path, tmp_path: Path):
     r = runner.invoke(
         app,
         [
             "--db",
             str(fixture_db),
+            "--artifacts-dir",
+            str(tmp_path / "arts"),
             "challenge",
-            "legacy",
+            "engine",
             "screener",
             "--scenario",
             "accum",
+            "--against",
+            "equal_sleeves",
         ],
     )
     assert r.exit_code == 0, r.stdout
-    assert "accum" in r.stdout.lower() or "ACCUM" in r.stdout or "policy" in r.stdout.lower()
+    assert "screener" in r.stdout.lower() or "score_weights" in r.stdout
 
 
-def test_challenge_summary_helper(chapter_ctx: ChapterContext):
-    # Single-group map
-    res = challenge_screener(chapter_ctx)
-    summary = challenge_summary({"screener": res})
-    assert summary["n_ok"] == summary["n_total"]
-    assert summary["n_error"] == 0
+def test_challenge_legacy_removed():
+    r = runner.invoke(app, ["challenge", "legacy", "all"])
+    assert r.exit_code != 0
+    # Typer unknown command or no such command
+    combined = (r.stdout or "") + (r.stderr or "")
+    assert "legacy" in combined.lower() or "No such command" in combined or r.exit_code == 2
 
 
-def test_data_integrity_in_engine_map_and_compare(chapter_ctx: ChapterContext):
-    assert "data-integrity" in ENGINE_FACTORS["other_aspects"]
+def test_data_integrity_chapter_compare(chapter_ctx: ChapterContext):
+    """Curriculum data-integrity still has run_compare (learning lab, not product authority)."""
+    assert has_chapter_module("data-integrity")
     mod = load_chapter("data-integrity")
     result = mod.run_compare(chapter_ctx)
     assert "integrity" in (result.metrics or {}) or "integrity_score" in (result.metrics or {})

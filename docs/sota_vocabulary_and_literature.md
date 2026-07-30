@@ -74,9 +74,9 @@ These support **vocabulary cleanup** later, not paper citations as “we ship SO
 | Preferred arm labeled SOTA | LightGBM vs Piotroski sum; HRP vs equal weight |
 | Mock / hardcoded “advanced” arm | Ichimoku CNN/RNN metrics; mock FinBERT scores |
 | Non-ML labeled SOTA | Polars pipeline vs pandas loops (Ch.19) |
-| Legacy CLI | `sota_metrics` keys in chapter-loop challenge output (transitional) |
+| Historical chapter-loop CLI | `sota_metrics` keys (retired with `challenge legacy`) |
 
-**Phase A done (2026-07-29):** curriculum UI copy uses **Default** (preferred arm) vs **Baseline**; metrics keys prefer `against_*` / `against_metrics`. Legacy CLI still accepts `sota_metrics` as alias. Discovery wording below kept for history.
+**Phase A done (2026-07-29):** curriculum UI copy uses **Default** (preferred arm) vs **Baseline**; metrics keys prefer `against_*` / `against_metrics`. Chapter compare may still accept `sota_metrics` as a transitional alias. Discovery wording below kept for history.
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Status:** Accepted  
 **Date:** 2026-07-29  
-**Related:** [architecture.md](../../architecture.md) · [chapters.md](../../chapters.md) · `src/ml_saham/eval/challenge.py`
+**Related:** [architecture.md](../../architecture.md) · [chapters.md](../../chapters.md) · `src/ml_saham/challenge/` (ADR-002)
 
 ---
 
@@ -24,38 +24,33 @@ Without an explicit decision, agents and future work keep recentering “finish 
 ## Decision
 
 1. **Primary product** = **challenge lab for `ai-saham`**  
-   - Spine: `ml-saham challenge`, `ml-saham compare <factor>`, engine groups in `ENGINE_FACTORS`.  
-   - Quality bar: every factor in the engine map has a working **`run_compare`** (baseline ≈ ai-saham-style vs against/learned) and honest metrics/artifacts.
+   - Spine (post ADR-002): `ml-saham challenge run|engine|factor|health|champion` on **PolicySpecs**.  
+   - Superseded implementation detail: chapter-loop `ENGINE_FACTORS` / `challenge legacy` — **retired**.  
+   - Quality bar: frozen policies, versioned protocols, honest WIN/LOSE/INCONCLUSIVE/BLOCKED_* outcomes.
 
-2. **`challenge` vs `compare` (both primary-axis; both related to `ai-saham`)**  
+2. **`challenge` vs `compare`**  
 
    | Command | Product definition | Relation to `ai-saham` |
    |---------|-------------------|------------------------|
-   | **`challenge`** | **Engine audit report** — run a mapped factor set (engine / scenario / all), default baselines, rollup export (JSON/MD). | **For** `ai-saham` engines: “How is the screener / signal / risk / market stack doing?” |
-   | **`compare`** | **Single-factor experiment** — one topic slug, explicit `--baseline` / `--against`, full head-to-head narrative + optional artifact pack. | **Against** ai-saham-style (or static/hand) baselines: “Should we change *this* factor/policy?” |
+   | **`challenge`** | **Policy / engine audit** — production vs challenger, factor validity, engine portfolios, health. | **For** `ai-saham` policies: “Does this still beat clean alternatives?” |
+   | **`compare`** | **Curriculum single-factor lab** — chapter `run_compare`, pedagogy. | **Not** promotion authority (ADR-002). |
 
    One-liner:
 
-   > **`compare`** is the single-factor lab used to challenge **ai-saham-style baselines**; **`challenge`** is the multi-factor engine audit that runs those compares in bulk.
-
-   Shared implementation fact: both ultimately call chapter `run_compare`.  
-   Product split is **scope + UX**, not a different ML core.
+   > **`challenge`** is the product audit of **ai-saham policies**; **`compare`** is the learning lab for individual chapter factors.
 
    Rules of thumb:
-   - Daily / ship review of engines → `challenge`  
-   - Dig into one loser or try alternate models → `compare`  
-   - Prefer baselines that mean *current static / engine-like policy*; “against” = learned alternative  
-   - Some compares are honest ML hygiene labs (e.g. coin-flip, LOF vs IF) — still on the same data plane and still support tuning habits; they are not “pure sklearn playground” outside `ai-saham`  
+   - Daily / ship review of production policies → `challenge run` / `engine` / `health`  
+   - Learn or dig into a curriculum factor → `compare` / `explore`  
    - **Never auto-promote** winners into `ai-saham` configs
 
 3. **Learning is secondary onboarding**  
-   - `explore` / `demo` / chapter numbers teach *why* a factor exists so challenge/compare output is interpretable.  
-   - Curriculum order and registry numbers remain useful, but **do not outrank engine maps** when priorities conflict.  
-   - `demo` may refuse or redirect to challenge/compare for engine-critical factors; that is acceptable if messaging is clear.
+   - `explore` / `demo` / chapter numbers teach *why* a factor exists so challenge output is interpretable.  
+   - Curriculum order and registry numbers remain useful, but **do not outrank policy challenges** when priorities conflict.
 
 4. **Two sources of truth, different jobs**  
    - **Curriculum SSOT:** `src/ml_saham/chapters/registry.py` (chapter number, slug, phase).  
-   - **Challenge SSOT:** `ENGINE_FACTORS` in `src/ml_saham/eval/challenge.py` (screener / signal / risk / market_context / other).
+   - **Challenge SSOT:** `src/ml_saham/challenge/` (policies, protocols, engines) — see ADR-002.
 
 5. **No silent weak challenge fallbacks**  
    - Prefer hard failure + install hint (`pip install -e ".[ml]"`) over a degraded model that would lie about beating a baseline.  
@@ -120,10 +115,11 @@ Without an explicit decision, agents and future work keep recentering “finish 
 ## Implementation notes
 
 ```text
-challenge  →  ENGINE_FACTORS groups  →  each slug.run_compare(defaults)  →  rollup export
-compare    →  one slug.run_compare(--baseline, --against)  →  full lines + optional artifact
+challenge  →  PolicySpec + protocol  →  panel/score/verdict  →  artifacts (ADR-002)
+compare    →  one slug.run_compare(--baseline, --against)  →  curriculum lab only
 explore    →  teach problem (no heavy train required)  [ID]
 demo       →  optional illustration; may defer to challenge path
 ```
 
-Engine groups (challenge SSOT): `screener`, `signal_engine`, `risk_engine`, `market_context`, `other_aspects`.
+Product SSOT: `src/ml_saham/challenge/` (policies, protocols, engines).  
+Curriculum SSOT: `src/ml_saham/chapters/registry.py`.

@@ -124,7 +124,6 @@ ml-saham challenge factor screener.accum.score_weights --factor consistency
 | `challenge engine screener` | PolicySpec portfolio (`--scenario` optional) |
 | `challenge factor …` | KEEP / DEMOTE / DROP_CANDIDATE (accum) |
 | `vet` / `doctor --deep` | Data-plane gate |
-| `challenge legacy …` | Old chapter-loop batch — **not** promotion authority |
 | `compare <slug>` | Curriculum lab — **not** ADR-002 authority |
 
 Statuses: `WIN` · `LOSE` · `INCONCLUSIVE` · `BLOCKED_DATA` · `BLOCKED_POLICY` (first-class; thin data is honest, not a broken install).
@@ -151,7 +150,7 @@ Curriculum list: [chapters.md](./chapters.md). Registry SSOT: `src/ml_saham/chap
 |------|----------|
 | Progress (curriculum) | `~/.ml-saham/progress.json` |
 | Artifacts | `./artifacts` or `ML_SAHAM_ARTIFACTS` |
-| Challenge acceptance (historical fixture suite) | [challenge_acceptance.md](./challenge_acceptance.md) |
+| Challenge acceptance (ADR-002 fixture suite) | [challenge_acceptance.md](./challenge_acceptance.md) |
 
 Hard rules: **no** ai-saham Python imports · **no** scrapers · **no** auto-promote.  
 Sibling contract: **[BOUNDARY.md](./BOUNDARY.md)**.
@@ -159,9 +158,8 @@ Sibling contract: **[BOUNDARY.md](./BOUNDARY.md)**.
 ```text
 ai-saham  →  fetch/enrich → SQLite → corpus obs + path labels (no accum evaluate product)
 ml-saham  →  read-only DB
-              ├─ challenge run / engine / factor   →  ADR-002 scoring authority
-              ├─ challenge legacy                  →  chapter-loop (legacy)
-              └─ explore / demo                    →  curriculum
+              ├─ challenge run / engine / factor / health  →  ADR-002 scoring authority
+              └─ explore / demo / compare                  →  curriculum (not promotion)
 ```
 
 ADRs: [docs/adr/](./docs/adr/) · Architecture: [architecture.md](./architecture.md) · Boundary: [BOUNDARY.md](./BOUNDARY.md)  
