@@ -27,11 +27,16 @@ def fixture_db(tmp_path: Path) -> Path:
 
 def test_list_engines():
     engines = list_engines()
-    assert any(e["engine_id"] == "screener" for e in engines)
+    ids = {e["engine_id"] for e in engines}
+    assert {"screener", "signal", "risk"} <= ids
     scr = next(e for e in engines if e["engine_id"] == "screener")
     assert "accum" in scr["scenarios"]
     assert "pre-open" in scr["scenarios"]
     assert scr["n_policies"] == 3
+    sig = next(e for e in engines if e["engine_id"] == "signal")
+    assert "signal.accum.raw_score" in sig["policies"]["accum"]
+    risk = next(e for e in engines if e["engine_id"] == "risk")
+    assert "risk.accum.hard_gates" in risk["policies"]["accum"]
 
 
 def test_normalize_scenario():

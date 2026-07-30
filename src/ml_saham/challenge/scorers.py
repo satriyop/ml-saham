@@ -21,8 +21,43 @@ def score_production(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[f
         return [float(r.components.get("official_rank_score", 0.0)) for r in rows]
     if policy.score_kind == "raw_score_primary":
         return [float(r.components.get("production_raw_score", 0.0)) for r in rows]
+    if policy.score_kind == "gate_block":
+        # 1.0 = allowed (open), 0.0 = blocked by any enabled gate
+        keys = enabled_keys(policy)
+        out: list[float] = []
+        for r in rows:
+            blocked = any(float(r.components.get(k, 0.0)) > 0.0 for k in keys)
+            out.append(0.0 if blocked else 1.0)
+        return out
     keys = enabled_keys(policy)
     return [float(sum(r.components.get(k, 0.0) for k in keys)) for r in rows]
+
+
+def score_gate_off(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[float]:
+    """Challenger: never block — all names allowed (1.0)."""
+    del policy
+    return [1.0] * len(rows)
+
+
+def mean_excess_allowed(
+    rows: Sequence[PanelRow],
+    allow_scores: Sequence[float],
+    primary_horizon: int,
+) -> tuple[float | None, float, int]:
+    """Mean excess among allowed rows (score > 0.5). Returns (mean, block_rate, n_open)."""
+    ys: list[float] = []
+    n_block = 0
+    for r, s in zip(rows, allow_scores, strict=True):
+        if float(s) > 0.5:
+            if primary_horizon in r.excess:
+                ys.append(float(r.excess[primary_horizon]))
+        else:
+            n_block += 1
+    n = len(rows)
+    block_rate = (n_block / n) if n else 0.0
+    if len(ys) < 2:
+        return None, block_rate, len(ys)
+    return float(sum(ys) / len(ys)), block_rate, len(ys)
 
 
 def score_production_drop(

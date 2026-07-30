@@ -26,6 +26,16 @@ ENGINE_POLICIES: dict[str, dict[str, list[str]]] = {
             "screener.pre_open.directional_score",
         ],
     },
+    "signal": {
+        "accum": [
+            "signal.accum.raw_score",
+        ],
+    },
+    "risk": {
+        "accum": [
+            "risk.accum.hard_gates",
+        ],
+    },
 }
 
 _SCENARIO_ALIASES: dict[str, str] = {
