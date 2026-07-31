@@ -127,7 +127,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
         uni = ctx.universe or resolve_universe(conn, limit=40)
         rows = _from_labels(conn, uni)
-        source = "signal_forward_labels"
+        source = "learning_outcome_labels"
         if len(rows) < 30:
             rows = _from_panel(conn, uni)
             source = "candles+fundies panel"
@@ -213,7 +213,7 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
         uni = ctx.universe or resolve_universe(conn, limit=40)
         rows = _from_labels(conn, uni)
-        source = "signal_forward_labels"
+        source = "learning_outcome_labels"
         if len(rows) < 30:
             rows = _from_panel(conn, uni)
             source = "candles+fundies panel"

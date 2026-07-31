@@ -95,7 +95,7 @@ These names appear in older notes or fixtures only. **Live ai-saham does not use
 
 Do **not** treat “honest labels for challenge” as a reason to recreate those dead tables inside ml-saham. Challenge labels are protocol-owned (next section).
 
-Optional: a curriculum chapter may still soft-read `signal_forward_labels` if present in a **fixture**; that is not the production contract.
+Curriculum labs soft-read **`learning_outcome_labels`** (canonical). A soft fallback to retired `signal_forward_labels` exists only if the corpus table is empty (old fixtures).
 
 ---
 

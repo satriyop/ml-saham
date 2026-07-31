@@ -4,7 +4,9 @@ Thin P2 signal policy. English only. **Not** Action ENTER accuracy.
 
 ## Question
 
-Does production **signal.raw_score** (on accum observations) still beat clean feature reweights on **rank IC vs excess return vs IHSG**, primary **H=10**?
+Does production **SignalEngine score** on accum observations still beat clean feature reweights on **rank IC vs excess return vs IHSG**, primary **H=10**?
+
+Live captures store score under **`features_by_window.<window>.signal`** (`assessment.score` / `raw_exact_score`), not top-level `signal.raw_score`.
 
 ## Commands
 
@@ -18,7 +20,7 @@ ml-saham challenge engine signal --scenario accum
 ## Baseline
 
 `src/ml_saham/challenge/policies/signal_accum_raw_score.v1.json`  
-`score_kind=raw_score_primary` · panel extracts `signal.raw_score` + group contribution features.
+`score_kind=raw_score_primary` · panel extracts window `signal` score + group contribution features (`panel_signal.py`).
 
 ## Protocol
 

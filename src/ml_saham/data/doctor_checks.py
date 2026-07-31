@@ -307,6 +307,8 @@ def _phase2_checks(conn) -> list[CheckItem]:
         )
     )
     # Live learning plane (ai-saham SSOT). Soft here; integrity block deep-dives purpose counts.
+    # Canonical learning plane (ai-saham SSOT) — not candidate_observations /
+    # signal_forward_labels (retired). Soft: challenge can use candles without labels.
     items.append(
         _check_table(
             conn,
@@ -319,7 +321,7 @@ def _phase2_checks(conn) -> list[CheckItem]:
         _check_table(
             conn,
             "learning_outcome_labels",
-            required_cols={"observation_id", "contract_id"},
+            required_cols={"observation_id", "contract_id", "metrics_json"},
             hard=False,
         )
     )
@@ -341,13 +343,13 @@ def _phase2_checks(conn) -> list[CheckItem]:
                 hard=False,
             )
         )
-    # Legacy names (retired) — soft only if present; do not require for phase-2 ok
+    # Retired names: never "ok" as data plane — warn if still present
     if table_exists(conn, "signal_forward_labels"):
         items.append(
-            _check_table(
-                conn,
+            CheckItem(
                 "signal_forward_labels",
-                required_cols={"ticker", "signal_date", "horizon", "close_return"},
+                "partial",
+                "retired table present — use learning_outcome_labels (not required)",
                 hard=False,
             )
         )
@@ -355,8 +357,8 @@ def _phase2_checks(conn) -> list[CheckItem]:
         items.append(
             CheckItem(
                 "candidate_observations",
-                "ok",
-                "legacy table present — prefer learning_observations",
+                "partial",
+                "retired table present — use learning_observations (not required)",
                 hard=False,
             )
         )
@@ -394,7 +396,7 @@ def _integrity_checks(conn, *, deep: bool) -> list[CheckItem]:
     """Observation health + cross-table honesty (challenge data plane)."""
     items: list[CheckItem] = []
 
-    # learning_observations by purpose
+    # learning_observations by purpose (canonical observations plane)
     if table_exists(conn, "learning_observations"):
         rows = conn.execute(
             "SELECT purpose, COUNT(*) AS n FROM learning_observations GROUP BY purpose"
@@ -433,6 +435,90 @@ def _integrity_checks(conn, *, deep: bool) -> list[CheckItem]:
                 "learning_observations",
                 "missing",
                 "no table — engine challenge needs ai-saham observation capture",
+                hard=False,
+            )
+        )
+
+    # learning_outcome_labels (canonical corpus labels — not signal_forward_labels)
+    if table_exists(conn, "learning_outcome_labels"):
+        lol_cols = {
+            r[1]
+            for r in conn.execute("PRAGMA table_info(learning_outcome_labels)").fetchall()
+        }
+        n_lab = count_rows(conn, "learning_outcome_labels")
+        n_avail = 0
+        if "availability" in lol_cols and n_lab > 0:
+            try:
+                n_avail = int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM learning_outcome_labels "
+                        "WHERE UPPER(COALESCE(availability,'')) IN ('AVAILABLE','')"
+                    ).fetchone()[0]
+                )
+            except Exception:
+                n_avail = n_lab
+        else:
+            n_avail = n_lab
+        n_joined = 0
+        if (
+            n_lab > 0
+            and table_exists(conn, "learning_observations")
+            and "observation_id" in lol_cols
+        ):
+            obs_cols = {
+                r[1]
+                for r in conn.execute(
+                    "PRAGMA table_info(learning_observations)"
+                ).fetchall()
+            }
+            if "observation_id" in obs_cols:
+                try:
+                    n_joined = int(
+                        conn.execute(
+                            "SELECT COUNT(*) FROM learning_outcome_labels lol "
+                            "WHERE EXISTS ("
+                            "  SELECT 1 FROM learning_observations lo "
+                            "  WHERE lo.observation_id = lol.observation_id"
+                            ")"
+                        ).fetchone()[0]
+                    )
+                except Exception:
+                    n_joined = 0
+        if n_lab == 0:
+            items.append(
+                CheckItem(
+                    "learning_outcome_labels",
+                    "partial",
+                    "table empty — corpus path labels absent "
+                    "(challenge may still use candles)",
+                    hard=False,
+                )
+            )
+        elif n_avail < 10:
+            items.append(
+                CheckItem(
+                    "learning_outcome_labels",
+                    "partial",
+                    f"rows={n_lab} available={n_avail} joined_obs={n_joined} (thin)",
+                    hard=False,
+                )
+            )
+        else:
+            items.append(
+                CheckItem(
+                    "learning_outcome_labels",
+                    "ok",
+                    f"rows={n_lab} available={n_avail} joined_obs={n_joined}",
+                    hard=False,
+                )
+            )
+    else:
+        items.append(
+            CheckItem(
+                "learning_outcome_labels",
+                "missing",
+                "no table — optional corpus labels; not candidate_observations/"
+                "signal_forward_labels",
                 hard=False,
             )
         )

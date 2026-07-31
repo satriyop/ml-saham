@@ -231,13 +231,21 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                 date TEXT, ticker TEXT, iev REAL, rank INT, iep REAL,
                 fetched_at TEXT, is_ncp_locked INT
             );
-            -- Fixture-only legacy table for curriculum walk_forward demos.
-            -- Live ai-saham: learning_outcome_labels (not this name).
-            CREATE TABLE signal_forward_labels (
-                id INTEGER PRIMARY KEY,
-                ticker TEXT, signal_date TEXT, horizon INT,
-                close_return REAL, max_forward_return REAL,
-                max_adverse_excursion REAL
+            -- Canonical corpus labels (live ai-saham name). Curriculum walk_forward
+            -- reads these via load_forward_labels; retired signal_forward_labels not used.
+            CREATE TABLE learning_outcome_labels (
+                label_id TEXT PRIMARY KEY,
+                artifact_digest TEXT NOT NULL DEFAULT '',
+                schema_version INTEGER NOT NULL DEFAULT 1,
+                contract_id TEXT NOT NULL,
+                observation_id TEXT NOT NULL,
+                outcome_basis TEXT NOT NULL DEFAULT 'PRICE_PATH_ONLY',
+                availability TEXT NOT NULL DEFAULT 'AVAILABLE',
+                outcome TEXT,
+                metrics_json TEXT NOT NULL,
+                fingerprint TEXT NOT NULL DEFAULT '',
+                labeled_at TEXT NOT NULL,
+                artifact_json TEXT NOT NULL DEFAULT '{}'
             );
             CREATE TABLE regime_observations (
                 observation_date TEXT, regime TEXT, regime_score REAL,
@@ -345,15 +353,39 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                 "INSERT INTO iev_snapshots VALUES (?,?,?,?,?,?,?)",
                 (iev_date, t, 100.0 + si * 0.5, si + 1, 99.0 + si, "2024-06-01", 0),
             )
-            # labels across dates for walk-forward
+            # corpus labels across dates for walk-forward (learning_outcome_labels)
             for j in range(20):
                 sd = (start + timedelta(days=30 + j)).isoformat()
+                oid = f"obs-{t}-{sd}-ACCUM"
+                mid = f"lab-{t}-{sd}-5"
+                metrics = {
+                    "ticker": t,
+                    "signal_date": sd,
+                    "horizon": 5,
+                    "close_return": 0.01 * ((si + j) % 7 - 3),
+                    "max_forward_return": 0.02,
+                    "max_adverse_excursion": -0.01,
+                }
                 conn.execute(
-                    "INSERT INTO signal_forward_labels "
-                    "(ticker, signal_date, horizon, close_return, "
-                    "max_forward_return, max_adverse_excursion) "
-                    "VALUES (?,?,?,?,?,?)",
-                    (t, sd, 5, 0.01 * ((si + j) % 7 - 3), 0.02, -0.01),
+                    "INSERT INTO learning_outcome_labels "
+                    "(label_id, artifact_digest, schema_version, contract_id, "
+                    "observation_id, outcome_basis, availability, outcome, "
+                    "metrics_json, fingerprint, labeled_at, artifact_json) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        mid,
+                        "fixture",
+                        1,
+                        "price_path.accum_5d.v1",
+                        oid,
+                        "PRICE_PATH_ONLY",
+                        "AVAILABLE",
+                        "SUCCESS" if metrics["close_return"] > 0 else "FAIL",
+                        json.dumps(metrics),
+                        f"fp-{mid}",
+                        f"{sd}T12:00:00",
+                        "{}",
+                    ),
                 )
         for k in range(30):
             conn.execute(
@@ -382,6 +414,7 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
             );
             CREATE TABLE learning_observations (
                 id INTEGER PRIMARY KEY,
+                observation_id TEXT,
                 purpose TEXT NOT NULL,
                 captured_at TEXT NOT NULL,
                 decision_payload_json TEXT NOT NULL
@@ -541,10 +574,12 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                         },
                         "sub_signal_fingerprint": fingerprint,
                     }
-                    obs_rows.append((purpose, captured, json.dumps(payload)))
+                    oid = f"obs-{t}-{d}-{purpose}"
+                    obs_rows.append((oid, purpose, captured, json.dumps(payload)))
         conn.executemany(
-            "INSERT INTO learning_observations (purpose, captured_at, decision_payload_json) "
-            "VALUES (?,?,?)",
+            "INSERT INTO learning_observations "
+            "(observation_id, purpose, captured_at, decision_payload_json) "
+            "VALUES (?,?,?,?)",
             obs_rows,
         )
         conn.commit()

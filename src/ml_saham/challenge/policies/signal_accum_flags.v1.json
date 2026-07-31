@@ -14,7 +14,7 @@
       "aliases": ["raw_score", "score"],
       "weight": 1.0,
       "enabled": true,
-      "note": "Base signal.raw_score before flag penalties"
+      "note": "Base window signal score (assessment.score / raw_exact_score) before flag penalties"
     },
     {
       "key": "valuation_stretched",

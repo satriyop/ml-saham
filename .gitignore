@@ -1,5 +1,6 @@
 # Local discussion archives (not tracked)
 archive/
+docs/notes/
 
 # Secrets / local env
 .env
