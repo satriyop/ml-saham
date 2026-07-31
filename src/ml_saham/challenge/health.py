@@ -357,18 +357,28 @@ def build_summary_md(
             "## Next digs",
             "",
             "```bash",
+            "# Replace <ACCUM_COHORT_ID> with the exact ACCUM observation compatibility_id",
+            "# (production-facing ACCUM/PRE_OPEN commands fail closed without it).",
             "# 1 catalog",
             "ml-saham challenge list",
             "# 2 weekly tower (default)",
-            "ml-saham challenge health --with-diagnostics",
+            "ml-saham challenge health --with-diagnostics "
+            "--compatibility-id <ACCUM_COHORT_ID>",
             "# 3 dig only when retuning signal/risk/screener knobs",
-            "ml-saham challenge engine signal --scenario accum",
-            "ml-saham challenge engine risk --scenario accum --against gate_off",
-            "ml-saham challenge run screener.accum.score_weights --against equal_sleeves",
-            "ml-saham challenge run signal.accum.raw_score --against equal_sleeves",
-            "ml-saham challenge run risk.accum.hard_gates --against gate_off",
-            "ml-saham challenge factor screener.accum.score_weights --all",
-            "ml-saham challenge champion screener.accum.score_weights --model lgbm_reweight",
+            "ml-saham challenge engine signal --scenario accum "
+            "--compatibility-id <ACCUM_COHORT_ID>",
+            "ml-saham challenge engine risk --scenario accum --against gate_off "
+            "--compatibility-id <ACCUM_COHORT_ID>",
+            "ml-saham challenge run screener.accum.score_weights --against equal_sleeves "
+            "--compatibility-id <ACCUM_COHORT_ID>",
+            "ml-saham challenge run signal.accum.raw_score --against equal_sleeves "
+            "--compatibility-id <ACCUM_COHORT_ID>",
+            "ml-saham challenge run risk.accum.hard_gates --against gate_off "
+            "--compatibility-id <ACCUM_COHORT_ID>",
+            "ml-saham challenge factor screener.accum.score_weights --all "
+            "--compatibility-id <ACCUM_COHORT_ID>",
+            "ml-saham challenge champion screener.accum.score_weights "
+            "--model lgbm_reweight --compatibility-id <ACCUM_COHORT_ID>",
             "# diagnostics: PROMOTE_CANDIDATE → PolicySpec design (never Action/ENTER)",
             "ml-saham challenge diagnostic list",
             "ml-saham challenge promote-packet --from-json <export.json>",

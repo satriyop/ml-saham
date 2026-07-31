@@ -104,7 +104,14 @@ Hard rules (unchanged): **no** ai-saham Python imports · **no** scrapers · **n
 - ai-saham stamps `learning_observations.compatibility_id` when material config forks.
 - **ml-saham never mixes** multiple `compatibility_id` values in one panel or curriculum load.
 - Shared helper: `src/ml_saham/data/observation_cohort.py` (challenge + curriculum must use it; no ad-hoc `SELECT … FROM learning_observations` in chapters/challenge).
-- Default selection: **largest** cohort; override with explicit id when auditing a thin new rulebook.
+- **Production-facing challenge** (`challenge run|factor|engine|health|champion` and
+  promote reopen): bind an **explicit** purpose-family cohort — ACCUM policies
+  require a real ACCUM `compatibility_id` (+ verified snapshots); PRE_OPEN
+  observation policies require a real PRE_OPEN cohort; IEV rank binds iev
+  snapshot batch identity (observation cohort ids are not a population filter).
+  Largest/single-cohort auto-select is **not** allowed for production verdicts.
+- **Exploratory / curriculum** loaders may still auto-select largest `n` (ties →
+  newest `max(captured_at)`) and must record selected/excluded cohorts in notes.
 - Doctor soft-flags multi-cohort presence; retired tables `candidate_observations` / `signal_forward_labels` are never hard SSOT.
 
 ### Verified production-policy snapshots
@@ -123,8 +130,10 @@ Hard rules (unchanged): **no** ai-saham Python imports · **no** scrapers · **n
   not eligible for current `baseline=production`.
 - Snapshot or adapter integrity failures are `BLOCKED_POLICY`; valid policy
   with insufficient rows/folds is `BLOCKED_DATA`.
-- Because default cohort selection remains largest, operators auditing a thin
-  newly activated rulebook must pass its explicit `--compatibility-id`.
+- Operators must pass `--compatibility-id` for every production-facing ACCUM or
+  PRE_OPEN observation challenge (not only thin/new rulebooks). Omitting it
+  fails closed with `BLOCKED_POLICY`. A mixed engine reuses one flag only as a
+  pass-through; each policy still validates its own purpose family.
 
 Horizons **3 / 10 / 20** (primary **10**) align with ai-saham ADR-056 **by number**.  
 Challenge excess and corpus SUCCESS/FAILURE labels remain **different products** unless a protocol explicitly says otherwise.
@@ -170,8 +179,9 @@ export ML_SAHAM_DB=~/dev/ai-saham/data/db/data.db
 ml-saham doctor --deep
 ml-saham vet
 ml-saham challenge run screener.accum.score_weights \
-  --compatibility-id <snapshot-v2-cohort> --against equal_sleeves
-ml-saham challenge factor screener.accum.score_weights --all
+  --compatibility-id <ACCUM_COHORT_ID> --against equal_sleeves
+ml-saham challenge factor screener.accum.score_weights --all \
+  --compatibility-id <ACCUM_COHORT_ID>
 # Decision memo under docs/decisions/ — human may edit ai-saham config later
 ```
 

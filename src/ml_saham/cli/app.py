@@ -921,7 +921,10 @@ def challenge_factor_cmd(
     compatibility_id: Optional[str] = typer.Option(
         None,
         "--compatibility-id",
-        help="Exact accumulation observation cohort (recommended for verified v2)",
+        help=(
+            "Required for production-facing ACCUM/PRE_OPEN observation panels: "
+            "exact purpose-family cohort (no largest auto-select; IEV ignores this)"
+        ),
     ),
     export_json: Optional[Path] = typer.Option(
         None,
@@ -1112,7 +1115,10 @@ def challenge_health_cmd(
     compatibility_id: Optional[str] = typer.Option(
         None,
         "--compatibility-id",
-        help="Exact accumulation observation cohort (recommended for verified v2)",
+        help=(
+            "Required for production-facing ACCUM/PRE_OPEN observation panels: "
+            "exact purpose-family cohort (no largest auto-select; IEV ignores this)"
+        ),
     ),
     no_artifact: bool = typer.Option(
         False,
@@ -1208,7 +1214,10 @@ def challenge_champion_cmd(
     compatibility_id: Optional[str] = typer.Option(
         None,
         "--compatibility-id",
-        help="Exact accumulation observation cohort (recommended for verified v2)",
+        help=(
+            "Required for production-facing ACCUM/PRE_OPEN observation panels: "
+            "exact purpose-family cohort (no largest auto-select; IEV ignores this)"
+        ),
     ),
     export_json: Optional[Path] = typer.Option(
         None,
@@ -1300,7 +1309,10 @@ def challenge_run_cmd(
     compatibility_id: Optional[str] = typer.Option(
         None,
         "--compatibility-id",
-        help="Explicit observation cohort; required to audit a thin fresh rulebook",
+        help=(
+            "Required for production-facing ACCUM/PRE_OPEN observation panels: "
+            "exact purpose-family cohort (no largest auto-select; IEV ignores this)"
+        ),
     ),
     export_json: Optional[Path] = typer.Option(
         None,
@@ -1375,7 +1387,10 @@ def challenge_engine_cmd(
     compatibility_id: Optional[str] = typer.Option(
         None,
         "--compatibility-id",
-        help="Exact accumulation observation cohort (recommended for verified v2)",
+        help=(
+            "Required for production-facing ACCUM/PRE_OPEN observation panels: "
+            "exact purpose-family cohort (no largest auto-select; IEV ignores this)"
+        ),
     ),
     export_json: Optional[Path] = typer.Option(
         None,

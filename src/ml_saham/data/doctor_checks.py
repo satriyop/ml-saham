@@ -464,8 +464,10 @@ def _integrity_checks(conn, *, deep: bool) -> list[CheckItem]:
                         f"compatibility_cohorts_{family}",
                         "partial",
                         f"{len(cohorts)} {family} compatibility_id cohorts; "
-                        f"challenge uses largest n={top_n}, excludes n={other_n} "
-                        f"(never mixes rulebooks)",
+                        f"largest n={top_n}, other n={other_n} "
+                        f"(curriculum/exploratory may auto-select largest; "
+                        f"production challenge requires explicit "
+                        f"--compatibility-id; never mixes rulebooks)",
                         hard=False,
                     )
                 )

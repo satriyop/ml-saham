@@ -166,7 +166,15 @@ candles (+ IHSG)         ─read──►  protocol y (excess / open-close)
 | `ACCUMULATION_DISCOVERY` (and ACCUM*) | `screener.accum.score_weights` |
 | `PRE_OPEN_AUCTION_DIRECTION` | `screener.pre_open.directional_score` |
 
-**Single-cohort discipline (all readers):** when `compatibility_id` is present, **challenge panels, curriculum chapters, and doctor notes** load or report **exactly one** cohort per purpose family — never pool mixed rulebooks. Implementation: `ml_saham.data.observation_cohort` (`fetch_accum_observation_raw`, `fetch_pre_open_observation_raw`, `curriculum_payload_rows`). Default: largest `n` (ties → newest `max(captured_at)`). Explicit override via `preferred_compatibility_id` / panel `compatibility_id=`. Notes always record the selected id and excluded cohort sizes. Fixtures without the column keep the legacy unfiltered path. MVP fixture ships two ACCUM cohorts so CI proves non-mixing.
+**Single-cohort discipline (all readers):** when `compatibility_id` is present, **challenge panels, curriculum chapters, and doctor notes** load or report **exactly one** cohort per purpose family — never pool mixed rulebooks. Implementation: `ml_saham.data.observation_cohort` (`fetch_accum_observation_raw`, `fetch_pre_open_observation_raw`, `curriculum_payload_rows`, `require_family_compatibility_id`).
+
+| Path | Cohort selection |
+|------|------------------|
+| **Production-facing challenge** (run / factor / engine / health / champion prep) | **Explicit** purpose-family id required (`--compatibility-id`). ACCUM and PRE_OPEN observation panels must find that id in their family; no largest auto-select. IEV rank does **not** use observation `compatibility_id` (binds iev snapshot batch identity). |
+| **Exploratory / curriculum** (`fetch_*` without preferred, chapters) | May default to largest `n` (ties → newest `max(captured_at)`). Notes record selected id and excluded cohort sizes. |
+| **Legacy fixtures** without the column | Unfiltered path (no cohort stamp). |
+
+MVP fixture ships two ACCUM cohorts so CI proves non-mixing.
 
 ### `learning_outcome_labels` (corpus labels)
 

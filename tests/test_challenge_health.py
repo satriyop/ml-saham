@@ -108,6 +108,8 @@ def test_health_next_digs_codify_ritual_and_no_action_from_diagnostics(
     assert "health --with-diagnostics" in md
     assert "engine signal" in md
     assert "engine risk" in md
+    # Operator dig commands must include explicit cohort (production fail-closed).
+    assert "--compatibility-id <ACCUM_COHORT_ID>" in md
     assert "never set TradeSetup Action" in md.lower() or "never Action" in md
     assert "P4" in md or "ENTER" in md
     assert "Diagnostics (display bags" in md
