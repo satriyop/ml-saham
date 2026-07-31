@@ -10,6 +10,7 @@ Window lock: features_by_window["7"] only as the replay sample unit.
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 from dataclasses import dataclass, field
 from enum import Enum
@@ -17,7 +18,10 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from ml_saham.data.aisaham_read import connect, table_exists
-from ml_saham.data.observation_cohort import list_compatibility_cohorts
+from ml_saham.data.observation_cohort import (
+    count_other_purpose_rows,
+    list_compatibility_cohorts,
+)
 
 # ---------------------------------------------------------------------------
 # Contracts
@@ -118,6 +122,7 @@ class ScreenFilterAuditSummary:
     wrong_cohort_excluded: int = 0
     wrong_contract_excluded: int = 0
     bad_canonical_window_excluded: int = 0
+    h10_measurement_requested: bool = False
     notes: list[str] = field(default_factory=list)
     per_gate_numeric: dict[str, int] = field(default_factory=dict)
     per_gate_explicit_missing: dict[str, int] = field(default_factory=dict)
@@ -167,7 +172,7 @@ def _as_float(value: Any) -> float | None:
     if isinstance(value, int):
         return float(value)
     if isinstance(value, float):
-        return value
+        return value if math.isfinite(value) else None
     return None
 
 
@@ -215,7 +220,7 @@ def extract_screen_filter_inputs(
 
     # Fail closed: every selected row must declare canonical_window=7
     cw = payload.get("canonical_window")
-    if cw is None or str(cw) != CANONICAL_WINDOW_KEY:
+    if type(cw) is not int or cw != int(CANONICAL_WINDOW_KEY):
         return ExtractedScreenFilterInputs(
             ticker=ticker,
             session_date=session,
@@ -528,7 +533,10 @@ def audit_screen_filter_cohort(
 
     policy = policy or ScreenFilterPolicy()
     path = Path(db_path)
-    summary = ScreenFilterAuditSummary(compatibility_id=cid)
+    summary = ScreenFilterAuditSummary(
+        compatibility_id=cid,
+        h10_measurement_requested=measure_h10,
+    )
     for g in GATE_ORDER:
         summary.per_gate_numeric[g] = 0
         summary.per_gate_explicit_missing[g] = 0
@@ -561,8 +569,10 @@ def audit_screen_filter_cohort(
                 f"excluded {summary.wrong_cohort_excluded} row(s) from "
                 f"{len(cohorts) - 1} other ACCUMULATION_DISCOVERY cohort(s)"
             )
-        summary.wrong_purpose_excluded = _count_wrong_purpose_same_cohort(
-            conn, compatibility_id=cid
+        summary.wrong_purpose_excluded = count_other_purpose_rows(
+            conn,
+            compatibility_id=cid,
+            selected_purpose=ACCUM_DISCOVERY_PURPOSE,
         )
         if summary.wrong_purpose_excluded:
             summary.notes.append(
@@ -679,26 +689,6 @@ def fetch_observation_discovery_only(
     )
 
 
-def _count_wrong_purpose_same_cohort(
-    conn: sqlite3.Connection,
-    *,
-    compatibility_id: str,
-) -> int:
-    """Rows sharing compatibility_id but not ACCUMULATION_DISCOVERY purpose."""
-    try:
-        row = conn.execute(
-            """
-            SELECT COUNT(*) FROM learning_observations
-            WHERE compatibility_id = ?
-              AND purpose != ?
-            """,
-            (compatibility_id, ACCUM_DISCOVERY_PURPOSE),
-        ).fetchone()
-        return int(row[0] or 0) if row else 0
-    except sqlite3.Error:
-        return 0
-
-
 def _tally_gate(
     summary: ScreenFilterAuditSummary, gate: str, state: RawInputState
 ) -> None:
@@ -787,7 +777,7 @@ def sufficiency_verdict(summary: ScreenFilterAuditSummary) -> str:
 
     avail = summary.corpus_h10_label_available_count
     unavail = summary.corpus_h10_label_unavailable_count
-    if avail is not None or unavail is not None:
+    if summary.h10_measurement_requested:
         if avail is None or unavail is None:
             return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
         if avail < 0 or unavail < 0:
@@ -796,5 +786,7 @@ def sufficiency_verdict(summary: ScreenFilterAuditSummary) -> str:
             return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
         if avail + unavail != summary.selected_row_count:
             return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
+    elif avail is not None or unavail is not None:
+        return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
 
     return "SUFFICIENT_FOR_REPLAY"

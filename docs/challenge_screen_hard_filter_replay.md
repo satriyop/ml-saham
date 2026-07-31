@@ -143,6 +143,9 @@ See task §9 / `sufficiency_verdict()`:
 - **INSUFFICIENT_NEEDS_CORPUS_EXTENSION** when required paths cannot be
   distinguished from schema failure, extract collapses, or H10 counts fail
   reconciliation against the **selected** observation_id set.
+- Requested H10 measurement that cannot be performed because the label table or
+  required columns are unavailable fails closed. Explicit `measure_h10=False`
+  is the only supported way to skip that measurement.
 
 Numeric null coverage (e.g. missing market_cap) is **not** automatically insufficient.
 

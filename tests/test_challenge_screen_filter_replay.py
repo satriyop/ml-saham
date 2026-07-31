@@ -268,11 +268,22 @@ def test_duplicate_ticker_session_excluded(tmp_path: Path):
     assert sufficiency_verdict(summary) == "SUFFICIENT_FOR_REPLAY"
 
 
-def test_wrong_purpose_not_fetched(tmp_path: Path):
+def test_wrong_purpose_count_reconciles_same_cohort(tmp_path: Path):
     db = tmp_path / "purp.db"
     conn = sqlite3.connect(db)
     _obs_table(conn)
     cid = "sha256:purp"
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?,?,?,?,?,?)",
+        (
+            "good",
+            "ACCUMULATION_DISCOVERY",
+            cid,
+            json.dumps(_good_payload()),
+            "learning_observation.accumulation_discovery.v2",
+            "2026-06-02T00:00:00+07:00",
+        ),
+    )
     conn.execute(
         "INSERT INTO learning_observations VALUES (?,?,?,?,?,?)",
         (
@@ -287,8 +298,36 @@ def test_wrong_purpose_not_fetched(tmp_path: Path):
     conn.commit()
     conn.close()
     summary = audit_screen_filter_cohort(db, compatibility_id=cid, measure_h10=False)
-    assert summary.selected_row_count == 0
-    assert sufficiency_verdict(summary) == "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
+    assert summary.selected_row_count == 1
+    assert summary.wrong_purpose_excluded == 1
+    assert sufficiency_verdict(summary) == "SUFFICIENT_FOR_REPLAY"
+
+
+def test_wrong_cohort_count_reconciles_discovery_rows(tmp_path: Path):
+    db = tmp_path / "cohort.db"
+    conn = sqlite3.connect(db)
+    _obs_table(conn)
+    for oid, cid, ticker in (("a", "cid-a", "A"), ("b", "cid-b", "B")):
+        conn.execute(
+            "INSERT INTO learning_observations VALUES (?,?,?,?,?,?)",
+            (
+                oid,
+                "ACCUMULATION_DISCOVERY",
+                cid,
+                json.dumps(_good_payload(ticker)),
+                "learning_observation.accumulation_discovery.v2",
+                "2026-06-02T00:00:00+07:00",
+            ),
+        )
+    conn.commit()
+    conn.close()
+
+    summary = audit_screen_filter_cohort(
+        db, compatibility_id="cid-a", measure_h10=False
+    )
+    assert summary.selected_row_count == 1
+    assert summary.wrong_cohort_excluded == 1
+    assert sufficiency_verdict(summary) == "SUFFICIENT_FOR_REPLAY"
 
 
 def test_canonical_window_30_not_accepted():
@@ -300,9 +339,25 @@ def test_canonical_window_30_not_accepted():
     assert ext.unextractable_reason == "canonical_window_not_7"
 
 
+def test_string_canonical_window_not_repaired():
+    payload = _good_payload()
+    payload["canonical_window"] = "7"
+    ext = extract_screen_filter_inputs(payload)
+    assert ext.is_unextractable
+    assert ext.unextractable_reason == "canonical_window_not_7"
+
+
 def test_string_numeric_not_repaired():
     payload = _good_payload()
     payload["features_by_window"]["7"]["candidate"]["accum_score"] = "50"
+    ext = extract_screen_filter_inputs(payload)
+    assert ext.is_unextractable
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_numeric_not_accepted(value: float):
+    payload = _good_payload()
+    payload["features_by_window"]["7"]["candidate"]["accum_score"] = value
     ext = extract_screen_filter_inputs(payload)
     assert ext.is_unextractable
 
@@ -362,6 +417,35 @@ def test_h10_counts_only_selected_units(tmp_path: Path):
         == summary.selected_row_count
     )
     assert sufficiency_verdict(summary) == "SUFFICIENT_FOR_REPLAY"
+
+
+def test_requested_h10_missing_schema_fails_closed(tmp_path: Path):
+    db = tmp_path / "missing-labels.db"
+    conn = sqlite3.connect(db)
+    _obs_table(conn)
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?,?,?,?,?,?)",
+        (
+            "good",
+            "ACCUMULATION_DISCOVERY",
+            "cid",
+            json.dumps(_good_payload()),
+            "learning_observation.accumulation_discovery.v2",
+            "t0",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    measured = audit_screen_filter_cohort(db, compatibility_id="cid", measure_h10=True)
+    assert measured.h10_measurement_requested is True
+    assert measured.corpus_h10_label_available_count is None
+    assert measured.corpus_h10_label_unavailable_count is None
+    assert sufficiency_verdict(measured) == "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
+
+    skipped = audit_screen_filter_cohort(db, compatibility_id="cid", measure_h10=False)
+    assert skipped.h10_measurement_requested is False
+    assert sufficiency_verdict(skipped) == "SUFFICIENT_FOR_REPLAY"
 
 
 def test_gate_ids_stable():

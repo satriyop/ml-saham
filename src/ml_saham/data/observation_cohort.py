@@ -79,6 +79,29 @@ def list_compatibility_cohorts(
     return out
 
 
+def count_other_purpose_rows(
+    conn: sqlite3.Connection,
+    *,
+    compatibility_id: str,
+    selected_purpose: str,
+) -> int:
+    """Count rows sharing a cohort id but outside the selected purpose.
+
+    Raw ``learning_observations`` SQL stays centralized in this module. Schema
+    or query errors intentionally propagate so callers cannot report a false
+    zero exclusion count.
+    """
+    row = conn.execute(
+        """
+        SELECT COUNT(*) FROM learning_observations
+        WHERE compatibility_id = ?
+          AND purpose != ?
+        """,
+        (compatibility_id, selected_purpose),
+    ).fetchone()
+    return int(row[0] or 0) if row else 0
+
+
 def resolve_compatibility_id(
     conn: sqlite3.Connection,
     *,
@@ -109,17 +132,13 @@ def resolve_compatibility_id(
         pref = preferred.strip()
         match = next((c for c in cohorts if c[0] == pref), None)
         if match is None:
-            avail = ", ".join(
-                f"{_short(c[0])} n={c[1]}" for c in cohorts[:6]
-            )
+            avail = ", ".join(f"{_short(c[0])} n={c[1]}" for c in cohorts[:6])
             notes.append(
                 f"compatibility_id={pref!r} not found among {family} cohorts "
                 f"(available: {avail or 'none'})"
             )
             return pref, notes
-        notes.append(
-            f"compatibility_id={pref or '(untagged)'} (explicit) n={match[1]}"
-        )
+        notes.append(f"compatibility_id={pref or '(untagged)'} (explicit) n={match[1]}")
         if len(cohorts) > 1:
             excluded = sum(c[1] for c in cohorts if c[0] != pref)
             notes.append(
@@ -129,9 +148,7 @@ def resolve_compatibility_id(
 
     if len(cohorts) == 1:
         cid, n, _ = cohorts[0]
-        notes.append(
-            f"compatibility_id={cid or '(untagged)'} (single cohort) n={n}"
-        )
+        notes.append(f"compatibility_id={cid or '(untagged)'} (single cohort) n={n}")
         return cid, notes
 
     cid, n, _ = cohorts[0]
@@ -195,9 +212,7 @@ def fetch_observation_raw(
         )
         notes.extend(cnotes)
     elif resolved is not None:
-        notes.append(
-            f"compatibility_id={resolved or '(untagged)'} (caller-selected)"
-        )
+        notes.append(f"compatibility_id={resolved or '(untagged)'} (caller-selected)")
     elif preferred_compatibility_id is not None and "compatibility_id" not in cols:
         notes.append(
             "compatibility_id preferred but column missing — loading unfiltered"
@@ -334,9 +349,7 @@ def curriculum_payload_rows(
         if isinstance(r, sqlite3.Row):
             keys = r.keys()
             payload = (
-                r["decision_payload_json"]
-                if "decision_payload_json" in keys
-                else r[0]
+                r["decision_payload_json"] if "decision_payload_json" in keys else r[0]
             )
             cap = (
                 r["captured_at"]
