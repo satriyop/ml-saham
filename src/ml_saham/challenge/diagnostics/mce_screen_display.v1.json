@@ -8,7 +8,7 @@
   "protocol_id": "accum_path_v1",
   "control_score": "accum_production",
   "source": "ai-saham MarketContextEngine screen display (ADR-057 diagnostic)",
-  "source_ref": "market_context_snapshots + screen display path; not DecisionPolicy by default",
+  "source_ref": "prefer observation shared.market_context (PIT); fallback market_context_snapshots latest per date",
   "banner": "ADR-057: not Action authority — display / promote-candidate only",
   "features": [
     {

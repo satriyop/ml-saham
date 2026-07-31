@@ -21,7 +21,10 @@ from ml_saham.challenge.panel_pre_open_obs import (
     _stock_open_to_0930_return,
 )
 from ml_saham.challenge.diagnostics.registry import load_diagnostic
-from ml_saham.challenge.panel_diagnostic import extract_diagnostic_features
+from ml_saham.challenge.panel_diagnostic import (
+    _mctx_from_observation,
+    extract_diagnostic_features,
+)
 from ml_saham.challenge.panel_gates import extract_gate_components
 from ml_saham.challenge.panel_signal import extract_signal_components
 from ml_saham.challenge.policies.registry import load_policy
@@ -41,6 +44,7 @@ def test_golden_files_exist_in_repo():
         "iev_multi_capture_day.json",
         "risk_adr056_trade_setup.json",
         "diagnostic_adr056_window.json",
+        "mce_bound_market_context.json",
         "README.md",
     )
     for name in required:
@@ -222,3 +226,38 @@ def test_single_fold_ic_edge_provisional_not_win():
     )
     assert status == ChallengeStatus.INCONCLUSIVE
     assert any("provisional" in n.lower() for n in notes)
+
+
+def test_mce_prefers_observation_bound_market_context():
+    """MCE must use shared.market_context on the observation, not a table re-join by date."""
+    payload = load_golden("mce_bound_market_context.json")
+    bound = _mctx_from_observation(payload)
+    assert bound is not None
+    assert bound["regime_score"] == pytest.approx(-0.5)  # RISK_OFF
+    assert bound["vix"] == pytest.approx(15.77)
+    assert bound["eido"] == pytest.approx(-2.28)
+
+    # Table fallback with *different* regime must not override when bound exists
+    table_wrong = {
+        "regime_score": 1.0,  # BULL — wrong for this capture
+        "vix": 99.0,
+        "eido": 0.0,
+        "usd_idr": 0.0,
+        "idx_trend": 0.0,
+        "idx_breadth": 0.0,
+        "foreign_flow": 0.0,
+    }
+    feats = extract_diagnostic_features(
+        payload, load_diagnostic("mce.screen_display"), mctx=bound
+    )
+    assert feats is not None
+    assert feats["regime_score"] == pytest.approx(-0.5)
+    assert feats["vix"] == pytest.approx(15.77)
+    # If caller incorrectly passed only table_wrong without bound, scores would differ —
+    # extract uses mctx dict as primary fill for mce; bound must be what we pass.
+    feats_bad = extract_diagnostic_features(
+        payload, load_diagnostic("mce.screen_display"), mctx=table_wrong
+    )
+    assert feats_bad is not None
+    assert feats_bad["regime_score"] == pytest.approx(1.0)
+    # Panel path uses _mctx_from_observation first so bound wins over table_wrong date join

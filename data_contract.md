@@ -218,6 +218,7 @@ Guarded by golden fixtures in `tests/fixtures/golden/` + `tests/test_challenge_p
 | Signal | `features_by_window.<w>.signal` → `raw_exact_score` / `assessment.score` (top-level `signal.raw_score` = legacy only) | same H=10 path as accum | score 0–100-ish |
 | Risk hard gates | `features_by_window.<w>.trade_setup.blocking_gates` / `action` (top-level `trade_setup` = legacy only) | same H=10 excess; metric = mean excess among allowed | gate fire 0/1 |
 | Diagnostics (sector / institutional / CQ) | window `signal.alpha_trigger_score.group_contributions` + window `sub_signal_fingerprint` | same H=10 excess; residual vs accum production control | bag features |
+| MCE screen display | **Prefer** observation `shared.market_context` (frozen at capture); fallback `market_context_snapshots` **latest `created_at` per date** only | same H=10; do not re-bind a different snapshot for the same calendar day | regime map + factor values |
 | Pre-open directional | observation features | Prefer open→09:30 stock (**gross**); else open→close − IHSG open→close. **Never** open→09:30 − full-day IHSG | `*_return_pct` = **percent points** (always ÷100) |
 | IEV rank | official rank; challengers `log_iev`, `iev`, `iep` — **not** `iev/iep` | Prefer `is_ncp_locked` / clock **[08:45, 09:00)** over largest post-open batch | IEV=volume, IEP=price |
 | Verdict | — | **WIN needs ≥2 valid OOS folds**; single-fold edge = provisional `INCONCLUSIVE` | — |

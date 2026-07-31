@@ -44,8 +44,80 @@ _REGIME_MAP = {
 }
 
 
+def _feats_from_market_context_blob(mc: dict[str, Any]) -> dict[str, float]:
+    """Parse a market_context object (observation-bound or table row factors)."""
+    feats: dict[str, float] = {}
+    regime = mc.get("regime")
+    if regime is not None:
+        rkey = str(regime).strip().upper()
+        feats["regime_score"] = _REGIME_MAP.get(rkey, 0.0)
+    factors = mc.get("factors")
+    if factors is None and isinstance(mc.get("factors_json"), str):
+        try:
+            factors = json.loads(mc["factors_json"])
+        except (TypeError, json.JSONDecodeError):
+            factors = None
+    if isinstance(factors, list):
+        for item in factors:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or item.get("key") or "").lower()
+            if not name:
+                continue
+            # Prefer raw value (table path legacy); score is 0–1 label axis
+            raw = item.get("value")
+            if raw is None:
+                raw = item.get("score")
+            if isinstance(raw, (int, float)):
+                feats[name] = float(raw)
+    elif isinstance(factors, dict):
+        for k, v in factors.items():
+            if isinstance(v, (int, float)):
+                feats[str(k).lower()] = float(v)
+            elif isinstance(v, dict):
+                raw = v.get("value")
+                if raw is None:
+                    raw = v.get("score")
+                if isinstance(raw, (int, float)):
+                    feats[str(k).lower()] = float(raw)
+    return feats
+
+
+def _mctx_from_observation(payload: dict[str, Any]) -> dict[str, float] | None:
+    """Frozen market context captured with the observation (PIT-correct).
+
+    Live ACCUM payloads store this at ``shared.market_context``. Prefer it over
+    reloading ``market_context_snapshots`` by session date (which can pick a
+    different row when multiple snapshots exist for one calendar day).
+    """
+    shared = payload.get("shared") if isinstance(payload.get("shared"), dict) else {}
+    for blob in (
+        shared.get("market_context") if isinstance(shared, dict) else None,
+        payload.get("market_context"),
+        payload.get("mce"),
+    ):
+        if isinstance(blob, dict) and blob:
+            feats = _feats_from_market_context_blob(blob)
+            if feats:
+                return feats
+    # Fingerprint-only regime when full factors missing
+    _sig, fp, _cand, _root = _payload_views(payload)
+    if isinstance(fp, dict) and fp:
+        reg = fp.get("market_regime_at_signal") or fp.get("decision_constraints.regime")
+        if reg is None and isinstance(fp.get("decision_constraints"), dict):
+            reg = fp["decision_constraints"].get("regime")
+        if reg is not None:
+            rkey = str(reg).strip().upper()
+            return {"regime_score": _REGIME_MAP.get(rkey, 0.0)}
+    return None
+
+
 def _load_mctx_by_date(conn: sqlite3.Connection) -> dict[str, dict[str, float]]:
-    """date → feature map from market_context_snapshots."""
+    """Fallback only: date → features from market_context_snapshots.
+
+    When multiple rows share a calendar date, keep the **latest created_at**
+    (deterministic). Prefer observation-bound ``shared.market_context`` instead.
+    """
     if not table_exists(conn, "market_context_snapshots"):
         return {}
     cols = {
@@ -54,43 +126,35 @@ def _load_mctx_by_date(conn: sqlite3.Connection) -> dict[str, dict[str, float]]:
     if "as_of_date" not in cols or "factors_json" not in cols:
         return {}
     has_regime = "regime" in cols
-    sql = (
-        "SELECT as_of_date, regime, factors_json FROM market_context_snapshots"
-        if has_regime
-        else "SELECT as_of_date, NULL, factors_json FROM market_context_snapshots"
-    )
+    has_created = "created_at" in cols
+    select = ["as_of_date", "factors_json"]
+    if has_regime:
+        select.insert(1, "regime")
+    else:
+        select.insert(1, "NULL AS regime")
+    if has_created:
+        select.append("created_at")
+    else:
+        select.append("NULL AS created_at")
+    order = " ORDER BY created_at ASC" if has_created else ""
+    sql = f"SELECT {', '.join(select)} FROM market_context_snapshots{order}"
     out: dict[str, dict[str, float]] = {}
-    for as_of, regime, fj in conn.execute(sql).fetchall():
+    for row in conn.execute(sql).fetchall():
+        as_of, regime, fj, created = row[0], row[1], row[2], row[3]
         date = str(as_of or "")
         if "T" in date:
             date = date.split("T", 1)[0]
         if not date:
             continue
-        feats: dict[str, float] = {}
-        if regime is not None:
-            rkey = str(regime).strip().upper()
-            feats["regime_score"] = _REGIME_MAP.get(rkey, 0.0)
+        blob: dict[str, Any] = {"regime": regime, "factors_json": fj}
         try:
-            factors = json.loads(fj) if fj else []
+            blob["factors"] = json.loads(fj) if fj else []
         except (TypeError, json.JSONDecodeError):
-            factors = []
-        if isinstance(factors, list):
-            for item in factors:
-                if not isinstance(item, dict):
-                    continue
-                name = str(item.get("name") or item.get("key") or "").lower()
-                if not name:
-                    continue
-                raw = item.get("value")
-                if raw is None:
-                    raw = item.get("score")
-                if isinstance(raw, (int, float)):
-                    feats[name] = float(raw)
-        elif isinstance(factors, dict):
-            for k, v in factors.items():
-                if isinstance(v, (int, float)):
-                    feats[str(k).lower()] = float(v)
-        out[date] = feats
+            blob["factors"] = []
+        feats = _feats_from_market_context_blob(blob)
+        # later created_at overwrites earlier (scan ASC) → latest wins
+        if feats:
+            out[date] = feats
     return out
 
 
@@ -373,13 +437,16 @@ def build_diagnostic_panel(
             accum_policy = None
             notes.append("accum production policy missing; control_score=0")
 
-        mctx_all = (
-            _load_mctx_by_date(conn)
-            if spec.diagnostic_id == "mce.screen_display"
-            else {}
-        )
-        if spec.diagnostic_id == "mce.screen_display" and not mctx_all:
-            notes.append("market_context_snapshots empty or missing")
+        mctx_table: dict[str, dict[str, float]] = {}
+        n_bound = 0
+        n_table = 0
+        if spec.diagnostic_id == "mce.screen_display":
+            mctx_table = _load_mctx_by_date(conn)
+            if not mctx_table:
+                notes.append(
+                    "market_context_snapshots empty — relying on observation-bound "
+                    "shared.market_context when present"
+                )
 
         rows_raw, cohort_notes, _ = fetch_accum_observation_raw(
             conn, preferred_compatibility_id=compatibility_id
@@ -411,7 +478,16 @@ def build_diagnostic_panel(
             if not ticker or not date:
                 continue
 
-            mctx = mctx_all.get(date)
+            mctx: dict[str, float] | None = None
+            if spec.diagnostic_id == "mce.screen_display":
+                # PIT: prefer context frozen on the observation payload
+                mctx = _mctx_from_observation(payload)
+                if mctx is not None:
+                    n_bound += 1
+                else:
+                    mctx = mctx_table.get(date)
+                    if mctx is not None:
+                        n_table += 1
             feats = extract_diagnostic_features(payload, spec, mctx=mctx)
             if not feats:
                 continue
@@ -456,6 +532,10 @@ def build_diagnostic_panel(
         if dropped:
             notes.append(
                 f"dropped {dropped} rows missing primary H={primary_horizon} or empty features"
+            )
+        if spec.diagnostic_id == "mce.screen_display":
+            notes.append(
+                f"mce_context_source bound_obs={n_bound} table_fallback={n_table}"
             )
         notes.append(
             f"diagnostic_panel n={len(out)} diagnostic_id={spec.diagnostic_id}"
