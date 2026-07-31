@@ -37,17 +37,50 @@ def test_policy_registry_includes_pre_open():
     assert listed["screener.pre_open.iev_rank"]["protocol"] == "pre_open_session_v1"
 
 
-def test_history_batch_pick_largest():
+def test_history_batch_prefers_ncp_over_larger_post_open():
+    """Largest batch must not win when a smaller NCP / pre-open batch exists."""
     rows = [
-        {"date": "2024-01-02", "ticker": "AAA", "collected_at": "t1", "rank": 1},
-        {"date": "2024-01-02", "ticker": "BBB", "collected_at": "t1", "rank": 2},
-        {"date": "2024-01-02", "ticker": "AAA", "collected_at": "t2", "rank": 9},
+        # early large non-NCP
+        {"date": "2024-01-02", "ticker": "AAA", "collected_at": "2024-01-02T02:00:00", "rank": 1, "is_ncp_locked": 0, "iev": 1e6, "iep": 100},
+        {"date": "2024-01-02", "ticker": "BBB", "collected_at": "2024-01-02T02:00:00", "rank": 2, "is_ncp_locked": 0, "iev": 1e6, "iep": 100},
+        {"date": "2024-01-02", "ticker": "CCC", "collected_at": "2024-01-02T02:00:00", "rank": 3, "is_ncp_locked": 0, "iev": 1e6, "iep": 100},
+        # small NCP locked pre-open
+        {"date": "2024-01-02", "ticker": "AAA", "collected_at": "2024-01-02T08:56:00", "rank": 1, "is_ncp_locked": 1, "iev": 100, "iep": 10},
+        {"date": "2024-01-02", "ticker": "BBB", "collected_at": "2024-01-02T08:56:00", "rank": 2, "is_ncp_locked": 1, "iev": 100, "iep": 10},
+        # large post-open (would win old "largest batch" rule)
+        {"date": "2024-01-02", "ticker": "AAA", "collected_at": "2024-01-02T09:08:00", "rank": 9, "is_ncp_locked": 1, "iev": 9e9, "iep": 1},
+        {"date": "2024-01-02", "ticker": "BBB", "collected_at": "2024-01-02T09:08:00", "rank": 8, "is_ncp_locked": 1, "iev": 9e9, "iep": 1},
+        {"date": "2024-01-02", "ticker": "CCC", "collected_at": "2024-01-02T09:08:00", "rank": 7, "is_ncp_locked": 1, "iev": 9e9, "iep": 1},
     ]
+    # Post-open batch is also ncp_locked=1 and larger → clock window must break the tie:
+    # 08:56 is in [08:45,09:00); 09:08 is not. Both ncp=1 → clock prefers 08:56.
     picked, notes = _pick_history_batches(rows)
-    assert len(picked) == 2
     assert {r["ticker"] for r in picked} == {"AAA", "BBB"}
-    assert all(r["collected_at"] == "t1" for r in picked)
+    assert all(r["collected_at"] == "2024-01-02T08:56:00" for r in picked)
     assert notes
+
+
+def test_history_batch_prefers_preopen_clock_over_early_largest():
+    rows = [
+        {"date": "2024-01-03", "ticker": "AAA", "collected_at": "2024-01-03T02:00:00", "rank": 1, "is_ncp_locked": 0},
+        {"date": "2024-01-03", "ticker": "BBB", "collected_at": "2024-01-03T02:00:00", "rank": 2, "is_ncp_locked": 0},
+        {"date": "2024-01-03", "ticker": "CCC", "collected_at": "2024-01-03T02:00:00", "rank": 3, "is_ncp_locked": 0},
+        {"date": "2024-01-03", "ticker": "AAA", "collected_at": "2024-01-03T08:50:00", "rank": 1, "is_ncp_locked": 0},
+        {"date": "2024-01-03", "ticker": "BBB", "collected_at": "2024-01-03T08:50:00", "rank": 2, "is_ncp_locked": 0},
+    ]
+    picked, _ = _pick_history_batches(rows)
+    assert all(r["collected_at"] == "2024-01-03T08:50:00" for r in picked)
+
+
+def test_no_iev_over_iep_imbalance_feature():
+    from ml_saham.challenge.panel_iev import _component_features
+    import math
+
+    comps = _component_features(iev=1602630.0, iep=165.0, rank=1, max_rank=50)
+    assert "imbalance" not in comps
+    assert comps["log_iev"] == pytest.approx(math.log1p(1602630.0))
+    # old bug would be ~9711
+    assert comps["log_iev"] < 20
 
 
 def test_iev_panel_labels(fixture_db: Path):
@@ -58,7 +91,8 @@ def test_iev_panel_labels(fixture_db: Path):
     assert len(rows) >= PRE_OPEN_SESSION_V1.min_n_total, notes
     assert all(0 in r.excess for r in rows)
     assert all("official_rank_score" in r.components for r in rows)
-    assert all("imbalance" in r.components for r in rows)
+    assert all("log_iev" in r.components for r in rows)
+    assert all("imbalance" not in r.components for r in rows)
     # production scores higher for better ranks
     s = score_production(rows[:5], pol)
     assert len(s) == 5

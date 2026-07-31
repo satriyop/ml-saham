@@ -21,7 +21,9 @@ ml-saham challenge run screener.pre_open.iev_rank --against ridge_reweight
 
 Frozen snapshot: `src/ml_saham/challenge/policies/pre_open_iev_rank.v1.json`  
 Production score = `official_rank_score` (higher is better rank within capture batch).  
-Features for challengers: `iev`, `iep`, `imbalance` (within-date z equal / ridge).
+Challenger features: `log_iev` (= log1p volume), raw `iev`, `iep` (within-date z equal / ridge).
+
+**Not used:** `iev / iep - 1` — IEV is volume, IEP is price; that ratio is meaningless.
 
 ## Protocol `pre_open_session_v1`
 
@@ -33,9 +35,15 @@ Features for challengers: `iev`, `iep`, `imbalance` (within-date z equal / ridge
 | Split | time-ordered folds, embargo 1 session |
 | Outcomes | WIN / LOSE / INCONCLUSIVE / BLOCKED_DATA / BLOCKED_POLICY |
 
-### Capture batch PIT
+### Capture batch PIT (NCP decision window)
 
-If history has multiple `collected_at` per date, use the **largest** batch only (tie → latest). Do not mix tickers across capture times.
+If history has multiple `collected_at` per date, pick **one** batch (do not mix tickers across times):
+
+1. Prefer **`is_ncp_locked = 1`**
+2. Else prefer capture clock in **[08:45, 09:00)** (pre-open / NCP)
+3. Else largest batch (legacy fallback; note if post-open)
+
+Tie-break: latest `collected_at`.
 
 ## Factor validity
 

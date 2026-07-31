@@ -335,6 +335,7 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                 ),
             )
             # multi-date IEV for pre-open ADR-002 challenge (same-session open→close)
+            # is_ncp_locked=1 + 08:50 clock = NCP decision window
             for di in range(0, min_bars - 5, max(1, (min_bars - 5) // 20)):
                 d_iev = (start + timedelta(days=di)).isoformat()
                 conn.execute(
@@ -346,13 +347,13 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                         si + 1,
                         99.0 + si + (di % 3) * 0.1,
                         f"{d_iev}T08:50:00",
-                        0,
+                        1,
                     ),
                 )
             # keep last as-of row dense
             conn.execute(
                 "INSERT INTO iev_snapshots VALUES (?,?,?,?,?,?,?)",
-                (iev_date, t, 100.0 + si * 0.5, si + 1, 99.0 + si, "2024-06-01", 0),
+                (iev_date, t, 100.0 + si * 0.5, si + 1, 99.0 + si, f"{iev_date}T08:50:00", 1),
             )
             # corpus labels across dates for walk-forward (learning_outcome_labels)
             for j in range(20):
