@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any
 
-from ml_saham.challenge.panel import ACCUM_PURPOSES, PanelRow, build_forward_excess
+from ml_saham.challenge.panel import (
+    PanelRow,
+    build_forward_excess,
+    fetch_accum_observation_raw,
+)
 from ml_saham.challenge.types import PolicySnapshot
 from ml_saham.data.aisaham_read import connect, table_exists
 
@@ -64,28 +69,30 @@ def build_gate_panel(
     policy: PolicySnapshot,
     horizons: tuple[int, ...],
     primary_horizon: int,
+    *,
+    compatibility_id: str | None = None,
 ) -> tuple[list[PanelRow], list[str]]:
     notes: list[str] = []
     path = Path(db_path)
     with connect(path) as conn:
         if not table_exists(conn, "learning_observations"):
             return [], ["learning_observations missing"]
-        purpose_filter = ",".join("?" * len(ACCUM_PURPOSES))
-        rows_raw = conn.execute(
-            f"SELECT purpose, captured_at, decision_payload_json FROM learning_observations "
-            f"WHERE purpose IN ({purpose_filter}) ORDER BY captured_at ASC",
-            ACCUM_PURPOSES,
-        ).fetchall()
-        if not rows_raw:
-            rows_raw = conn.execute(
-                "SELECT purpose, captured_at, decision_payload_json FROM learning_observations "
-                "WHERE purpose LIKE '%ACCUM%' OR purpose LIKE '%accum%' "
-                "ORDER BY captured_at ASC"
-            ).fetchall()
+        rows_raw, cohort_notes, _ = fetch_accum_observation_raw(
+            conn, preferred_compatibility_id=compatibility_id
+        )
+        notes.extend(cohort_notes)
 
         candidates: list[tuple[str, str, dict[str, float]]] = []
         n_blocked = 0
-        for _p, _c, payload_json in rows_raw:
+        for row in rows_raw:
+            if isinstance(row, sqlite3.Row):
+                _p, _c, payload_json = (
+                    row["purpose"],
+                    row["captured_at"],
+                    row["decision_payload_json"],
+                )
+            else:
+                _p, _c, payload_json = row[0], row[1], row[2]
             try:
                 payload = json.loads(payload_json)
             except (TypeError, json.JSONDecodeError):

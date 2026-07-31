@@ -157,6 +157,7 @@ candles (+ IHSG)         ─read──►  protocol y (excess / open-close)
 | `captured_at` | Capture time (ordering / dedupe) |
 | `decision_payload_json` | Full decision JSON (components, scores, ticker, dates) |
 | `observation_id` | Identity for join to corpus outcomes (when column present) |
+| `compatibility_id` | Semantic cohort / rulebook stamp (ai-saham material-config hash) |
 
 **Read by challenge for features / scores:**
 
@@ -164,6 +165,8 @@ candles (+ IHSG)         ─read──►  protocol y (excess / open-close)
 |---|---|
 | `ACCUMULATION_DISCOVERY` (and ACCUM*) | `screener.accum.score_weights` |
 | `PRE_OPEN_AUCTION_DIRECTION` | `screener.pre_open.directional_score` |
+
+**Single-cohort discipline (accum panels):** when `compatibility_id` is present, challenge loads **exactly one** cohort — never pools mixed rulebooks. Default: largest `n` (ties → newest `max(captured_at)`). Explicit override via `compatibility_id=` on panel builders. Notes always record the selected id and excluded cohort sizes. Fixtures without the column keep the legacy unfiltered path.
 
 ### `learning_outcome_labels` (corpus labels)
 

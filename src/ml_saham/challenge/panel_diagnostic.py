@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from ml_saham.challenge.panel import (
-    ACCUM_PURPOSES,
     build_forward_excess,
     extract_components,
+    fetch_accum_observation_raw,
 )
 from ml_saham.challenge.policies.registry import load_policy
 from ml_saham.challenge.scorers import score_production
@@ -246,6 +246,8 @@ def build_diagnostic_panel(
     spec: DiagnosticSpec,
     horizons: tuple[int, ...],
     primary_horizon: int,
+    *,
+    compatibility_id: str | None = None,
 ) -> tuple[list[DiagnosticPanelRow], list[str]]:
     """Build labeled diagnostic panel aligned with accum observations + excess."""
     notes: list[str] = []
@@ -268,28 +270,19 @@ def build_diagnostic_panel(
         if spec.diagnostic_id == "mce.screen_display" and not mctx_all:
             notes.append("market_context_snapshots empty or missing")
 
-        cols = {
-            r[1]
-            for r in conn.execute("PRAGMA table_info(learning_observations)").fetchall()
-        }
-        if "decision_payload_json" not in cols:
-            return [], ["learning_observations.decision_payload_json missing"]
-
-        purpose_filter = ",".join("?" * len(ACCUM_PURPOSES))
-        sql = (
-            f"SELECT purpose, captured_at, decision_payload_json FROM learning_observations "
-            f"WHERE purpose IN ({purpose_filter}) ORDER BY captured_at ASC"
+        rows_raw, cohort_notes, _ = fetch_accum_observation_raw(
+            conn, preferred_compatibility_id=compatibility_id
         )
-        rows_raw = conn.execute(sql, ACCUM_PURPOSES).fetchall()
-        if not rows_raw:
-            rows_raw = conn.execute(
-                "SELECT purpose, captured_at, decision_payload_json FROM learning_observations "
-                "WHERE purpose LIKE '%ACCUM%' OR purpose LIKE '%accum%' "
-                "ORDER BY captured_at ASC"
-            ).fetchall()
+        notes.extend(cohort_notes)
+        if any("decision_payload_json missing" in n for n in cohort_notes):
+            return [], notes
 
         candidates: list[tuple[str, str, dict[str, float], float]] = []
-        for _purpose, _cap, payload_json in rows_raw:
+        for row in rows_raw:
+            if isinstance(row, sqlite3.Row):
+                payload_json = row["decision_payload_json"]
+            else:
+                payload_json = row[2]
             try:
                 payload = json.loads(payload_json)
             except (TypeError, json.JSONDecodeError):
