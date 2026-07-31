@@ -125,7 +125,7 @@ Maintainer DB cohort `sha256:005363021f7f792071e43d12506aeefe474abf4fbd7d0a45f82
 | unique ticker/session | 1,890 |
 | extracted_count | 1,890 |
 | unextractable_count | 0 |
-| Corpus H10-label AVAILABLE (`price_path.accum_10d.v1`) | 1,485 |
+| Corpus H10-label AVAILABLE / UNAVAILABLE (selected units only) | 1,485 / 405 |
 | market_cap numeric / explicit_missing | 765 / 1,125 |
 | piotroski numeric / explicit_missing | 765 / 1,125 |
 | accum_score / signal_score numeric | 1,890 / 1,890 |
@@ -137,8 +137,12 @@ Counterfactual smoke (non-tournament): floors market_cap 1e12, piotroski 3, accu
 
 See task §9 / `sufficiency_verdict()`:
 
-- **SUFFICIENT_FOR_REPLAY** when extract covers the cohort with low unextractable rate and golden predicates match.
-- **INSUFFICIENT_NEEDS_CORPUS_EXTENSION** when required paths cannot be distinguished from schema failure or extract collapses.
+- **SUFFICIENT_FOR_REPLAY** when every selected unique unit extracts cleanly
+  (unextractable count must be **exactly zero**), classifications reconcile 1:1,
+  and when measured, corpus H10-label available + unavailable == selected.
+- **INSUFFICIENT_NEEDS_CORPUS_EXTENSION** when required paths cannot be
+  distinguished from schema failure, extract collapses, or H10 counts fail
+  reconciliation against the **selected** observation_id set.
 
 Numeric null coverage (e.g. missing market_cap) is **not** automatically insufficient.
 

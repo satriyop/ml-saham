@@ -158,6 +158,12 @@ def test_live_screen_hard_filter_extract_cohort(live_db: Path):
     assert summary.per_gate_numeric["screen.accum.market_cap_floor"] == 765
     assert summary.per_gate_explicit_missing["screen.accum.market_cap_floor"] == 1125
     assert summary.corpus_h10_label_available_count == 1485
+    assert summary.corpus_h10_label_unavailable_count == 1890 - 1485
+    assert (
+        summary.corpus_h10_label_available_count
+        + summary.corpus_h10_label_unavailable_count
+        == summary.selected_row_count
+    )
     assert sufficiency_verdict(summary) == "SUFFICIENT_FOR_REPLAY"
 
     # Spot-check extract paths (no root fallback)

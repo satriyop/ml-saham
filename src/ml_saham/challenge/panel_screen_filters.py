@@ -115,13 +115,15 @@ class ScreenFilterAuditSummary:
     unextractable_count: int = 0
     duplicate_ticker_session_excluded: int = 0
     wrong_purpose_excluded: int = 0
+    wrong_cohort_excluded: int = 0
     wrong_contract_excluded: int = 0
     bad_canonical_window_excluded: int = 0
     notes: list[str] = field(default_factory=list)
     per_gate_numeric: dict[str, int] = field(default_factory=dict)
     per_gate_explicit_missing: dict[str, int] = field(default_factory=dict)
-    # Corpus label availability (price_path.accum_10d.v1) — not tournament y
+    # Corpus label availability (price_path.accum_10d.v1) for **selected** units only
     corpus_h10_label_available_count: int | None = None
+    corpus_h10_label_unavailable_count: int | None = None
     classifications: list[
         tuple[ExtractedScreenFilterInputs, ScreenFilterClassification]
     ] = field(default_factory=list)
@@ -157,20 +159,15 @@ def _window7(payload: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 def _as_float(value: Any) -> float | None:
+    """Accept JSON numbers only (int/float). Strings are not repaired."""
     if value is None:
         return None
     if isinstance(value, bool):
         return None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int):
         return float(value)
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            return float(text)
-        except ValueError:
-            return None
+    if isinstance(value, float):
+        return value
     return None
 
 
@@ -555,13 +552,27 @@ def audit_screen_filter_cohort(
                 f"compatibility_id={cid!r} not found among ACCUMULATION_DISCOVERY cohorts"
             )
             return summary
-        if len(cohorts) > 1:
+
+        # Parent-population exclusion counts (SQL aggregates, not post-filter)
+        summary.wrong_cohort_excluded = sum(n for c, n, _ in cohorts if c != cid)
+        if summary.wrong_cohort_excluded:
             summary.notes.append(
                 f"explicit cohort {cid[:16]}… n={match[1]}; "
-                f"excluded {len(cohorts) - 1} other cohort(s)"
+                f"excluded {summary.wrong_cohort_excluded} row(s) from "
+                f"{len(cohorts) - 1} other ACCUMULATION_DISCOVERY cohort(s)"
+            )
+        summary.wrong_purpose_excluded = _count_wrong_purpose_same_cohort(
+            conn, compatibility_id=cid
+        )
+        if summary.wrong_purpose_excluded:
+            summary.notes.append(
+                f"excluded {summary.wrong_purpose_excluded} non-ACCUMULATION_DISCOVERY "
+                f"row(s) sharing compatibility_id"
             )
 
-        select_cols = "purpose, captured_at, decision_payload_json, contract_id"
+        select_cols = (
+            "purpose, captured_at, decision_payload_json, contract_id, observation_id"
+        )
         rows_raw, notes, resolved = fetch_observation_discovery_only(
             conn, compatibility_id=cid, select=select_cols
         )
@@ -573,16 +584,23 @@ def audit_screen_filter_cohort(
             return summary
 
         summary.raw_fetch_count = len(rows_raw)
-        seen: dict[tuple[str, str], ExtractedScreenFilterInputs] = {}
+        seen: dict[tuple[str, str], tuple[str, ExtractedScreenFilterInputs]] = {}
 
         for row in rows_raw:
             if isinstance(row, sqlite3.Row):
                 purpose = str(row["purpose"] or "")
                 contract = row["contract_id"] if "contract_id" in row.keys() else None
+                obs_id = (
+                    str(row["observation_id"] or "")
+                    if "observation_id" in row.keys()
+                    else ""
+                )
             else:
                 purpose = str(row[0] or "")
                 contract = row[3] if len(row) > 3 else None
+                obs_id = str(row[4] or "") if len(row) > 4 else ""
 
+            # Purpose is SQL-filtered to discovery; keep guard for safety
             if purpose != ACCUM_DISCOVERY_PURPOSE:
                 summary.wrong_purpose_excluded += 1
                 continue
@@ -593,7 +611,6 @@ def audit_screen_filter_cohort(
 
             payload = _payload_from_row(row)
             if payload is None:
-                # Malformed payload: exclude from unit set, count exclusion
                 summary.unextractable_count += 1
                 continue
 
@@ -611,11 +628,13 @@ def audit_screen_filter_cohort(
             if key in seen:
                 summary.duplicate_ticker_session_excluded += 1
                 continue
-            seen[key] = extracted
+            if not obs_id:
+                summary.unextractable_count += 1
+                continue
+            seen[key] = (obs_id, extracted)
 
             if extracted.is_unextractable:
                 summary.unextractable_count += 1
-                # Still a selected unit if identity is valid but fields bad
             else:
                 summary.extracted_count += 1
                 _tally_gate(summary, GATE_MARKET_CAP, extracted.market_cap_state)
@@ -628,11 +647,12 @@ def audit_screen_filter_cohort(
 
         summary.unique_ticker_session_count = len(seen)
         summary.selected_row_count = len(seen)
+        selected_obs_ids = [oid for oid, _ in seen.values()]
 
         if measure_h10:
-            summary.corpus_h10_label_available_count = _count_h10_available(
-                conn, compatibility_id=cid
-            )
+            avail, unavail = _count_h10_for_selected_ids(conn, selected_obs_ids)
+            summary.corpus_h10_label_available_count = avail
+            summary.corpus_h10_label_unavailable_count = unavail
 
     return summary
 
@@ -641,7 +661,9 @@ def fetch_observation_discovery_only(
     conn: sqlite3.Connection,
     *,
     compatibility_id: str,
-    select: str = "purpose, captured_at, decision_payload_json, contract_id",
+    select: str = (
+        "purpose, captured_at, decision_payload_json, contract_id, observation_id"
+    ),
 ) -> tuple[list[Any], list[str], str | None]:
     """Fetch ACCUMULATION_DISCOVERY rows for one explicit compatibility_id only."""
     from ml_saham.data.observation_cohort import fetch_observation_raw
@@ -657,6 +679,26 @@ def fetch_observation_discovery_only(
     )
 
 
+def _count_wrong_purpose_same_cohort(
+    conn: sqlite3.Connection,
+    *,
+    compatibility_id: str,
+) -> int:
+    """Rows sharing compatibility_id but not ACCUMULATION_DISCOVERY purpose."""
+    try:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) FROM learning_observations
+            WHERE compatibility_id = ?
+              AND purpose != ?
+            """,
+            (compatibility_id, ACCUM_DISCOVERY_PURPOSE),
+        ).fetchone()
+        return int(row[0] or 0) if row else 0
+    except sqlite3.Error:
+        return 0
+
+
 def _tally_gate(
     summary: ScreenFilterAuditSummary, gate: str, state: RawInputState
 ) -> None:
@@ -668,38 +710,56 @@ def _tally_gate(
         )
 
 
-def _count_h10_available(
+def _count_h10_for_selected_ids(
     conn: sqlite3.Connection,
-    *,
-    compatibility_id: str,
-) -> int | None:
-    """Count observations in cohort with AVAILABLE price_path.accum_10d.v1 labels."""
+    observation_ids: list[str],
+) -> tuple[int | None, int | None]:
+    """Corpus H10-label available/unavailable for **selected** observation_ids only.
+
+    Returns ``(available, unavailable)`` where
+    ``available + unavailable == len(observation_ids)`` when labels table exists.
+    Unavailable = selected units without an AVAILABLE ``price_path.accum_10d.v1``
+    label (missing label or non-AVAILABLE). Not tournament ``accum_path_v1`` y.
+    """
+    n = len(observation_ids)
+    if n == 0:
+        return 0, 0
     if not table_exists(conn, "learning_outcome_labels"):
-        return None
-    if not table_exists(conn, "learning_observations"):
-        return None
+        return None, None
     cols = {
         r[1]
         for r in conn.execute("PRAGMA table_info(learning_outcome_labels)").fetchall()
     }
     if "contract_id" not in cols or "observation_id" not in cols:
-        return None
+        return None, None
     try:
-        rows = conn.execute(
-            """
-            SELECT COUNT(DISTINCT lol.observation_id)
-            FROM learning_outcome_labels lol
-            JOIN learning_observations lo ON lo.observation_id = lol.observation_id
-            WHERE lo.purpose = ?
-              AND lo.compatibility_id = ?
-              AND lol.contract_id = 'price_path.accum_10d.v1'
-              AND UPPER(COALESCE(lol.availability, '')) = 'AVAILABLE'
-            """,
-            (ACCUM_DISCOVERY_PURPOSE, compatibility_id),
-        ).fetchone()
-        return int(rows[0] or 0) if rows else 0
+        # Chunk IN clauses for safety
+        available_ids: set[str] = set()
+        chunk = 400
+        for i in range(0, n, chunk):
+            part = observation_ids[i : i + chunk]
+            placeholders = ",".join("?" * len(part))
+            rows = conn.execute(
+                f"""
+                SELECT DISTINCT observation_id
+                FROM learning_outcome_labels
+                WHERE observation_id IN ({placeholders})
+                  AND contract_id = 'price_path.accum_10d.v1'
+                  AND UPPER(COALESCE(availability, '')) = 'AVAILABLE'
+                """,
+                part,
+            ).fetchall()
+            for r in rows:
+                available_ids.add(
+                    str(r[0] if not isinstance(r, sqlite3.Row) else r["observation_id"])
+                )
+        available = len(available_ids)
+        unavailable = n - available
+        if available < 0 or unavailable < 0 or available + unavailable != n:
+            return None, None
+        return available, unavailable
     except sqlite3.Error:
-        return None
+        return None, None
 
 
 def sufficiency_verdict(summary: ScreenFilterAuditSummary) -> str:
@@ -709,7 +769,8 @@ def sufficiency_verdict(summary: ScreenFilterAuditSummary) -> str:
     - explicit cohort selected with ≥1 unique ticker/session unit
     - every selected unit extracted (no unextractable kept in the unit set)
     - classifications reconcile 1:1 with selected units
-    - no inventing a pass from contaminated raw fetch alone
+    - when H10 label counts are measured, available+unavailable==selected
+      and neither is negative / available does not exceed selected
     """
     if not summary.compatibility_id:
         return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
@@ -723,4 +784,17 @@ def sufficiency_verdict(summary: ScreenFilterAuditSummary) -> str:
         return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
     if len(summary.classifications) != summary.selected_row_count:
         return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
+
+    avail = summary.corpus_h10_label_available_count
+    unavail = summary.corpus_h10_label_unavailable_count
+    if avail is not None or unavail is not None:
+        if avail is None or unavail is None:
+            return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
+        if avail < 0 or unavail < 0:
+            return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
+        if avail > summary.selected_row_count:
+            return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
+        if avail + unavail != summary.selected_row_count:
+            return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
+
     return "SUFFICIENT_FOR_REPLAY"

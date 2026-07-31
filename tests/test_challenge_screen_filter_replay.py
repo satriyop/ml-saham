@@ -300,6 +300,70 @@ def test_canonical_window_30_not_accepted():
     assert ext.unextractable_reason == "canonical_window_not_7"
 
 
+def test_string_numeric_not_repaired():
+    payload = _good_payload()
+    payload["features_by_window"]["7"]["candidate"]["accum_score"] = "50"
+    ext = extract_screen_filter_inputs(payload)
+    assert ext.is_unextractable
+
+
+def test_h10_counts_only_selected_units(tmp_path: Path):
+    """H10 must not include wrong-contract observation labels."""
+    db = tmp_path / "h10.db"
+    conn = sqlite3.connect(db)
+    _obs_table(conn)
+    conn.execute(
+        "CREATE TABLE learning_outcome_labels ("
+        "observation_id TEXT, contract_id TEXT, availability TEXT)"
+    )
+    cid = "sha256:h10"
+    good = json.dumps(_good_payload("A", "2026-06-02"))
+    bad = json.dumps(_good_payload("B", "2026-06-02"))
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?,?,?,?,?,?)",
+        (
+            "good",
+            "ACCUMULATION_DISCOVERY",
+            cid,
+            good,
+            "learning_observation.accumulation_discovery.v2",
+            "t0",
+        ),
+    )
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?,?,?,?,?,?)",
+        (
+            "bad",
+            "ACCUMULATION_DISCOVERY",
+            cid,
+            bad,
+            "learning_observation.wrong.v0",
+            "t1",
+        ),
+    )
+    # Labels for BOTH observations — only good should count toward available
+    for oid in ("good", "bad"):
+        conn.execute(
+            "INSERT INTO learning_outcome_labels VALUES (?,?,?)",
+            (oid, "price_path.accum_10d.v1", "AVAILABLE"),
+        )
+    conn.commit()
+    conn.close()
+
+    summary = audit_screen_filter_cohort(db, compatibility_id=cid, measure_h10=True)
+    assert summary.raw_fetch_count == 2
+    assert summary.selected_row_count == 1
+    assert summary.wrong_contract_excluded == 1
+    assert summary.corpus_h10_label_available_count == 1
+    assert summary.corpus_h10_label_unavailable_count == 0
+    assert (
+        summary.corpus_h10_label_available_count
+        + summary.corpus_h10_label_unavailable_count
+        == summary.selected_row_count
+    )
+    assert sufficiency_verdict(summary) == "SUFFICIENT_FOR_REPLAY"
+
+
 def test_gate_ids_stable():
     assert GATE_MARKET_CAP.startswith("screen.accum.")
     assert GATE_PIOTROSKI.startswith("screen.accum.")
