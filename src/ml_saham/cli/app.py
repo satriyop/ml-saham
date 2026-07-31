@@ -8,8 +8,6 @@ from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.markdown import Markdown
-from rich.panel import Panel
 from rich.table import Table
 
 from ml_saham import __version__
@@ -319,11 +317,7 @@ def learn_demo_cmd(
         sb_type = (
             "open_session"
             if getattr(result, "scoreboard_kind", "") == "open_session"
-            else (
-                "long_only_vs_ihsg"
-                if result.scoreboard
-                else "failure_lab"
-            )
+            else ("long_only_vs_ihsg" if result.scoreboard else "failure_lab")
         )
         pack = write_artifact_pack(
             ArtifactWriteRequest(
@@ -359,7 +353,9 @@ def learn_demo_cmd(
             "top_names": getattr(result, "top_names", []),
         }
         export_json.parent.mkdir(parents=True, exist_ok=True)
-        export_json.write_text(json.dumps(export_data, indent=2, ensure_ascii=False), encoding="utf-8")
+        export_json.write_text(
+            json.dumps(export_data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         console.print(f"[green]Saved JSON export to {export_json}[/green]")
 
     if export_md:
@@ -378,7 +374,15 @@ def learn_demo_cmd(
             result.summary_md or "",
         ]
         if getattr(result, "top_names", None):
-            md_lines.extend(["", "## Top Picks", "```json", json.dumps(result.top_names, indent=2), "```"])
+            md_lines.extend(
+                [
+                    "",
+                    "## Top Picks",
+                    "```json",
+                    json.dumps(result.top_names, indent=2),
+                    "```",
+                ]
+            )
         export_md.parent.mkdir(parents=True, exist_ok=True)
         export_md.write_text("\n".join(md_lines), encoding="utf-8")
         console.print(f"[green]Saved Markdown export to {export_md}[/green]")
@@ -599,9 +603,7 @@ def challenge_list_cmd() -> None:
         "[bold]Operator ritual:[/bold] catalog → weekly health --with-diagnostics "
         "→ dig engine signal|risk only when retuning"
     )
-    console.print(
-        "[dim]Weekly: ml-saham challenge health --with-diagnostics[/dim]"
-    )
+    console.print("[dim]Weekly: ml-saham challenge health --with-diagnostics[/dim]")
     console.print(
         "[dim]Dig (on demand): challenge engine signal|risk --scenario accum[/dim]"
     )
@@ -916,6 +918,11 @@ def challenge_factor_cmd(
         "--list-factors",
         help="List enabled factors for the policy and exit",
     ),
+    compatibility_id: Optional[str] = typer.Option(
+        None,
+        "--compatibility-id",
+        help="Exact accumulation observation cohort (recommended for verified v2)",
+    ),
     export_json: Optional[Path] = typer.Option(
         None,
         "--export-json",
@@ -945,7 +952,7 @@ def challenge_factor_cmd(
         except KeyError as exc:
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=2) from None
-        table = Table(title=f"Enabled factors — {policy_id}")
+        table = Table(title=f"Challenge adapter factors — {policy_id}")
         table.add_column("key")
         table.add_column("weight")
         table.add_column("aliases")
@@ -976,6 +983,7 @@ def challenge_factor_cmd(
             policy_id,
             write_artifact=not no_artifact,
             artifacts_dir=Path(arts) if arts else None,
+            compatibility_id=compatibility_id,
         )
         for line in batch.lines:
             console.print(line)
@@ -985,6 +993,16 @@ def challenge_factor_cmd(
                 "policy_id": batch.policy_id,
                 "protocol_id": batch.protocol_id,
                 "policy_hash": batch.policy_hash,
+                "observation_compatibility_id": batch.observation_compatibility_id,
+                "production_snapshot_id": batch.production_snapshot_id,
+                "production_snapshot_digest": batch.production_snapshot_digest,
+                "production_policy_id": batch.production_policy_id,
+                "production_policy_version": batch.production_policy_version,
+                "production_semantic_engine_contract_id": (
+                    batch.production_semantic_engine_contract_id
+                ),
+                "challenge_adapter_id": batch.challenge_adapter_id,
+                "challenge_adapter_version": batch.challenge_adapter_version,
                 "n_rows": batch.n_rows,
                 "primary_horizon": batch.primary_horizon,
                 "blocked": batch.blocked.value if batch.blocked else None,
@@ -1001,7 +1019,9 @@ def challenge_factor_cmd(
                 ],
                 "artifact_dir": str(batch.artifact_dir) if batch.artifact_dir else None,
             }
-            export_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            export_json.write_text(
+                json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+            )
             console.print(f"\n[green]Saved JSON to {export_json}[/green]")
         if export_md:
             export_md.parent.mkdir(parents=True, exist_ok=True)
@@ -1015,6 +1035,7 @@ def challenge_factor_cmd(
         factor=factor or "",
         write_artifact=not no_artifact,
         artifacts_dir=Path(arts) if arts else None,
+        compatibility_id=compatibility_id,
     )
     for line in result.lines:
         console.print(line)
@@ -1026,6 +1047,16 @@ def challenge_factor_cmd(
             "policy_id": result.policy_id,
             "protocol_id": result.protocol_id,
             "policy_hash": result.policy_hash,
+            "observation_compatibility_id": result.observation_compatibility_id,
+            "production_snapshot_id": result.production_snapshot_id,
+            "production_snapshot_digest": result.production_snapshot_digest,
+            "production_policy_id": result.production_policy_id,
+            "production_policy_version": result.production_policy_version,
+            "production_semantic_engine_contract_id": (
+                result.production_semantic_engine_contract_id
+            ),
+            "challenge_adapter_id": result.challenge_adapter_id,
+            "challenge_adapter_version": result.challenge_adapter_version,
             "factor": result.factor,
             "n_rows": result.n_rows,
             "primary_horizon": result.primary_horizon,
@@ -1078,6 +1109,11 @@ def challenge_health_cmd(
         "--champion-model",
         help="Champion model when --with-champion (lgbm_reweight | elastic_net_reweight)",
     ),
+    compatibility_id: Optional[str] = typer.Option(
+        None,
+        "--compatibility-id",
+        help="Exact accumulation observation cohort (recommended for verified v2)",
+    ),
     no_artifact: bool = typer.Option(
         False,
         "--no-artifact",
@@ -1102,6 +1138,7 @@ def challenge_health_cmd(
         champion_model=champion_model,
         write_artifact=not no_artifact,
         artifacts_dir=Path(arts) if arts else None,
+        compatibility_id=compatibility_id,
     )
     for line in result.lines:
         console.print(line)
@@ -1168,6 +1205,11 @@ def challenge_champion_cmd(
         "--baseline",
         help="Baseline id (v1: production only)",
     ),
+    compatibility_id: Optional[str] = typer.Option(
+        None,
+        "--compatibility-id",
+        help="Exact accumulation observation cohort (recommended for verified v2)",
+    ),
     export_json: Optional[Path] = typer.Option(
         None,
         "--export-json",
@@ -1215,6 +1257,7 @@ def challenge_champion_cmd(
         baseline=baseline,
         write_artifact=not no_artifact,
         artifacts_dir=Path(arts) if arts else None,
+        compatibility_id=compatibility_id,
     )
     for line in result.lines:
         console.print(line)
@@ -1227,6 +1270,16 @@ def challenge_champion_cmd(
             "policy_id": result.policy_id,
             "protocol_id": result.protocol_id,
             "policy_hash": result.policy_hash,
+            "observation_compatibility_id": result.observation_compatibility_id,
+            "production_snapshot_id": result.production_snapshot_id,
+            "production_snapshot_digest": result.production_snapshot_digest,
+            "production_policy_id": result.production_policy_id,
+            "production_policy_version": result.production_policy_version,
+            "production_semantic_engine_contract_id": (
+                result.production_semantic_engine_contract_id
+            ),
+            "challenge_adapter_id": result.challenge_adapter_id,
+            "challenge_adapter_version": result.challenge_adapter_version,
             "baseline_id": result.baseline_id,
             "against_id": result.against_id,
             "n_rows": result.n_rows,
@@ -1269,6 +1322,11 @@ def challenge_run_cmd(
         "--baseline",
         help="Baseline id (v1: production only)",
     ),
+    compatibility_id: Optional[str] = typer.Option(
+        None,
+        "--compatibility-id",
+        help="Explicit observation cohort; required to audit a thin fresh rulebook",
+    ),
     export_json: Optional[Path] = typer.Option(
         None,
         "--export-json",
@@ -1297,6 +1355,7 @@ def challenge_run_cmd(
         baseline=baseline,
         write_artifact=not no_artifact,
         artifacts_dir=Path(arts) if arts else None,
+        compatibility_id=compatibility_id,
     )
     for line in result.lines:
         console.print(line)
@@ -1308,6 +1367,16 @@ def challenge_run_cmd(
             "policy_id": result.policy_id,
             "protocol_id": result.protocol_id,
             "policy_hash": result.policy_hash,
+            "observation_compatibility_id": result.observation_compatibility_id,
+            "production_snapshot_id": result.production_snapshot_id,
+            "production_snapshot_digest": result.production_snapshot_digest,
+            "production_policy_id": result.production_policy_id,
+            "production_policy_version": result.production_policy_version,
+            "production_semantic_engine_contract_id": (
+                result.production_semantic_engine_contract_id
+            ),
+            "challenge_adapter_id": result.challenge_adapter_id,
+            "challenge_adapter_version": result.challenge_adapter_version,
             "baseline_id": result.baseline_id,
             "against_id": result.against_id,
             "n_rows": result.n_rows,
@@ -1351,6 +1420,11 @@ def challenge_engine_cmd(
         "production",
         "--baseline",
         help="Baseline id (v1: production only)",
+    ),
+    compatibility_id: Optional[str] = typer.Option(
+        None,
+        "--compatibility-id",
+        help="Exact accumulation observation cohort (recommended for verified v2)",
     ),
     export_json: Optional[Path] = typer.Option(
         None,
@@ -1400,6 +1474,7 @@ def challenge_engine_cmd(
         baseline=baseline,
         write_artifact=not no_artifact,
         artifacts_dir=Path(arts) if arts else None,
+        compatibility_id=compatibility_id,
     )
     for line in result.lines:
         console.print(line)
@@ -1419,6 +1494,17 @@ def challenge_engine_cmd(
                     "scenario": r.scenario,
                     "policy_id": r.policy_id,
                     "protocol_id": r.protocol_id,
+                    "policy_hash": r.policy_hash,
+                    "observation_compatibility_id": r.observation_compatibility_id,
+                    "production_snapshot_id": r.production_snapshot_id,
+                    "production_snapshot_digest": r.production_snapshot_digest,
+                    "production_policy_id": r.production_policy_id,
+                    "production_policy_version": r.production_policy_version,
+                    "production_semantic_engine_contract_id": (
+                        r.production_semantic_engine_contract_id
+                    ),
+                    "challenge_adapter_id": r.challenge_adapter_id,
+                    "challenge_adapter_version": r.challenge_adapter_version,
                     "status": r.status,
                     "n_rows": r.n_rows,
                     "primary_horizon": r.primary_horizon,

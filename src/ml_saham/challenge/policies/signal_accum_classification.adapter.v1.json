@@ -1,0 +1,17 @@
+{
+  "adapter_id": "ml-saham.signal.accum.classification.adapter",
+  "adapter_version": "v1",
+  "supported_policy_id": "signal.accum.classification",
+  "supported_snapshot_contract": "production_policy_snapshot.v2",
+  "supported_semantic_engine_contract_ids": ["signal.semantic_engine.v1.5"],
+  "protocol_id": "accum_path_v1",
+  "panel_kind": "accum_signal_flags",
+  "score_kind": "classification_band",
+  "supported_challengers": ["production", "threshold_shift"],
+  "conformance_id": "golden.signal.accum.classification.v1",
+  "components": [
+    {"key": "production_raw_score", "aliases": ["raw_score", "score"]},
+    {"key": "strong_min", "aliases": ["strong_min_score"]},
+    {"key": "moderate_min", "aliases": ["moderate_min_score"]}
+  ]
+}

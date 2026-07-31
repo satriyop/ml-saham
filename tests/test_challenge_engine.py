@@ -114,7 +114,9 @@ def test_scenario_filter_pre_open(fixture_db: Path):
     assert result.exit_code() == 0
     assert len(result.rows) == 2
     assert all(r.scenario == "pre-open" for r in result.rows)
-    assert all("accum" not in r.policy_id or "pre_open" in r.policy_id for r in result.rows)
+    assert all(
+        "accum" not in r.policy_id or "pre_open" in r.policy_id for r in result.rows
+    )
     assert not any(r.policy_id == "screener.accum.score_weights" for r in result.rows)
 
 
@@ -138,6 +140,8 @@ def test_cli_list_and_run(fixture_db: Path, tmp_path: Path):
             "accum",
             "--against",
             "equal_sleeves",
+            "--compatibility-id",
+            "sha256:fixture_cohort_primary",
             "--no-artifact",
             "--export-json",
             str(out_json),
@@ -149,12 +153,25 @@ def test_cli_list_and_run(fixture_db: Path, tmp_path: Path):
     assert data["engine_id"] == "screener"
     assert data["scenario_filter"] == "accum"
     assert len(data["rows"]) == 1
+    assert data["rows"][0]["observation_compatibility_id"] == (
+        "sha256:fixture_cohort_primary"
+    )
+    assert data["rows"][0]["production_snapshot_id"]
+    assert data["rows"][0]["challenge_adapter_id"]
 
 
 def test_cli_bad_scenario(fixture_db: Path):
     r = runner.invoke(
         app,
-        ["--db", str(fixture_db), "challenge", "engine", "screener", "--scenario", "xyz"],
+        [
+            "--db",
+            str(fixture_db),
+            "challenge",
+            "engine",
+            "screener",
+            "--scenario",
+            "xyz",
+        ],
     )
     assert r.exit_code == 2
 

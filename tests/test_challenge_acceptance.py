@@ -8,7 +8,11 @@ import pytest
 from typer.testing import CliRunner
 
 from ml_saham.challenge.engines import ENGINE_POLICIES, list_engines
-from ml_saham.challenge.policies.registry import list_policy_ids, load_policy
+from ml_saham.challenge.policies.registry import (
+    list_policy_ids,
+    load_policy,
+    load_policy_adapter,
+)
 from ml_saham.challenge.protocols import PROTOCOLS, get_protocol
 from ml_saham.chapters.loader import has_chapter_module, load_chapter
 from ml_saham.chapters.types import ChapterContext
@@ -40,6 +44,12 @@ def test_policy_registry_nonempty_and_loadable():
     assert "screener.pre_open.iev_rank" in ids
     assert "screener.pre_open.directional_score" in ids
     for pid in ids:
+        if ".accum." in pid:
+            adapter = load_policy_adapter(pid)
+            assert adapter.supported_policy_id == pid
+            assert adapter.protocol_id in PROTOCOLS
+            assert adapter.components
+            continue
         snap = load_policy(pid)
         assert snap.policy_id
         assert snap.protocol_id in PROTOCOLS
@@ -91,10 +101,9 @@ def test_challenge_run_cli(fixture_db: Path, tmp_path: Path):
     )
     assert r.exit_code == 0, r.stdout
     out = r.stdout.upper()
-    assert any(
-        token in out
-        for token in ("WIN", "LOSE", "INCONCLUSIVE", "BLOCKED")
-    ), r.stdout
+    assert any(token in out for token in ("WIN", "LOSE", "INCONCLUSIVE", "BLOCKED")), (
+        r.stdout
+    )
 
 
 def test_challenge_engine_cli(fixture_db: Path, tmp_path: Path):
@@ -123,7 +132,11 @@ def test_challenge_legacy_removed():
     assert r.exit_code != 0
     # Typer unknown command or no such command
     combined = (r.stdout or "") + (r.stderr or "")
-    assert "legacy" in combined.lower() or "No such command" in combined or r.exit_code == 2
+    assert (
+        "legacy" in combined.lower()
+        or "No such command" in combined
+        or r.exit_code == 2
+    )
 
 
 def test_data_integrity_chapter_compare(chapter_ctx: ChapterContext):
@@ -131,7 +144,9 @@ def test_data_integrity_chapter_compare(chapter_ctx: ChapterContext):
     assert has_chapter_module("data-integrity")
     mod = load_chapter("data-integrity")
     result = mod.run_compare(chapter_ctx)
-    assert "integrity" in (result.metrics or {}) or "integrity_score" in (result.metrics or {})
+    assert "integrity" in (result.metrics or {}) or "integrity_score" in (
+        result.metrics or {}
+    )
     assert result.title
 
 

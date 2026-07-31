@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -46,7 +45,7 @@ def test_list_enabled_factors():
     keys = {r["key"] for r in rows}
     assert "consistency" in keys
     assert "bci" in keys
-    assert "sector_breadth" in keys
+    assert "sector_breadth" not in keys
     assert "bb_squeeze" not in keys
 
 
@@ -65,9 +64,10 @@ def test_blocked_disabled_factor(fixture_db: Path):
     assert r.exit_code() == 2
 
 
-def test_p0_bci_and_sector_breadth_factor_challenge(fixture_db: Path):
-    """P0: BCI and sector_breadth are first-class enabled sleeves."""
-    for key in ("bci", "inst", "sector_breadth", "breadth"):
+def test_bci_is_enabled_but_sector_breadth_is_blocked_by_snapshot_v1(
+    fixture_db: Path,
+):
+    for key in ("bci", "inst"):
         r = run_factor_challenge(fixture_db, factor=key, write_artifact=False)
         assert r.verdict != FactorVerdict.BLOCKED_POLICY, (key, r.notes)
         assert r.verdict in {
@@ -77,6 +77,10 @@ def test_p0_bci_and_sector_breadth_factor_challenge(fixture_db: Path):
             FactorVerdict.INCONCLUSIVE,
             FactorVerdict.BLOCKED_DATA,
         }
+    for key in ("sector_breadth", "breadth"):
+        r = run_factor_challenge(fixture_db, factor=key, write_artifact=False)
+        assert r.verdict == FactorVerdict.BLOCKED_POLICY
+        assert "outside accumulation snapshot v1" in " ".join(r.notes)
 
 
 def test_blocked_unknown_factor(fixture_db: Path):
@@ -119,6 +123,9 @@ def test_batch_factor_challenge(fixture_db: Path, tmp_path: Path):
         assert batch.exit_code() == 0
         keys = {r.factor for r in batch.results}
         assert keys == {r["key"] for r in enabled}
+        assert batch.observation_compatibility_id == "sha256:fixture_cohort_primary"
+        assert batch.production_snapshot_id
+        assert batch.challenge_adapter_id
         assert batch.artifact_dir is not None
         assert (batch.artifact_dir / "manifest.json").is_file()
         assert "FACTOR VALIDITY BATCH" in "\n".join(batch.lines)

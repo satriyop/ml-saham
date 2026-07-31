@@ -47,19 +47,39 @@ Curriculum modules may reuse metrics libraries; they **do not** define the chall
 
 ### 3. Core objects
 
-#### 3.1 `PolicySnapshot` (baseline)
+#### 3.1 Verified production snapshot and challenge adapter
 
-Frozen “what production does / would do”:
+For accumulation, `baseline=production` is eligible only when the selected
+observation cohort has the exact seven-row
+`production_policy_snapshot.v2` set in ai-saham SQLite. ml-saham opens that
+database read-only and independently verifies canonical JSON bytes, SHA-256
+digest, deterministic snapshot ID, purpose, observation-contract bindings,
+compatibility ID, decision type, policy version, semantic contract, and common
+material-config hash. Historical v1/six-row cohorts are readable history but
+are not active production baselines. Missing or unverifiable material is
+`BLOCKED_POLICY`; packaged JSON is never a fallback.
 
-- `policy_id` + version / config hash  
-- decision type: `rank` | `score` | `gate` | `size` | `label`  
-- feature/parameter contract (names only)  
-- PIT / availability rules  
+The upstream `VerifiedProductionPolicySnapshot` owns production identity and
+material parameters. The separate ML-owned `ChallengePolicyAdapter` owns only
+panel extraction, aliases, scorer dispatch, supported challengers, and an
+explicit semantic-contract/conformance version. `Protocol` separately owns
+labels, horizons, folds, embargo, costs, and minimum N. Feature names or a
+non-empty handwritten hash are not sufficient production identity.
 
-**Default baseline id:** `production` (or `exported-policy@<hash>`).  
-Not `elastic-net` unless that *is* production.
+The seven active policy IDs are the six score/signal/risk policies plus
+`screener.accum.hard_filters`. The hard-filter snapshot is verified with the
+cohort, but its tournament adapter remains `BLOCKED_POLICY` until its separate
+counterfactual conformance work lands. Ordinary baselines use frozen observed
+outputs (not reconstructed production scores); in particular
+`signal.accum.raw_score` reads
+`features_by_window.<canonical_window>.signal.raw_exact_score`.
 
-Sources (preferred order): observation payloads that embed configured weights; exported JSON/YAML snapshots from ai-saham; documented constant maps. Still **no import of ai-saham Python packages** (ADR-001 boundary).
+Every production-comparison result carries the observation compatibility ID,
+production snapshot ID/digest/policy/version/semantic contract, challenge
+adapter ID/version, and protocol ID. These identities propagate through policy,
+factor, engine, health, champion, artifact, and promote-packet surfaces. Legacy
+artifacts lacking them are historical only and cannot create a verified promote
+packet.
 
 #### 3.2 `Challenger`
 

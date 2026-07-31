@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -32,6 +33,20 @@ def test_health_engine_only_fixture(fixture_db: Path, tmp_path: Path):
     assert (result.artifact_dir / "summary.md").is_file()
     assert (result.artifact_dir / "engine.json").is_file()
     assert (result.artifact_dir / "index.json").is_file()
+    manifest = json.loads(
+        (result.artifact_dir / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["production_identities"]
+    assert {
+        "observation_compatibility_id",
+        "production_snapshot_id",
+        "production_snapshot_digest",
+        "production_policy_id",
+        "production_policy_version",
+        "production_semantic_engine_contract_id",
+        "challenge_adapter_id",
+        "challenge_adapter_version",
+    } <= set(manifest["production_identities"][0])
     assert len(result.index) >= 1
     assert "health report" in result.summary_md.lower() or "Engine" in result.summary_md
     assert "screener.accum.score_weights" in result.summary_md or any(
@@ -51,6 +66,8 @@ def test_health_cli(fixture_db: Path, tmp_path: Path):
             "health",
             "--scenario",
             "accum",
+            "--compatibility-id",
+            "sha256:fixture_cohort_primary",
         ],
     )
     assert r.exit_code == 0, r.stdout

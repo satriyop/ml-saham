@@ -30,13 +30,11 @@ def test_policy_registry_loads():
     ids = list_policy_ids()
     assert "screener.accum.score_weights" in ids
     pol = load_policy("screener.accum.score_weights")
-    assert pol.hash
+    assert pol.hash == ""
+    assert pol.source == "ML adapter fixture; not production authority"
     assert any(c.key == "consistency" and c.enabled for c in pol.components)
     assert any(
-        c.key == "bci" and c.enabled and abs(c.weight - 12.5) < 1e-9 for c in pol.components
-    )
-    assert any(
-        c.key == "sector_breadth" and c.enabled and abs(c.weight - 10.0) < 1e-9
+        c.key == "bci" and c.enabled and abs(c.weight - 12.5) < 1e-9
         for c in pol.components
     )
     assert any(c.key == "bb_squeeze" and not c.enabled for c in pol.components)
@@ -81,7 +79,9 @@ def test_extract_components_from_flow_signals():
     assert comps["consistency"] == 10.0
     assert comps["bci"] == 4.0
     assert comps["sector_breadth"] == pytest.approx(0.7 * 10.0)
-    assert "bb_squeeze" not in comps  # disabled not required in output keys of enabled only
+    assert (
+        "bb_squeeze" not in comps
+    )  # disabled not required in output keys of enabled only
     assert "consistency" in comps
 
 
@@ -103,7 +103,11 @@ def test_extract_components_from_adr056_features_by_window():
                             {"key": "flow", "score_points": 2.0, "max_points": 12.5},
                             {"key": "rsi", "score_points": 1.7, "max_points": 12.5},
                             {"key": "inst", "score_points": 5.0, "max_points": 8.3},
-                            {"key": "sector_breadth", "score_points": 10.0, "max_points": 10.0},
+                            {
+                                "key": "sector_breadth",
+                                "score_points": 10.0,
+                                "max_points": 10.0,
+                            },
                         ],
                         "breakdown": {
                             "cons": 9.5,
@@ -201,6 +205,18 @@ def test_run_policy_challenge_fixture(fixture_db: Path, tmp_path: Path):
     assert "10" in (result.horizon_metrics.get("baseline") or {})
     assert result.artifact_dir is not None
     assert (result.artifact_dir / "manifest.json").is_file()
+    manifest = (result.artifact_dir / "manifest.json").read_text(encoding="utf-8")
+    for expected in (
+        result.observation_compatibility_id,
+        result.production_snapshot_id,
+        result.production_snapshot_digest,
+        result.production_policy_id,
+        result.production_semantic_engine_contract_id,
+        result.challenge_adapter_id,
+        result.challenge_adapter_version,
+        result.protocol_id,
+    ):
+        assert expected and expected in manifest
     assert result.exit_code() == 0
 
 

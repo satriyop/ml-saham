@@ -1,4 +1,5 @@
 {
+  "fixture_only": true,
   "policy_id": "screener.accum.score_weights",
   "version": "v1",
   "protocol_id": "accum_path_v1",

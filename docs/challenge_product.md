@@ -52,7 +52,10 @@ Related: [challenge_health.md](./challenge_health.md) · [challenge_diagnostic_v
 
 ## What it is
 
-`ml-saham` **challenge** stress-tests **frozen production-like policies** (PolicySpecs) from the personal IDX stack against clean challengers, on **read-only** `ai-saham` SQLite.
+`ml-saham` **challenge** stress-tests digest-verified production policies from
+the personal IDX stack against clean challengers, on **read-only** `ai-saham`
+SQLite. Accumulation `baseline=production` requires the selected cohort's exact
+seven-row `production_policy_snapshot.v2` set; there is no packaged fallback.
 
 | In scope | Out of scope |
 |----------|----------------|
@@ -142,12 +145,12 @@ Prefer **tune vs champion** for purpose (not a third product axis).
 
 | Layer | Product surface |
 |-------|-----------------|
-| Accum sleeves (7; BB off) | `screener.accum.score_weights` |
+| Accum sleeves (snapshot v2; sector breadth excluded) | `screener.accum.score_weights` |
 | Signal | `raw_score` · `flags` · `classification` · **`evidence_group_weights`** |
 | Risk hard gates | `risk.accum.hard_gates` (+ `gate_off:<gate>`; mean excess open) |
 | Weekly cron | `scripts/install_challenge_health_cron.sh` → `health --with-diagnostics` |
 | Diagnostics | `challenge diagnostic` (display/promote-candidate only) |
-| Screen hard filters (P1) | **Skipped** (unused knobs) |
+| Screen hard filters | v2 identity verified; tournament adapter remains `BLOCKED_POLICY` pending its dedicated conformance slice |
 | Action ENTER desk (P4) | **Deferred** |
 
 Expansion plan: **[challenge_product_roadmap.md](./challenge_product_roadmap.md)**.  

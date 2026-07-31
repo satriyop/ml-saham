@@ -1,4 +1,5 @@
 {
+  "fixture_only": true,
   "policy_id": "signal.accum.evidence_group_weights",
   "version": "v1",
   "hash": "sigevg05a9b3c2d1",

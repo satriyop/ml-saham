@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ml_saham.challenge.types import PolicySnapshot
+from ml_saham.challenge.types import ChallengeExecutionPolicy
 from ml_saham.data.aisaham_read import connect, load_candles, table_exists
 from ml_saham.data.observation_cohort import (
     ACCUM_PURPOSE_LIKE,
@@ -78,9 +78,7 @@ def build_forward_excess(
         return {}
     ihsg_dates = [d for d, _ in ihsg_rows]
     ihsg_close = {d: c for d, c in ihsg_rows}
-    ihsg_fwd = {
-        h: _session_forward_map(ihsg_close, ihsg_dates, h) for h in horizons
-    }
+    ihsg_fwd = {h: _session_forward_map(ihsg_close, ihsg_dates, h) for h in horizons}
 
     result: dict[tuple[str, str], dict[int, float]] = {}
     for t in tickers:
@@ -101,7 +99,7 @@ def build_forward_excess(
     return result
 
 
-def _alias_lookup(policy: PolicySnapshot) -> dict[str, str]:
+def _alias_lookup(policy: ChallengeExecutionPolicy) -> dict[str, str]:
     """Map any alias or key -> canonical component key."""
     m: dict[str, str] = {}
     for c in policy.components:
@@ -155,7 +153,9 @@ def _pick_window_blob(payload: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def extract_components(payload: dict[str, Any], policy: PolicySnapshot) -> dict[str, float] | None:
+def extract_components(
+    payload: dict[str, Any], policy: ChallengeExecutionPolicy
+) -> dict[str, float] | None:
     """Adaptive extract of component points from observation payload.
 
     Supports:
@@ -168,9 +168,24 @@ def extract_components(payload: dict[str, Any], policy: PolicySnapshot) -> dict[
     # --- A) Real ai-saham accum observation (preferred) ---
     window = _pick_window_blob(payload)
     if window is not None:
-        cand = window.get("candidate") if isinstance(window.get("candidate"), dict) else {}
-        breakdown = cand.get("accum_score_breakdown") if isinstance(cand, dict) else None
+        cand = (
+            window.get("candidate") if isinstance(window.get("candidate"), dict) else {}
+        )
+        observed_score = cand.get("accum_score") if isinstance(cand, dict) else None
+        if isinstance(observed_score, (int, float)) and not isinstance(
+            observed_score, bool
+        ):
+            found["production_observed_score"] = float(observed_score)
+        breakdown = (
+            cand.get("accum_score_breakdown") if isinstance(cand, dict) else None
+        )
         if isinstance(breakdown, dict):
+            if "production_observed_score" not in found:
+                observed_score = breakdown.get("accum_score")
+                if isinstance(observed_score, (int, float)) and not isinstance(
+                    observed_score, bool
+                ):
+                    found["production_observed_score"] = float(observed_score)
             comps = breakdown.get("components")
             if isinstance(comps, list):
                 _ingest_component_list(comps, aliases, found)
@@ -179,7 +194,11 @@ def extract_components(payload: dict[str, Any], policy: PolicySnapshot) -> dict[
             if isinstance(br, dict):
                 for k, v in br.items():
                     kl = str(k).lower()
-                    if kl in aliases and aliases[kl] not in found and isinstance(v, (int, float)):
+                    if (
+                        kl in aliases
+                        and aliases[kl] not in found
+                        and isinstance(v, (int, float))
+                    ):
                         found[aliases[kl]] = float(v)
         # nested signal.flow_evidence under window
         wsig = window.get("signal") if isinstance(window.get("signal"), dict) else {}
@@ -237,9 +256,17 @@ def extract_components(payload: dict[str, Any], policy: PolicySnapshot) -> dict[
                 found[dest] = score
 
     # --- D) Candidate / top-level extras for P0 sleeves ---
-    cand = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+    cand = (
+        payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+    )
     if window is not None and isinstance(window.get("candidate"), dict):
         cand = {**cand, **window["candidate"]}
+    if "production_observed_score" not in found:
+        observed_score = cand.get("accum_score") if isinstance(cand, dict) else None
+        if isinstance(observed_score, (int, float)) and not isinstance(
+            observed_score, bool
+        ):
+            found["production_observed_score"] = float(observed_score)
     for src, dest in (
         ("sector_breadth", "sector_breadth"),
         ("peer_breadth", "sector_breadth"),
@@ -255,13 +282,19 @@ def extract_components(payload: dict[str, Any], policy: PolicySnapshot) -> dict[
             val = float(raw)
             found[dest] = val * w if val <= 1.0 else min(w, max(0.0, val))
 
+    if policy.production_snapshot_id and "production_observed_score" not in found:
+        return None
+
     enabled_keys = {c.key for c in policy.enabled_components()}
     present = enabled_keys & set(found)
     if len(present) < 3:
         return None
     for k in enabled_keys:
         found.setdefault(k, 0.0)
-    return {k: found[k] for k in enabled_keys}
+    result = {k: found[k] for k in enabled_keys}
+    if "production_observed_score" in found:
+        result["production_observed_score"] = found["production_observed_score"]
+    return result
 
 
 def list_accum_compatibility_cohorts(
@@ -293,7 +326,7 @@ def resolve_accum_compatibility_id(
 
 def load_observation_rows(
     conn: sqlite3.Connection,
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     *,
     compatibility_id: str | None = None,
     preferred_compatibility_id: str | None = None,
@@ -314,13 +347,13 @@ def load_observation_rows(
     out: list[tuple[str, str, dict[str, float], str]] = []
     for row in rows:
         if isinstance(row, sqlite3.Row):
-            purpose, captured_at, payload_json = (
+            _purpose, captured_at, payload_json = (
                 row["purpose"],
                 row["captured_at"],
                 row["decision_payload_json"],
             )
         else:
-            purpose, captured_at, payload_json = row[0], row[1], row[2]
+            _purpose, captured_at, payload_json = row[0], row[1], row[2]
         try:
             payload = json.loads(payload_json)
         except (TypeError, json.JSONDecodeError):
@@ -347,7 +380,7 @@ def load_observation_rows(
 
 def build_panel(
     db_path: Path | str,
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     horizons: tuple[int, ...],
     primary_horizon: int,
     *,
@@ -391,6 +424,10 @@ def build_panel(
             rows.append(PanelRow(ticker=ticker, date=date, components=comps, excess=ex))
 
         if dropped_primary:
-            notes.append(f"dropped {dropped_primary} rows missing primary H={primary_horizon}")
-        notes.append(f"panel_rows={len(rows)} unique_tickers={len({r.ticker for r in rows})}")
+            notes.append(
+                f"dropped {dropped_primary} rows missing primary H={primary_horizon}"
+            )
+        notes.append(
+            f"panel_rows={len(rows)} unique_tickers={len({r.ticker for r in rows})}"
+        )
         return rows, notes

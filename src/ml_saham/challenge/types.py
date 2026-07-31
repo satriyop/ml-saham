@@ -48,7 +48,57 @@ class ComponentWeight:
 
 
 @dataclass(frozen=True)
-class PolicySnapshot:
+class ChallengeAdapterComponent:
+    """ML-owned extraction key and aliases; contains no production material."""
+
+    key: str
+    aliases: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class VerifiedProductionPolicySnapshot:
+    """Digest-verified upstream policy identity; contains no ML adapter policy."""
+
+    snapshot_id: str
+    schema_version: int
+    contract_id: str
+    purpose: str
+    learning_observation_contract_id: str
+    producer_observation_contract: str
+    compatibility_id: str
+    policy_id: str
+    policy_version: str
+    decision_type: str
+    semantic_engine_contract_id: str
+    material_config_hash: str
+    canonical_payload_json: str
+    canonical_payload: dict[str, Any]
+    payload_digest: str
+    source_revision: str
+    created_at: str
+
+
+@dataclass(frozen=True)
+class ChallengePolicyAdapter:
+    """ML-owned extraction/scorer dispatch; never production material authority."""
+
+    adapter_id: str
+    adapter_version: str
+    supported_policy_id: str
+    supported_snapshot_contract: str
+    supported_semantic_engine_contract_ids: tuple[str, ...]
+    protocol_id: str
+    panel_kind: str
+    score_kind: str
+    components: tuple[ChallengeAdapterComponent, ...]
+    supported_challengers: tuple[str, ...]
+    conformance_id: str
+
+
+@dataclass(frozen=True)
+class ChallengeExecutionPolicy:
+    """Runtime composition of a verified snapshot and a local ML adapter."""
+
     policy_id: str
     version: str
     hash: str
@@ -59,6 +109,12 @@ class PolicySnapshot:
     protocol_id: str = "accum_path_v1"
     panel_kind: str = "accum_components"
     score_kind: str = "weighted_sleeves"
+    observation_compatibility_id: str = ""
+    production_snapshot_id: str = ""
+    production_snapshot_digest: str = ""
+    production_semantic_engine_contract_id: str = ""
+    challenge_adapter_id: str = ""
+    challenge_adapter_version: str = ""
 
     def enabled_components(self) -> tuple[ComponentWeight, ...]:
         return tuple(c for c in self.components if c.enabled and c.weight > 0)
@@ -70,15 +126,11 @@ class PolicySnapshot:
         """Feature sleeves for equal/ridge challengers (exclude primary production score)."""
         if self.score_kind == "rank_primary":
             return tuple(
-                c.key
-                for c in self.components
-                if c.key != "official_rank_score"
+                c.key for c in self.components if c.key != "official_rank_score"
             )
         if self.score_kind == "raw_score_primary":
             return tuple(
-                c.key
-                for c in self.components
-                if c.key != "production_raw_score"
+                c.key for c in self.components if c.key != "production_raw_score"
             )
         if self.score_kind == "flag_penalty_adjusted":
             return tuple(
@@ -131,9 +183,20 @@ class ChallengeResult:
     summary_md: str = ""
     notes: list[str] = field(default_factory=list)
     artifact_dir: Path | None = None
+    observation_compatibility_id: str = ""
+    production_snapshot_id: str = ""
+    production_snapshot_digest: str = ""
+    production_policy_id: str = ""
+    production_policy_version: str = ""
+    production_semantic_engine_contract_id: str = ""
+    challenge_adapter_id: str = ""
+    challenge_adapter_version: str = ""
 
     def exit_code(self) -> int:
-        if self.status in (ChallengeStatus.BLOCKED_DATA, ChallengeStatus.BLOCKED_POLICY):
+        if self.status in (
+            ChallengeStatus.BLOCKED_DATA,
+            ChallengeStatus.BLOCKED_POLICY,
+        ):
             return 2
         return 0
 
@@ -158,6 +221,14 @@ class FactorChallengeResult:
     summary_md: str = ""
     notes: list[str] = field(default_factory=list)
     artifact_dir: Path | None = None
+    observation_compatibility_id: str = ""
+    production_snapshot_id: str = ""
+    production_snapshot_digest: str = ""
+    production_policy_id: str = ""
+    production_policy_version: str = ""
+    production_semantic_engine_contract_id: str = ""
+    challenge_adapter_id: str = ""
+    challenge_adapter_version: str = ""
 
     def exit_code(self) -> int:
         if self.verdict in (FactorVerdict.BLOCKED_DATA, FactorVerdict.BLOCKED_POLICY):
@@ -182,6 +253,14 @@ class EnginePolicyRow:
     against_id: str
     notes: list[str] = field(default_factory=list)
     error: str | None = None
+    observation_compatibility_id: str = ""
+    production_snapshot_id: str = ""
+    production_snapshot_digest: str = ""
+    production_policy_id: str = ""
+    production_policy_version: str = ""
+    production_semantic_engine_contract_id: str = ""
+    challenge_adapter_id: str = ""
+    challenge_adapter_version: str = ""
 
 
 @dataclass
@@ -223,6 +302,7 @@ class HealthReportResult:
     champion_payload: dict[str, Any] | None = None
     factors_payload: dict[str, Any] | None = None
     diagnostics_payload: dict[str, Any] | None = None
+    production_identities: list[dict[str, str]] = field(default_factory=list)
     artifact_dir: Path | None = None
     resolve_error: str | None = None
 
@@ -263,6 +343,14 @@ class BatchFactorResult:
     summary_md: str = ""
     notes: list[str] = field(default_factory=list)
     artifact_dir: Path | None = None
+    observation_compatibility_id: str = ""
+    production_snapshot_id: str = ""
+    production_snapshot_digest: str = ""
+    production_policy_id: str = ""
+    production_policy_version: str = ""
+    production_semantic_engine_contract_id: str = ""
+    challenge_adapter_id: str = ""
+    challenge_adapter_version: str = ""
 
     def exit_code(self) -> int:
         if self.blocked in (FactorVerdict.BLOCKED_DATA, FactorVerdict.BLOCKED_POLICY):

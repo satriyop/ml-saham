@@ -1,0 +1,20 @@
+{
+  "adapter_id": "ml-saham.screener.accum.score_weights.adapter",
+  "adapter_version": "v1",
+  "supported_policy_id": "screener.accum.score_weights",
+  "supported_snapshot_contract": "production_policy_snapshot.v2",
+  "supported_semantic_engine_contract_ids": ["accum_score_policy.v1"],
+  "protocol_id": "accum_path_v1",
+  "panel_kind": "accum_components",
+  "score_kind": "weighted_sleeves",
+  "supported_challengers": ["production", "equal_sleeves", "ridge_reweight"],
+  "conformance_id": "golden.screener.accum.score_weights.v1",
+  "components": [
+    {"key": "consistency", "aliases": ["cons"]},
+    {"key": "streak", "aliases": ["streak"]},
+    {"key": "vwap_discount", "aliases": ["vwap"]},
+    {"key": "rsi_headroom", "aliases": ["rsi"]},
+    {"key": "foreign_flow_ratio", "aliases": ["flow"]},
+    {"key": "bci", "aliases": ["bci", "inst"]}
+  ]
+}

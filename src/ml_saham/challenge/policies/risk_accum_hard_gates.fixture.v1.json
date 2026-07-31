@@ -1,4 +1,5 @@
 {
+  "fixture_only": true,
   "policy_id": "risk.accum.hard_gates",
   "version": "v1",
   "hash": "riskgate03f8a1b9",

@@ -1,4 +1,5 @@
 {
+  "fixture_only": true,
   "policy_id": "signal.accum.classification",
   "version": "v1",
   "hash": "sigcls04e5f6a7b2",

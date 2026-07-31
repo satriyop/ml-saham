@@ -18,6 +18,17 @@ _REQUIRED = (
     "against_id",
 )
 
+_VERIFIED_PRODUCTION_IDENTITY = (
+    "observation_compatibility_id",
+    "production_snapshot_id",
+    "production_snapshot_digest",
+    "production_policy_id",
+    "production_policy_version",
+    "production_semantic_engine_contract_id",
+    "challenge_adapter_id",
+    "challenge_adapter_version",
+)
+
 
 def load_evidence_json(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     try:
@@ -29,6 +40,12 @@ def load_evidence_json(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     missing = [k for k in _REQUIRED if k not in data or data[k] in (None, "")]
     if missing:
         return None, f"missing required fields: {', '.join(missing)}"
+    missing_identity = [k for k in _VERIFIED_PRODUCTION_IDENTITY if not data.get(k)]
+    if missing_identity:
+        return None, (
+            "historical artifact is not eligible for a verified production-policy "
+            "promotion packet; missing: " + ", ".join(missing_identity)
+        )
     return data, None
 
 
@@ -71,6 +88,8 @@ def load_evidence_artifact(dir_path: Path) -> tuple[dict[str, Any] | None, str |
         "notes": [],
         "mode": manifest.get("mode"),
     }
+    for key in _VERIFIED_PRODUCTION_IDENTITY:
+        data[key] = manifest.get(key)
     weights_p = dir_path / "weights.json"
     if weights_p.is_file():
         try:
@@ -80,6 +99,12 @@ def load_evidence_artifact(dir_path: Path) -> tuple[dict[str, Any] | None, str |
     missing = [k for k in _REQUIRED if not data.get(k)]
     if missing:
         return None, f"artifact incomplete, missing: {', '.join(missing)}"
+    missing_identity = [k for k in _VERIFIED_PRODUCTION_IDENTITY if not data.get(k)]
+    if missing_identity:
+        return None, (
+            "historical artifact is not eligible for a verified production-policy "
+            "promotion packet; missing: " + ", ".join(missing_identity)
+        )
     return data, None
 
 
@@ -109,6 +134,13 @@ def build_promote_md(evidence: dict[str, Any], *, mode: str) -> str:
         f"- **Mode:** {mode}",
         f"- **Policy:** `{evidence.get('policy_id')}`",
         f"- **Policy hash:** `{evidence.get('policy_hash') or 'n/a'}`",
+        f"- **Observation cohort:** `{evidence.get('observation_compatibility_id')}`",
+        f"- **Production snapshot:** `{evidence.get('production_snapshot_id')}`",
+        f"- **Production digest:** `{evidence.get('production_snapshot_digest')}`",
+        f"- **Production semantic contract:** "
+        f"`{evidence.get('production_semantic_engine_contract_id')}`",
+        f"- **Challenge adapter:** `{evidence.get('challenge_adapter_id')}` "
+        f"`{evidence.get('challenge_adapter_version')}`",
         f"- **Protocol:** `{evidence.get('protocol_id')}`",
         f"- **Baseline:** `{evidence.get('baseline_id')}`",
         f"- **Against:** `{evidence.get('against_id')}`",

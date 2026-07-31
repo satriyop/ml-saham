@@ -42,6 +42,16 @@ def write_challenge_artifact(
         "policy_id": result.policy_id,
         "protocol_id": result.protocol_id,
         "policy_hash": result.policy_hash,
+        "observation_compatibility_id": result.observation_compatibility_id,
+        "production_snapshot_id": result.production_snapshot_id,
+        "production_snapshot_digest": result.production_snapshot_digest,
+        "production_policy_id": result.production_policy_id,
+        "production_policy_version": result.production_policy_version,
+        "production_semantic_engine_contract_id": (
+            result.production_semantic_engine_contract_id
+        ),
+        "challenge_adapter_id": result.challenge_adapter_id,
+        "challenge_adapter_version": result.challenge_adapter_version,
         "baseline_id": result.baseline_id,
         "against_id": result.against_id,
         "status": result.status.value,
@@ -98,6 +108,16 @@ def write_factor_artifact(
         "policy_id": result.policy_id,
         "protocol_id": result.protocol_id,
         "policy_hash": result.policy_hash,
+        "observation_compatibility_id": result.observation_compatibility_id,
+        "production_snapshot_id": result.production_snapshot_id,
+        "production_snapshot_digest": result.production_snapshot_digest,
+        "production_policy_id": result.production_policy_id,
+        "production_policy_version": result.production_policy_version,
+        "production_semantic_engine_contract_id": (
+            result.production_semantic_engine_contract_id
+        ),
+        "challenge_adapter_id": result.challenge_adapter_id,
+        "challenge_adapter_version": result.challenge_adapter_version,
         "factor": result.factor,
         "verdict": result.verdict.value,
         "n_rows": result.n_rows,
@@ -133,12 +153,7 @@ def write_batch_factor_artifact(
     root = resolve_artifacts_root(artifacts_root)
     ts = datetime.now(tz=JAKARTA).strftime("%Y%m%d_%H%M%S")
     out = (
-        root
-        / "challenge"
-        / "factor"
-        / result.policy_id.replace("/", ".")
-        / "_all"
-        / ts
+        root / "challenge" / "factor" / result.policy_id.replace("/", ".") / "_all" / ts
     )
     out.mkdir(parents=True, exist_ok=True)
     factors_payload = [
@@ -159,6 +174,16 @@ def write_batch_factor_artifact(
         "policy_id": result.policy_id,
         "protocol_id": result.protocol_id,
         "policy_hash": result.policy_hash,
+        "observation_compatibility_id": result.observation_compatibility_id,
+        "production_snapshot_id": result.production_snapshot_id,
+        "production_snapshot_digest": result.production_snapshot_digest,
+        "production_policy_id": result.production_policy_id,
+        "production_policy_version": result.production_policy_version,
+        "production_semantic_engine_contract_id": (
+            result.production_semantic_engine_contract_id
+        ),
+        "challenge_adapter_id": result.challenge_adapter_id,
+        "challenge_adapter_version": result.challenge_adapter_version,
         "n_rows": result.n_rows,
         "primary_horizon": result.primary_horizon,
         "n_factors": len(result.results),
@@ -315,6 +340,16 @@ def write_engine_artifact(
             "against_id": r.against_id,
             "notes": r.notes[-5:],
             "error": r.error,
+            "observation_compatibility_id": r.observation_compatibility_id,
+            "production_snapshot_id": r.production_snapshot_id,
+            "production_snapshot_digest": r.production_snapshot_digest,
+            "production_policy_id": r.production_policy_id,
+            "production_policy_version": r.production_policy_version,
+            "production_semantic_engine_contract_id": (
+                r.production_semantic_engine_contract_id
+            ),
+            "challenge_adapter_id": r.challenge_adapter_id,
+            "challenge_adapter_version": r.challenge_adapter_version,
         }
         for r in result.rows
     ]
@@ -375,6 +410,7 @@ def write_health_artifact(
         "db_path": str(db_path),
         "created_at": datetime.now(tz=JAKARTA).isoformat(),
         "n_index": len(result.index),
+        "production_identities": result.production_identities,
     }
     (out / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
@@ -416,6 +452,20 @@ def write_promote_packet(
         "schema_version": 2,
         "mode": "challenge_promote_packet",
         "policy_id": result.policy_id,
+        **{
+            key: result.evidence.get(key)
+            for key in (
+                "observation_compatibility_id",
+                "production_snapshot_id",
+                "production_snapshot_digest",
+                "production_policy_id",
+                "production_policy_version",
+                "production_semantic_engine_contract_id",
+                "challenge_adapter_id",
+                "challenge_adapter_version",
+                "protocol_id",
+            )
+        },
         "purpose_mode": result.mode,
         "created_at": datetime.now(tz=JAKARTA).isoformat(),
         "auto_applied": False,

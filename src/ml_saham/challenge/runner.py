@@ -12,7 +12,17 @@ from ml_saham.challenge.panel_gates import build_gate_panel
 from ml_saham.challenge.panel_iev import build_iev_panel
 from ml_saham.challenge.panel_pre_open_obs import build_pre_open_obs_panel
 from ml_saham.challenge.panel_signal import build_signal_panel
-from ml_saham.challenge.policies.registry import list_policy_ids, load_policy
+from ml_saham.challenge.policies.registry import (
+    list_policy_ids,
+    load_policy,
+    load_policy_adapter,
+)
+from ml_saham.challenge.production_policy_snapshots import (
+    REQUIRED_POLICIES,
+    PolicySnapshotError,
+    compose_execution_policy,
+    load_verified_snapshot_set,
+)
 from ml_saham.challenge.protocols import ACCUM_PATH_V1, get_protocol
 from ml_saham.challenge.champion import (
     is_champion_against,
@@ -33,9 +43,19 @@ from ml_saham.challenge.scorers import (
 )
 from dataclasses import dataclass
 
-from ml_saham.challenge.types import ChallengeResult, ChallengeStatus, PolicySnapshot, Protocol
+from ml_saham.challenge.types import (
+    ChallengeResult,
+    ChallengeStatus,
+    ChallengeExecutionPolicy,
+    Protocol,
+)
 from ml_saham.data.aisaham_read import has_ihsg, table_exists
 from ml_saham.data.aisaham_read import connect as db_connect
+from ml_saham.data.observation_cohort import (
+    ACCUM_PURPOSE_LIKE,
+    ACCUM_PURPOSES,
+    resolve_compatibility_id,
+)
 from ml_saham.data.doctor_checks import run_doctor
 
 
@@ -43,7 +63,7 @@ from ml_saham.data.doctor_checks import run_doctor
 class AccumPanelPrep:
     """Shared prep for policy tournament and factor validity (any panel_kind)."""
 
-    policy: PolicySnapshot | None
+    policy: ChallengeExecutionPolicy | None
     protocol: Protocol | None
     rows: list[PanelRow]
     notes: list[str]
@@ -53,6 +73,19 @@ class AccumPanelPrep:
 def list_policies() -> list[dict[str, str]]:
     out = []
     for pid in list_policy_ids():
+        if pid in REQUIRED_POLICIES:
+            adapter = load_policy_adapter(pid)
+            out.append(
+                {
+                    "policy_id": pid,
+                    "version": "v1",
+                    "hash": "verified-snapshot-required",
+                    "protocol": adapter.protocol_id,
+                    "panel_kind": adapter.panel_kind,
+                    "score_kind": adapter.score_kind,
+                }
+            )
+            continue
         pol = load_policy(pid)
         out.append(
             {
@@ -106,10 +139,14 @@ def _vet_for_pre_open_iev(db_path: Path, protocol: Protocol) -> tuple[bool, list
         n_snap = 0
         if has_hist:
             n_hist = int(
-                conn.execute("SELECT COUNT(*) AS n FROM iev_snapshot_history").fetchone()["n"]
+                conn.execute(
+                    "SELECT COUNT(*) AS n FROM iev_snapshot_history"
+                ).fetchone()["n"]
             )
         if has_snap:
-            n_snap = int(conn.execute("SELECT COUNT(*) AS n FROM iev_snapshots").fetchone()["n"])
+            n_snap = int(
+                conn.execute("SELECT COUNT(*) AS n FROM iev_snapshots").fetchone()["n"]
+            )
         if n_hist == 0 and n_snap == 0:
             return False, ["iev_snapshots / iev_snapshot_history empty or missing"]
         if n_hist == 0 and n_snap > 0:
@@ -117,7 +154,9 @@ def _vet_for_pre_open_iev(db_path: Path, protocol: Protocol) -> tuple[bool, list
         # thin calendar soft note
         table = "iev_snapshot_history" if n_hist > 0 else "iev_snapshots"
         n_dates = int(
-            conn.execute(f"SELECT COUNT(DISTINCT date) AS n FROM {table}").fetchone()["n"]
+            conn.execute(f"SELECT COUNT(DISTINCT date) AS n FROM {table}").fetchone()[
+                "n"
+            ]
         )
         if n_dates < 5:
             notes.append(f"thin IEV calendar: {n_dates} distinct dates")
@@ -139,9 +178,7 @@ def _vet_for_pre_open_obs(db_path: Path, protocol: Protocol) -> tuple[bool, list
             return False, ["learning_observations missing (need PRE_OPEN captures)"]
         from ml_saham.data.observation_cohort import fetch_pre_open_observation_raw
 
-        rows, cohort_notes, _ = fetch_pre_open_observation_raw(
-            conn, select="purpose"
-        )
+        rows, cohort_notes, _ = fetch_pre_open_observation_raw(conn, select="purpose")
         notes.extend(cohort_notes)
         n = len(rows)
         if n == 0:
@@ -164,22 +201,57 @@ def prepare_accum_panel(
     db_path: Path | str,
     policy_id: str = "screener.accum.score_weights",
     protocol_id: str | None = None,
+    preferred_compatibility_id: str | None = None,
 ) -> AccumPanelPrep:
     """Load policy, vet DB, build labeled panel. blocked set if not runnable.
 
     Dispatches on policy.panel_kind. protocol_id defaults to policy.protocol_id.
     """
     path = Path(db_path)
+    selected_compatibility_id: str | None = None
+    cohort_notes: list[str] = []
     try:
-        policy = load_policy(policy_id)
-        pid = protocol_id or policy.protocol_id
-        protocol = get_protocol(pid)
-    except KeyError as exc:
+        if policy_id in REQUIRED_POLICIES:
+            adapter = load_policy_adapter(policy_id)
+            pid = protocol_id or adapter.protocol_id
+            protocol = get_protocol(pid)
+            with db_connect(path) as conn:
+                selected_compatibility_id, cohort_notes = resolve_compatibility_id(
+                    conn,
+                    purposes=ACCUM_PURPOSES,
+                    purpose_like=ACCUM_PURPOSE_LIKE,
+                    preferred=preferred_compatibility_id,
+                    family="ACCUM",
+                )
+                if selected_compatibility_id is None:
+                    return AccumPanelPrep(
+                        policy=None,
+                        protocol=protocol,
+                        rows=[],
+                        notes=cohort_notes
+                        + ["no accumulation observation cohort selected"],
+                        blocked=ChallengeStatus.BLOCKED_DATA,
+                    )
+                snapshots = load_verified_snapshot_set(conn, selected_compatibility_id)
+            policy = compose_execution_policy(snapshots[policy_id], adapter)
+        else:
+            policy = load_policy(policy_id)
+            pid = protocol_id or policy.protocol_id
+            protocol = get_protocol(pid)
+    except FileNotFoundError as exc:
         return AccumPanelPrep(
             policy=None,
             protocol=None,
             rows=[],
             notes=[str(exc)],
+            blocked=ChallengeStatus.BLOCKED_DATA,
+        )
+    except (KeyError, PolicySnapshotError) as exc:
+        return AccumPanelPrep(
+            policy=None,
+            protocol=None,
+            rows=[],
+            notes=cohort_notes + [str(exc)],
             blocked=ChallengeStatus.BLOCKED_POLICY,
         )
 
@@ -228,6 +300,7 @@ def prepare_accum_panel(
             policy,
             horizons=protocol.horizons_report,
             primary_horizon=protocol.primary_horizon,
+            compatibility_id=selected_compatibility_id,
         )
     elif policy.panel_kind in ("accum_signal", "accum_signal_flags"):
         ok, vet_notes = _vet_for_accum(path, protocol)
@@ -244,6 +317,7 @@ def prepare_accum_panel(
             policy,
             horizons=protocol.horizons_report,
             primary_horizon=protocol.primary_horizon,
+            compatibility_id=selected_compatibility_id,
         )
     elif policy.panel_kind == "accum_gates":
         ok, vet_notes = _vet_for_accum(path, protocol)
@@ -260,6 +334,7 @@ def prepare_accum_panel(
             policy,
             horizons=protocol.horizons_report,
             primary_horizon=protocol.primary_horizon,
+            compatibility_id=selected_compatibility_id,
         )
     else:
         return AccumPanelPrep(
@@ -270,7 +345,7 @@ def prepare_accum_panel(
             blocked=ChallengeStatus.BLOCKED_POLICY,
         )
 
-    notes = list(vet_notes) + list(panel_notes)
+    notes = list(cohort_notes) + list(vet_notes) + list(panel_notes)
     if len(rows) < protocol.min_n_total:
         notes.append(
             f"panel too small n={len(rows)} < min_n_total={protocol.min_n_total}"
@@ -295,9 +370,15 @@ def prepare_for_policy(
     db_path: Path | str,
     policy_id: str,
     protocol_id: str | None = None,
+    preferred_compatibility_id: str | None = None,
 ) -> AccumPanelPrep:
     """Alias: prep dispatch for any registered policy."""
-    return prepare_accum_panel(db_path, policy_id, protocol_id)
+    return prepare_accum_panel(
+        db_path,
+        policy_id,
+        protocol_id,
+        preferred_compatibility_id=preferred_compatibility_id,
+    )
 
 
 def _horizon_ics(
@@ -394,6 +475,7 @@ def run_policy_challenge(
     protocol_id: str | None = None,
     write_artifact: bool = True,
     artifacts_dir: Path | None = None,
+    compatibility_id: str | None = None,
 ) -> ChallengeResult:
     path = Path(db_path)
     against = against.strip().lower().replace("-", "_")
@@ -404,10 +486,34 @@ def run_policy_challenge(
         baseline = "production"
     champion_mode = is_champion_against(against)
 
-    prep = prepare_for_policy(path, policy_id, protocol_id)
+    prep = prepare_for_policy(
+        path,
+        policy_id,
+        protocol_id,
+        preferred_compatibility_id=compatibility_id,
+    )
+
+    def make_result(**kwargs: object) -> ChallengeResult:
+        policy = prep.policy
+        identity = {}
+        if policy is not None and policy.production_snapshot_id:
+            identity = {
+                "observation_compatibility_id": policy.observation_compatibility_id,
+                "production_snapshot_id": policy.production_snapshot_id,
+                "production_snapshot_digest": policy.production_snapshot_digest,
+                "production_policy_id": policy.policy_id,
+                "production_policy_version": policy.version,
+                "production_semantic_engine_contract_id": (
+                    policy.production_semantic_engine_contract_id
+                ),
+                "challenge_adapter_id": policy.challenge_adapter_id,
+                "challenge_adapter_version": policy.challenge_adapter_version,
+            }
+        return ChallengeResult(**kwargs, **identity)  # type: ignore[arg-type]
+
     if prep.blocked is not None or prep.policy is None or prep.protocol is None:
         st = prep.blocked or ChallengeStatus.BLOCKED_DATA
-        return ChallengeResult(
+        return make_result(
             status=st,
             policy_id=policy_id if prep.policy is None else prep.policy.policy_id,
             protocol_id=(
@@ -461,7 +567,7 @@ def run_policy_challenge(
 
     folds = time_purged_folds(rows, protocol)
     if not folds:
-        return ChallengeResult(
+        return make_result(
             status=ChallengeStatus.BLOCKED_DATA,
             policy_id=policy.policy_id,
             protocol_id=protocol.protocol_id,
@@ -500,7 +606,7 @@ def run_policy_challenge(
                         break
                 if canon is None:
                     known = ", ".join(c.key for c in policy.enabled_components())
-                    return ChallengeResult(
+                    return make_result(
                         status=ChallengeStatus.BLOCKED_POLICY,
                         policy_id=policy.policy_id,
                         protocol_id=protocol.protocol_id,
@@ -516,13 +622,16 @@ def run_policy_challenge(
                         notes=[f"unknown gate_off key in {against}"],
                     )
                 ag_s = score_gate_off_named(test, policy, canon)
-                coefs = {c.key: (0.0 if c.key == canon else 1.0) for c in policy.enabled_components()}
+                coefs = {
+                    c.key: (0.0 if c.key == canon else 1.0)
+                    for c in policy.enabled_components()
+                }
                 notes.append(f"gate ablation: off {canon!r} only")
             elif against == "production":
                 ag_s = score_production(test, policy)
                 coefs = policy.weight_map()
             else:
-                return ChallengeResult(
+                return make_result(
                     status=ChallengeStatus.BLOCKED_POLICY,
                     policy_id=policy.policy_id,
                     protocol_id=protocol.protocol_id,
@@ -606,7 +715,7 @@ def run_policy_challenge(
                 ag_s = score_production(test, policy)
                 coefs = policy.weight_map()
             else:
-                return ChallengeResult(
+                return make_result(
                     status=ChallengeStatus.BLOCKED_POLICY,
                     policy_id=policy.policy_id,
                     protocol_id=protocol.protocol_id,
@@ -635,7 +744,9 @@ def run_policy_challenge(
                 "ridge",
             ):
                 if against not in ("flags_off", "flag_off", "no_flags"):
-                    notes.append(f"flags policy: remapped against={against!r} → flags_off")
+                    notes.append(
+                        f"flags policy: remapped against={against!r} → flags_off"
+                    )
                 against = "flags_off"
                 ag_s = score_flags_off(test, policy)
                 coefs = {"production_raw_score": 1.0}
@@ -643,7 +754,7 @@ def run_policy_challenge(
                 ag_s = score_production(test, policy)
                 coefs = policy.weight_map()
             else:
-                return ChallengeResult(
+                return make_result(
                     status=ChallengeStatus.BLOCKED_POLICY,
                     policy_id=policy.policy_id,
                     protocol_id=protocol.protocol_id,
@@ -678,7 +789,7 @@ def run_policy_challenge(
                 ag_s = score_production(test, policy)
                 coefs = policy.weight_map()
             else:
-                return ChallengeResult(
+                return make_result(
                     status=ChallengeStatus.BLOCKED_POLICY,
                     policy_id=policy.policy_id,
                     protocol_id=protocol.protocol_id,
@@ -712,7 +823,7 @@ def run_policy_challenge(
         elif against in ("gate_off", "off", "allow_all") or against.startswith(
             "gate_off:"
         ):
-            return ChallengeResult(
+            return make_result(
                 status=ChallengeStatus.BLOCKED_POLICY,
                 policy_id=policy.policy_id,
                 protocol_id=protocol.protocol_id,
@@ -728,7 +839,7 @@ def run_policy_challenge(
                 notes=["gate_off on non-gate policy"],
             )
         elif against in ("flags_off", "threshold_shift"):
-            return ChallengeResult(
+            return make_result(
                 status=ChallengeStatus.BLOCKED_POLICY,
                 policy_id=policy.policy_id,
                 protocol_id=protocol.protocol_id,
@@ -755,7 +866,7 @@ def run_policy_challenge(
                     else ChallengeStatus.BLOCKED_DATA
                 )
                 msg = ch_err or "champion scorer failed"
-                return ChallengeResult(
+                return make_result(
                     status=st,
                     policy_id=policy.policy_id,
                     protocol_id=protocol.protocol_id,
@@ -783,7 +894,7 @@ def run_policy_challenge(
                 "equal_sleeves|ridge_reweight|lgbm_reweight|elastic_net_reweight|"
                 "gate_off|gate_off:<gate>|flags_off|threshold_shift"
             )
-            return ChallengeResult(
+            return make_result(
                 status=ChallengeStatus.BLOCKED_POLICY,
                 policy_id=policy.policy_id,
                 protocol_id=protocol.protocol_id,
@@ -797,7 +908,7 @@ def run_policy_challenge(
             )
 
         if not scored:
-            return ChallengeResult(
+            return make_result(
                 status=ChallengeStatus.BLOCKED_POLICY,
                 policy_id=policy.policy_id,
                 protocol_id=protocol.protocol_id,
@@ -904,7 +1015,7 @@ def run_policy_challenge(
         gate_mode=gate_mode,
     )
 
-    result = ChallengeResult(
+    result = make_result(
         status=status,
         policy_id=policy.policy_id,
         protocol_id=protocol.protocol_id,
@@ -931,7 +1042,7 @@ def run_policy_challenge(
 
 def _format_lines(
     *,
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     protocol: Protocol,
     status: ChallengeStatus,
     against: str,
@@ -963,9 +1074,7 @@ def _format_lines(
         horizon_title = "Horizon table (pooled mean excess among allowed):"
         fold_lab = "mean_open"
     elif is_champion_against(against):
-        mode_banner = (
-            "Mode:     CHAMPION (learned score rule vs production; not factor/weight tune)"
-        )
+        mode_banner = "Mode:     CHAMPION (learned score rule vs production; not factor/weight tune)"
         metric_title = f"Primary rank IC @ {h_primary_txt} (mean OOS folds):"
         horizon_title = "Horizon table (pooled OOS rank IC):"
         fold_lab = "ic"
@@ -1030,7 +1139,7 @@ def _format_lines(
 
 def _format_summary(
     *,
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     protocol: Protocol,
     status: ChallengeStatus,
     against: str,
@@ -1048,11 +1157,7 @@ def _format_summary(
         if protocol.primary_horizon == 0
         else f"H={protocol.primary_horizon}"
     )
-    primary_lab = (
-        "Primary mean excess (allowed)"
-        if gate_mode
-        else "Primary IC"
-    )
+    primary_lab = "Primary mean excess (allowed)" if gate_mode else "Primary IC"
     lines = [
         f"# Challenge: {policy.policy_id}",
         "",

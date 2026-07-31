@@ -7,6 +7,8 @@ import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
 
+from tests.fixtures.policy_snapshots import insert_verified_policy_snapshots
+
 # Must intersect LQ45_LIKE in universe.py
 _STOCKS = (
     "BBCA",
@@ -27,7 +29,9 @@ _STOCKS = (
 )
 
 
-def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80) -> Path:
+def build_mvp_fixture(
+    path: Path, *, with_hard: bool = True, min_bars: int = 80
+) -> Path:
     """Create a small SQLite matching MVP hard tables (or empty shell)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
@@ -139,9 +143,7 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                 # volume spike for Ch.9 volume-anomaly
                 if t != "IHSG" and i == 55 and si == 1:
                     vol *= 25
-                candle_rows.append(
-                    (t, d, close - 1, close + 1, close - 2, close, vol)
-                )
+                candle_rows.append((t, d, close - 1, close + 1, close - 2, close, vol))
                 px += drift
         conn.executemany(
             "INSERT INTO candles VALUES (?,?,?,?,?,?,?)",
@@ -290,11 +292,45 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
         for si, t in enumerate(_STOCKS):
             conn.execute(
                 "INSERT INTO company_financials VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (t, "annual", "2023-12-31", "FY", 1e12 * (si + 1), 1e11 * (si + 1), 1.2e11 * (si + 1), 2e12 * (si + 1), 1e12 * (si + 1), 1e12 * (si + 1), 2e11 * (si + 1), 5e11 * (si + 1), 1.5e11 * (si + 1), 1e11 * (si + 1), "2024-06-01"),
+                (
+                    t,
+                    "annual",
+                    "2023-12-31",
+                    "FY",
+                    1e12 * (si + 1),
+                    1e11 * (si + 1),
+                    1.2e11 * (si + 1),
+                    2e12 * (si + 1),
+                    1e12 * (si + 1),
+                    1e12 * (si + 1),
+                    2e11 * (si + 1),
+                    5e11 * (si + 1),
+                    1.5e11 * (si + 1),
+                    1e11 * (si + 1),
+                    "2024-06-01",
+                ),
             )
             conn.execute(
                 "INSERT INTO bandar_detector VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (t, iev_date, "BIG ACC", "ACC", "BIG ACC", "ACC", 30.0 + si, 20.0, 50, 40, "BIG ACC", "ACC", "ACC", 90, 100.0, 1e9, 1e6),
+                (
+                    t,
+                    iev_date,
+                    "BIG ACC",
+                    "ACC",
+                    "BIG ACC",
+                    "ACC",
+                    30.0 + si,
+                    20.0,
+                    50,
+                    40,
+                    "BIG ACC",
+                    "ACC",
+                    "ACC",
+                    90,
+                    100.0,
+                    1e9,
+                    1e6,
+                ),
             )
             conn.execute(
                 "INSERT INTO forward_estimates_cache VALUES (?,?,?,?,?,?)",
@@ -302,7 +338,21 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
             )
             conn.execute(
                 "INSERT INTO ticker_notation_cache VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (t, "STATUS_ACTIVE", 1, "Papan Utama", "Finance", "Banking", "30%", "[]", "close", "", 0, 0 if si > 0 else 1, "2024-06-01"),
+                (
+                    t,
+                    "STATUS_ACTIVE",
+                    1,
+                    "Papan Utama",
+                    "Finance",
+                    "Banking",
+                    "30%",
+                    "[]",
+                    "close",
+                    "",
+                    0,
+                    0 if si > 0 else 1,
+                    "2024-06-01",
+                ),
             )
         for si, t in enumerate(_STOCKS):
             conn.execute(
@@ -320,7 +370,16 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
         for si, t in enumerate(_STOCKS):
             conn.execute(
                 "INSERT INTO earnings_cache VALUES (?,?,?,?,?,?,?,?)",
-                (t, 2024, 1, 100.0 + si, 90.0 + si, float(si - 5), float(si - 3), "2024-06-01"),
+                (
+                    t,
+                    2024,
+                    1,
+                    100.0 + si,
+                    90.0 + si,
+                    float(si - 5),
+                    float(si - 3),
+                    "2024-06-01",
+                ),
             )
             conn.execute(
                 "INSERT INTO corp_action_cache VALUES (?,?,?,?,?,?,?)",
@@ -353,7 +412,15 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
             # keep last as-of row dense
             conn.execute(
                 "INSERT INTO iev_snapshots VALUES (?,?,?,?,?,?,?)",
-                (iev_date, t, 100.0 + si * 0.5, si + 1, 99.0 + si, f"{iev_date}T08:50:00", 1),
+                (
+                    iev_date,
+                    t,
+                    100.0 + si * 0.5,
+                    si + 1,
+                    99.0 + si,
+                    f"{iev_date}T08:50:00",
+                    1,
+                ),
             )
             # corpus labels across dates for walk-forward (learning_outcome_labels)
             for j in range(20):
@@ -427,7 +494,14 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
             );
             """
         )
-        factor_names = ["vix", "eido", "usd_idr", "idx_trend", "idx_breadth", "foreign_flow"]
+        factor_names = [
+            "vix",
+            "eido",
+            "usd_idr",
+            "idx_trend",
+            "idx_breadth",
+            "foreign_flow",
+        ]
         mctx_rows = []
         for k in range(min_bars - 10):
             d = (start + timedelta(days=k)).isoformat()
@@ -556,6 +630,9 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                             },
                         },
                         "candidate": {
+                            "accum_score": float(
+                                sum(item["score"] for item in flow_signals)
+                            ),
                             "iep_gap_pct": ((seed % 9) - 4) / 100.0,
                             "bid_offer_imbalance": ((seed % 17) - 8) / 10.0,
                             "book_pressure": ((seed % 21) - 10) / 10.0,
@@ -626,6 +703,7 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
             "VALUES (?,?,?,?,?)",
             obs_rows,
         )
+        insert_verified_policy_snapshots(conn, "sha256:fixture_cohort_primary")
         conn.commit()
     finally:
         conn.close()

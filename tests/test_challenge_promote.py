@@ -16,6 +16,21 @@ from tests.fixtures.build_mvp_fixture import build_mvp_fixture
 runner = CliRunner()
 
 
+def _identity(result) -> dict[str, str]:
+    return {
+        "observation_compatibility_id": result.observation_compatibility_id,
+        "production_snapshot_id": result.production_snapshot_id,
+        "production_snapshot_digest": result.production_snapshot_digest,
+        "production_policy_id": result.production_policy_id,
+        "production_policy_version": result.production_policy_version,
+        "production_semantic_engine_contract_id": (
+            result.production_semantic_engine_contract_id
+        ),
+        "challenge_adapter_id": result.challenge_adapter_id,
+        "challenge_adapter_version": result.challenge_adapter_version,
+    }
+
+
 @pytest.fixture
 def fixture_db(tmp_path: Path) -> Path:
     return build_mvp_fixture(tmp_path / "prom.db", min_bars=120)
@@ -44,6 +59,7 @@ def test_promote_from_champion_export(fixture_db: Path, tmp_path: Path):
         "weights": result.weights,
         "notes": result.notes,
         "fold_metrics": result.fold_metrics,
+        **_identity(result),
     }
     export.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -73,6 +89,25 @@ def test_promote_bad_json(tmp_path: Path):
     assert pack.error
 
 
+def test_legacy_export_is_not_promotion_eligible(tmp_path: Path):
+    legacy = tmp_path / "legacy.json"
+    legacy.write_text(
+        json.dumps(
+            {
+                "status": "WIN",
+                "policy_id": "screener.accum.score_weights",
+                "protocol_id": "accum_path_v1",
+                "baseline_id": "production",
+                "against_id": "equal_sleeves",
+            }
+        ),
+        encoding="utf-8",
+    )
+    pack = build_promote_packet(from_json=legacy, write_artifact=False)
+    assert pack.exit_code() == 2
+    assert "historical artifact" in (pack.error or "")
+
+
 def test_promote_cli(fixture_db: Path, tmp_path: Path):
     result = run_policy_challenge(
         fixture_db,
@@ -93,6 +128,7 @@ def test_promote_cli(fixture_db: Path, tmp_path: Path):
                 "primary_ic_against": result.primary_ic_against,
                 "n_rows": result.n_rows,
                 "notes": result.notes,
+                **_identity(result),
             }
         ),
         encoding="utf-8",

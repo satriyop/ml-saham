@@ -9,7 +9,7 @@ from typing import Any
 
 from ml_saham.challenge.panel import PanelRow
 from ml_saham.challenge.panel_iev import _open_close_excess
-from ml_saham.challenge.types import PolicySnapshot
+from ml_saham.challenge.types import ChallengeExecutionPolicy
 from ml_saham.data.aisaham_read import connect, table_exists
 from ml_saham.data.observation_cohort import (
     PRE_OPEN_PURPOSES,
@@ -62,11 +62,13 @@ def _trim_date(raw: str) -> str:
 
 def extract_pre_open_components(
     payload: dict[str, Any],
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
 ) -> dict[str, float] | None:
     """Extract production_raw_score + feature components; None if row unusable."""
     signal = payload.get("signal") if isinstance(payload.get("signal"), dict) else {}
-    cand = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+    cand = (
+        payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+    )
     factors = signal.get("factors") if isinstance(signal.get("factors"), dict) else {}
 
     raw = _f(signal.get("raw_score"))
@@ -152,7 +154,8 @@ def _load_open_30m_stock_returns(
     if not table_exists(conn, "learning_outcome_labels"):
         return {}
     cols = {
-        r[1] for r in conn.execute("PRAGMA table_info(learning_outcome_labels)").fetchall()
+        r[1]
+        for r in conn.execute("PRAGMA table_info(learning_outcome_labels)").fetchall()
     }
     if "observation_id" not in cols or "metrics_json" not in cols:
         return {}
@@ -190,7 +193,7 @@ def _load_open_30m_stock_returns(
 
 def build_pre_open_obs_panel(
     db_path: Path | str,
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     *,
     primary_horizon: int = 0,
     compatibility_id: str | None = None,
@@ -203,7 +206,8 @@ def build_pre_open_obs_panel(
             return [], ["learning_observations missing"]
 
         cols = {
-            r[1] for r in conn.execute("PRAGMA table_info(learning_observations)").fetchall()
+            r[1]
+            for r in conn.execute("PRAGMA table_info(learning_observations)").fetchall()
         }
         if "decision_payload_json" not in cols:
             return [], ["learning_observations.decision_payload_json missing"]

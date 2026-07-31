@@ -66,6 +66,7 @@ ai-saham `research pre-open evaluate` is **not** required for ml-saham challenge
 | Market / broker / IEV fetch & cache | **write** | read |
 | Live screen / signal / risk / plan / TUI | **owns** | — |
 | `learning_observations` capture / backfill | **write** | **read** (features) |
+| `learning_policy_snapshots` v1 history / v2 active set | **SSOT write** | **read + independently verify** |
 | `learning_outcome_labels` (`price_path.accum_*`, …) | **SSOT write** | optional join; not default challenge y |
 | Accum **cohort evaluate** / ACCUM `learning_evaluations` | **dropped (legacy)** | **do not depend on** |
 | Policy tournament WIN / LOSE / rank IC / folds (**tune**) | — | **owns** |
@@ -105,6 +106,25 @@ Hard rules (unchanged): **no** ai-saham Python imports · **no** scrapers · **n
 - Shared helper: `src/ml_saham/data/observation_cohort.py` (challenge + curriculum must use it; no ad-hoc `SELECT … FROM learning_observations` in chapters/challenge).
 - Default selection: **largest** cohort; override with explicit id when auditing a thin new rulebook.
 - Doctor soft-flags multi-cohort presence; retired tables `candidate_observations` / `signal_forward_labels` are never hard SSOT.
+
+### Verified production-policy snapshots
+
+- Active accumulation comparisons require exactly seven
+  `production_policy_snapshot.v2` rows for the selected compatibility cohort,
+  including `screener.accum.hard_filters`.
+- ml-saham recomputes canonical payload digests and snapshot IDs and validates
+  all cohort/contract/semantic bindings. It never imports ai-saham Python,
+  writes/repairs the table, infers missing rows, or falls back to packaged
+  policy mirrors.
+- `VerifiedProductionPolicySnapshot`, ML-owned `ChallengePolicyAdapter`, and
+  `Protocol` are separate contracts. Production material cannot come from the
+  adapter.
+- Historical `production_policy_snapshot.v1` six-row cohorts are audit history,
+  not eligible for current `baseline=production`.
+- Snapshot or adapter integrity failures are `BLOCKED_POLICY`; valid policy
+  with insufficient rows/folds is `BLOCKED_DATA`.
+- Because default cohort selection remains largest, operators auditing a thin
+  newly activated rulebook must pass its explicit `--compatibility-id`.
 
 Horizons **3 / 10 / 20** (primary **10**) align with ai-saham ADR-056 **by number**.  
 Challenge excess and corpus SUCCESS/FAILURE labels remain **different products** unless a protocol explicitly says otherwise.
@@ -149,7 +169,8 @@ saham research accum status
 export ML_SAHAM_DB=~/dev/ai-saham/data/db/data.db
 ml-saham doctor --deep
 ml-saham vet
-ml-saham challenge run screener.accum.score_weights --against equal_sleeves
+ml-saham challenge run screener.accum.score_weights \
+  --compatibility-id <snapshot-v2-cohort> --against equal_sleeves
 ml-saham challenge factor screener.accum.score_weights --all
 # Decision memo under docs/decisions/ — human may edit ai-saham config later
 ```

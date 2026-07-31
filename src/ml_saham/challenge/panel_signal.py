@@ -14,7 +14,7 @@ from typing import Any
 
 from ml_saham.challenge.panel import PanelRow, _pick_window_blob, build_forward_excess
 from ml_saham.data.observation_cohort import fetch_accum_observation_raw
-from ml_saham.challenge.types import PolicySnapshot
+from ml_saham.challenge.types import ChallengeExecutionPolicy
 from ml_saham.data.aisaham_read import connect, table_exists
 
 
@@ -56,7 +56,11 @@ def _group_scores(payload: dict[str, Any], signal: dict[str, Any]) -> dict[str, 
     at = signal.get("alpha_trigger_score") if isinstance(signal, dict) else None
     # assessment may mirror alpha_trigger_score
     if not isinstance(at, dict):
-        ass = signal.get("assessment") if isinstance(signal.get("assessment"), dict) else {}
+        ass = (
+            signal.get("assessment")
+            if isinstance(signal.get("assessment"), dict)
+            else {}
+        )
         at = ass.get("alpha_trigger_score") if isinstance(ass, dict) else None
     gcs = None
     if isinstance(at, dict):
@@ -78,13 +82,13 @@ def _extract_raw(payload: dict[str, Any], signal: dict[str, Any]) -> float | Non
     """Production score for ranking / baseline.
 
     Order matches live ai-saham then fixture shapes:
-    signal.raw_score → raw_exact_score → score → assessment.score /
+    signal.raw_exact_score → raw_score → score → assessment.score /
     assessment.raw_exact_score → fingerprint.
     """
     ass = signal.get("assessment") if isinstance(signal.get("assessment"), dict) else {}
     for v in (
-        signal.get("raw_score"),
         signal.get("raw_exact_score"),
+        signal.get("raw_score"),
         signal.get("score"),
         signal.get("raw_group_score"),
         ass.get("score") if isinstance(ass, dict) else None,
@@ -103,7 +107,9 @@ def _extract_raw(payload: dict[str, Any], signal: dict[str, Any]) -> float | Non
     return None
 
 
-def _flag_fires(payload: dict[str, Any], signal: dict[str, Any], key: str, aliases: tuple[str, ...]) -> float:
+def _flag_fires(
+    payload: dict[str, Any], signal: dict[str, Any], key: str, aliases: tuple[str, ...]
+) -> float:
     """Return 1.0 if flag fired, else 0.0."""
     names = {key.lower(), *(a.lower() for a in aliases)}
     # list of flag codes
@@ -135,10 +141,13 @@ def _flag_fires(payload: dict[str, Any], signal: dict[str, Any], key: str, alias
 
 def extract_signal_components(
     payload: dict[str, Any],
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
 ) -> dict[str, float] | None:
     signal = _resolve_signal_blob(payload)
-    raw = _extract_raw(payload, signal)
+    if policy.policy_id == "signal.accum.raw_score" and policy.production_snapshot_id:
+        raw = _f(signal.get("raw_exact_score"))
+    else:
+        raw = _extract_raw(payload, signal)
 
     if policy.panel_kind == "accum_signal_flags" or policy.score_kind in (
         "flag_penalty_adjusted",
@@ -203,7 +212,7 @@ def extract_signal_components(
 
 def build_signal_panel(
     db_path: Path | str,
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     horizons: tuple[int, ...],
     primary_horizon: int,
     *,
@@ -268,9 +277,7 @@ def build_signal_panel(
             if not ex or primary_horizon not in ex:
                 dropped += 1
                 continue
-            out.append(
-                PanelRow(ticker=ticker, date=date, components=comps, excess=ex)
-            )
+            out.append(PanelRow(ticker=ticker, date=date, components=comps, excess=ex))
         if dropped:
             notes.append(f"dropped {dropped} rows missing primary H={primary_horizon}")
         notes.append(

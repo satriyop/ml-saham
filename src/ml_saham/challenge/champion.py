@@ -14,7 +14,7 @@ import numpy as np
 
 from ml_saham.challenge.panel import PanelRow
 from ml_saham.challenge.scorers import enabled_keys
-from ml_saham.challenge.types import PolicySnapshot
+from ml_saham.challenge.types import ChallengeExecutionPolicy
 
 # Against ids reserved for champion track
 CHAMPION_AGAINST_IDS: frozenset[str] = frozenset(
@@ -44,7 +44,7 @@ def normalize_champion_id(against: str) -> str:
     return a
 
 
-def feature_keys_for_learned(policy: PolicySnapshot) -> list[str]:
+def feature_keys_for_learned(policy: ChallengeExecutionPolicy) -> list[str]:
     """Component / feature keys used as the X matrix for learned champions."""
     if policy.score_kind in ("rank_primary", "raw_score_primary"):
         keys = list(policy.feature_keys())
@@ -71,7 +71,7 @@ def _xy(
 def score_lgbm_reweight(
     train: Sequence[PanelRow],
     test: Sequence[PanelRow],
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     *,
     primary_horizon: int,
 ) -> tuple[list[float] | None, dict[str, float], str | None]:
@@ -88,18 +88,26 @@ def score_lgbm_reweight(
         from lightgbm import LGBMRegressor
         from sklearn.preprocessing import StandardScaler
     except ImportError:
-        return None, {}, (
-            "champion lgbm_reweight requires lightgbm+sklearn "
-            "(pip install -e '.[ml]')"
+        return (
+            None,
+            {},
+            (
+                "champion lgbm_reweight requires lightgbm+sklearn "
+                "(pip install -e '.[ml]')"
+            ),
         )
 
     X_tr, y_tr, m_tr = _xy(train, keys, primary_horizon)
     n_ok = int(m_tr.sum())
     min_need = max(_MIN_TRAIN_ABS, len(keys) + 5)
     if n_ok < min_need:
-        return None, {}, (
-            f"champion lgbm_reweight: train n_ok={n_ok} < min={min_need} "
-            f"(n_train={len(train)}, n_features={len(keys)})"
+        return (
+            None,
+            {},
+            (
+                f"champion lgbm_reweight: train n_ok={n_ok} < min={min_need} "
+                f"(n_train={len(train)}, n_features={len(keys)})"
+            ),
         )
     if float(np.std(y_tr[m_tr])) < 1e-12:
         return None, {}, "champion lgbm_reweight: constant train labels (no variance)"
@@ -121,8 +129,10 @@ def score_lgbm_reweight(
     model.fit(Xs, y_tr[m_tr])
     pred = np.asarray(model.predict(scaler.transform(X_te)), dtype=float)
     if float(np.std(pred)) < 1e-12:
-        return None, {}, (
-            "champion lgbm_reweight: constant predictions (degenerate fit)"
+        return (
+            None,
+            {},
+            ("champion lgbm_reweight: constant predictions (degenerate fit)"),
         )
     # importance as pseudo-coefs for report
     imp = getattr(model, "feature_importances_", None)
@@ -140,7 +150,7 @@ def score_lgbm_reweight(
 def score_elastic_net_reweight(
     train: Sequence[PanelRow],
     test: Sequence[PanelRow],
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     *,
     primary_horizon: int,
 ) -> tuple[list[float] | None, dict[str, float], str | None]:
@@ -153,17 +163,20 @@ def score_elastic_net_reweight(
         from sklearn.linear_model import ElasticNet
         from sklearn.preprocessing import StandardScaler
     except ImportError:
-        return None, {}, (
-            "champion elastic_net_reweight requires sklearn "
-            "(pip install -e '.[ml]')"
+        return (
+            None,
+            {},
+            ("champion elastic_net_reweight requires sklearn (pip install -e '.[ml]')"),
         )
 
     X_tr, y_tr, m_tr = _xy(train, keys, primary_horizon)
     n_ok = int(m_tr.sum())
     min_need = max(_MIN_TRAIN_ABS, len(keys) + 5)
     if n_ok < min_need:
-        return None, {}, (
-            f"champion elastic_net_reweight: train n_ok={n_ok} < min={min_need}"
+        return (
+            None,
+            {},
+            (f"champion elastic_net_reweight: train n_ok={n_ok} < min={min_need}"),
         )
     if float(np.std(y_tr[m_tr])) < 1e-12:
         return None, {}, "champion elastic_net_reweight: constant train labels"
@@ -179,9 +192,13 @@ def score_elastic_net_reweight(
     model.fit(Xs, y_tr[m_tr])
     pred = np.asarray(model.predict(scaler.transform(X_te)), dtype=float)
     if float(np.std(pred)) < 1e-12 or float(np.max(np.abs(model.coef_))) < 1e-12:
-        return None, {}, (
-            "champion elastic_net_reweight: constant/zero-coef predictions "
-            "(degenerate fit — try lgbm_reweight or more train data)"
+        return (
+            None,
+            {},
+            (
+                "champion elastic_net_reweight: constant/zero-coef predictions "
+                "(degenerate fit — try lgbm_reweight or more train data)"
+            ),
         )
     meta = {k: float(c) for k, c in zip(keys, model.coef_, strict=True)}
     meta["_n_train_ok"] = float(n_ok)
@@ -193,16 +210,14 @@ def score_champion(
     against: str,
     train: Sequence[PanelRow],
     test: Sequence[PanelRow],
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     *,
     primary_horizon: int,
 ) -> tuple[list[float] | None, dict[str, float], str | None]:
     """Dispatch champion against id → scores."""
     cid = normalize_champion_id(against)
     if cid == "lgbm_reweight":
-        return score_lgbm_reweight(
-            train, test, policy, primary_horizon=primary_horizon
-        )
+        return score_lgbm_reweight(train, test, policy, primary_horizon=primary_horizon)
     if cid == "elastic_net_reweight":
         return score_elastic_net_reweight(
             train, test, policy, primary_horizon=primary_horizon

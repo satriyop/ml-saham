@@ -20,7 +20,7 @@ from ml_saham.challenge.panel import (
 )
 from ml_saham.challenge.policies.registry import load_policy
 from ml_saham.challenge.scorers import score_production
-from ml_saham.challenge.types import DiagnosticSpec, PolicySnapshot
+from ml_saham.challenge.types import DiagnosticSpec, ChallengeExecutionPolicy
 from ml_saham.data.aisaham_read import connect, table_exists
 from ml_saham.data.observation_cohort import fetch_accum_observation_raw
 
@@ -121,7 +121,8 @@ def _load_mctx_by_date(conn: sqlite3.Connection) -> dict[str, dict[str, float]]:
     if not table_exists(conn, "market_context_snapshots"):
         return {}
     cols = {
-        r[1] for r in conn.execute("PRAGMA table_info(market_context_snapshots)").fetchall()
+        r[1]
+        for r in conn.execute("PRAGMA table_info(market_context_snapshots)").fetchall()
     }
     if "as_of_date" not in cols or "factors_json" not in cols:
         return {}
@@ -140,7 +141,7 @@ def _load_mctx_by_date(conn: sqlite3.Connection) -> dict[str, dict[str, float]]:
     sql = f"SELECT {', '.join(select)} FROM market_context_snapshots{order}"
     out: dict[str, dict[str, float]] = {}
     for row in conn.execute(sql).fetchall():
-        as_of, regime, fj, created = row[0], row[1], row[2], row[3]
+        as_of, regime, fj, _created = row[0], row[1], row[2], row[3]
         date = str(as_of or "")
         if "T" in date:
             date = date.split("T", 1)[0]
@@ -170,7 +171,9 @@ def _payload_views(
             if isinstance(window.get("sub_signal_fingerprint"), dict)
             else {}
         )
-        cand = window.get("candidate") if isinstance(window.get("candidate"), dict) else {}
+        cand = (
+            window.get("candidate") if isinstance(window.get("candidate"), dict) else {}
+        )
         # Prefer window signal/fp; fall back to root for hybrid fixtures
         if not sig:
             top = payload.get("signal")
@@ -189,7 +192,9 @@ def _payload_views(
         if isinstance(payload.get("sub_signal_fingerprint"), dict)
         else {}
     )
-    cand = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+    cand = (
+        payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+    )
     return sig, fp, cand, payload
 
 
@@ -197,7 +202,11 @@ def _group_score_from_signal(signal: dict[str, Any], group_name: str) -> float |
     at = signal.get("alpha_trigger_score") if isinstance(signal, dict) else None
     # assessment may mirror alpha_trigger
     if not isinstance(at, dict):
-        ass = signal.get("assessment") if isinstance(signal.get("assessment"), dict) else {}
+        ass = (
+            signal.get("assessment")
+            if isinstance(signal.get("assessment"), dict)
+            else {}
+        )
         at = ass.get("alpha_trigger_score") if isinstance(ass, dict) else None
     if isinstance(at, dict):
         gcs = at.get("group_contributions")
@@ -215,7 +224,10 @@ def _group_score_from_signal(signal: dict[str, Any], group_name: str) -> float |
             for g in blob:
                 if not isinstance(g, dict):
                     continue
-                if str(g.get("group") or g.get("name") or "").lower() == group_name.lower():
+                if (
+                    str(g.get("group") or g.get("name") or "").lower()
+                    == group_name.lower()
+                ):
                     raw = g.get("score")
                     if isinstance(raw, (int, float)):
                         return float(raw)
@@ -242,7 +254,10 @@ def _group_score(payload: dict[str, Any], group_name: str) -> float | None:
             for g in blob:
                 if not isinstance(g, dict):
                     continue
-                if str(g.get("group") or g.get("name") or "").lower() == group_name.lower():
+                if (
+                    str(g.get("group") or g.get("name") or "").lower()
+                    == group_name.lower()
+                ):
                     raw = g.get("score")
                     if isinstance(raw, (int, float)):
                         return float(raw)
@@ -329,7 +344,11 @@ def extract_diagnostic_features(
                 blob = nest_src.get(nest)
                 if not isinstance(blob, dict):
                     continue
-                if "regime" in blob and "regime_score" in enabled and "regime_score" not in found:
+                if (
+                    "regime" in blob
+                    and "regime_score" in enabled
+                    and "regime_score" not in found
+                ):
                     rkey = str(blob.get("regime") or "").strip().upper()
                     found["regime_score"] = _REGIME_MAP.get(rkey, 0.0)
                 for k in enabled:
@@ -408,7 +427,7 @@ def extract_diagnostic_features(
 
 def _production_score_from_comps(
     comps: dict[str, float],
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
 ) -> float:
     from ml_saham.challenge.panel import PanelRow
 

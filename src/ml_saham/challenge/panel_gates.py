@@ -13,12 +13,12 @@ from pathlib import Path
 from typing import Any
 
 from ml_saham.challenge.panel import PanelRow, _pick_window_blob, build_forward_excess
-from ml_saham.challenge.types import PolicySnapshot
+from ml_saham.challenge.types import ChallengeExecutionPolicy
 from ml_saham.data.aisaham_read import connect, table_exists
 from ml_saham.data.observation_cohort import fetch_accum_observation_raw
 
 
-def _alias_to_gate_key(policy: PolicySnapshot) -> dict[str, str]:
+def _alias_to_gate_key(policy: ChallengeExecutionPolicy) -> dict[str, str]:
     m: dict[str, str] = {}
     for c in policy.components:
         m[c.key.lower()] = c.key
@@ -44,15 +44,15 @@ def _gate_key_from_name(name: str, aliases: dict[str, str]) -> str | None:
     key = aliases.get(name.lower()) or aliases.get(name.replace("Gate", "").lower())
     if key is not None:
         return key
-    snake = "".join(
-        ("_" + ch.lower() if ch.isupper() else ch) for ch in name
-    ).lstrip("_")
+    snake = "".join(("_" + ch.lower() if ch.isupper() else ch) for ch in name).lstrip(
+        "_"
+    )
     return aliases.get(snake.lower())
 
 
 def extract_gate_components(
     payload: dict[str, Any],
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
 ) -> dict[str, float] | None:
     """Per-gate fire flags (1.0 fired / 0.0 clear). None if no trade_setup blob."""
     aliases = _alias_to_gate_key(policy)
@@ -87,7 +87,7 @@ def extract_gate_components(
 
 def build_gate_panel(
     db_path: Path | str,
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     horizons: tuple[int, ...],
     primary_horizon: int,
     *,
@@ -152,9 +152,7 @@ def build_gate_panel(
             if not ex or primary_horizon not in ex:
                 dropped += 1
                 continue
-            out.append(
-                PanelRow(ticker=ticker, date=date, components=comps, excess=ex)
-            )
+            out.append(PanelRow(ticker=ticker, date=date, components=comps, excess=ex))
         if dropped:
             notes.append(f"dropped {dropped} rows missing primary H={primary_horizon}")
         br = (n_blocked / len(candidates)) if candidates else 0.0

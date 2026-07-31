@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from ml_saham.challenge.panel import PanelRow
-from ml_saham.challenge.types import PolicySnapshot
+from ml_saham.challenge.types import ChallengeExecutionPolicy
 from ml_saham.data.aisaham_read import connect, load_candles, table_exists
 
 # IDX pre-open / NCP decision window (local exchange clock on collected_at).
@@ -166,12 +166,15 @@ def _prefer_ncp_snapshot_rows(
     return out, notes
 
 
-def load_iev_raw_rows(conn: sqlite3.Connection) -> tuple[list[dict[str, Any]], list[str]]:
+def load_iev_raw_rows(
+    conn: sqlite3.Connection,
+) -> tuple[list[dict[str, Any]], list[str]]:
     """Prefer iev_snapshot_history; fallback iev_snapshots."""
     notes: list[str] = []
     if table_exists(conn, "iev_snapshot_history"):
         cols_set = {
-            r[1] for r in conn.execute("PRAGMA table_info(iev_snapshot_history)").fetchall()
+            r[1]
+            for r in conn.execute("PRAGMA table_info(iev_snapshot_history)").fetchall()
         }
         want = ["date", "ticker", "iev", "rank", "iep"]
         if "collected_at" in cols_set:
@@ -198,7 +201,9 @@ def load_iev_raw_rows(conn: sqlite3.Connection) -> tuple[list[dict[str, Any]], l
     if not table_exists(conn, "iev_snapshots"):
         return [], ["iev_snapshots and iev_snapshot_history missing"]
 
-    cols_set = {r[1] for r in conn.execute("PRAGMA table_info(iev_snapshots)").fetchall()}
+    cols_set = {
+        r[1] for r in conn.execute("PRAGMA table_info(iev_snapshots)").fetchall()
+    }
     want = ["date", "ticker", "iev", "rank", "iep"]
     if "fetched_at" in cols_set:
         want.append("fetched_at")
@@ -207,7 +212,9 @@ def load_iev_raw_rows(conn: sqlite3.Connection) -> tuple[list[dict[str, Any]], l
     select = ", ".join(want)
     raw = [
         _as_dict(r, want)
-        for r in conn.execute(f"SELECT {select} FROM iev_snapshots ORDER BY date, ticker")
+        for r in conn.execute(
+            f"SELECT {select} FROM iev_snapshots ORDER BY date, ticker"
+        )
     ]
     notes.append(f"iev source=iev_snapshots n={len(raw)}")
     return _prefer_ncp_snapshot_rows(raw)
@@ -257,7 +264,9 @@ def _open_close_excess(
     return out, notes
 
 
-def _component_features(iev: float, iep: float, rank: int, max_rank: int) -> dict[str, float]:
+def _component_features(
+    iev: float, iep: float, rank: int, max_rank: int
+) -> dict[str, float]:
     """Production rank score + scale-sane challenger features (no IEV/IEP ratio)."""
     return {
         "official_rank_score": float(max_rank - rank + 1),
@@ -270,7 +279,7 @@ def _component_features(iev: float, iep: float, rank: int, max_rank: int) -> dic
 
 def build_iev_panel(
     db_path: Path | str,
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     *,
     primary_horizon: int = 0,
 ) -> tuple[list[PanelRow], list[str]]:

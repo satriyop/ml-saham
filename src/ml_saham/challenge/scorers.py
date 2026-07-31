@@ -8,14 +8,16 @@ from typing import Sequence
 import numpy as np
 
 from ml_saham.challenge.panel import PanelRow
-from ml_saham.challenge.types import PolicySnapshot
+from ml_saham.challenge.types import ChallengeExecutionPolicy
 
 
-def enabled_keys(policy: PolicySnapshot) -> list[str]:
+def enabled_keys(policy: ChallengeExecutionPolicy) -> list[str]:
     return [c.key for c in policy.enabled_components()]
 
 
-def score_production(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[float]:
+def score_production(
+    rows: Sequence[PanelRow], policy: ChallengeExecutionPolicy
+) -> list[float]:
     """Production score by score_kind."""
     if policy.score_kind == "rank_primary":
         return [float(r.components.get("official_rank_score", 0.0)) for r in rows]
@@ -23,7 +25,11 @@ def score_production(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[f
         return [float(r.components.get("production_raw_score", 0.0)) for r in rows]
     if policy.score_kind == "flag_penalty_adjusted":
         # raw_score − sum(weight_i) for each fired flag (component value 0/1)
-        flag_keys = [c.key for c in policy.enabled_components() if c.key != "production_raw_score"]
+        flag_keys = [
+            c.key
+            for c in policy.enabled_components()
+            if c.key != "production_raw_score"
+        ]
         wmap = {c.key: c.weight for c in policy.enabled_components()}
         out: list[float] = []
         for r in rows:
@@ -63,13 +69,15 @@ def score_production(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[f
         return out
     if policy.score_kind == "evidence_group_weights":
         return score_evidence_group_weights(rows, policy)
+    if policy.score_kind == "weighted_sleeves" and policy.production_snapshot_id:
+        return [float(r.components["production_observed_score"]) for r in rows]
     keys = enabled_keys(policy)
     return [float(sum(r.components.get(k, 0.0) for k in keys)) for r in rows]
 
 
 def score_evidence_group_weights(
     rows: Sequence[PanelRow],
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     *,
     weight_override: dict[str, float] | None = None,
     drop_key: str | None = None,
@@ -79,9 +87,11 @@ def score_evidence_group_weights(
     Mirrors production: missing groups drop out of the weight sum (not zero-filled).
     Group values are expected on a ~0–100 score scale.
     """
-    wmap = dict(weight_override) if weight_override is not None else {
-        c.key: float(c.weight) for c in policy.enabled_components()
-    }
+    wmap = (
+        dict(weight_override)
+        if weight_override is not None
+        else {c.key: float(c.weight) for c in policy.enabled_components()}
+    )
     if drop_key is not None:
         wmap = {k: (0.0 if k == drop_key else v) for k, v in wmap.items()}
     out: list[float] = []
@@ -103,7 +113,7 @@ def score_evidence_group_weights(
 
 def score_evidence_equal_groups(
     rows: Sequence[PanelRow],
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
 ) -> list[float]:
     """Equal weight on every enabled group key that is present on the row."""
     keys = enabled_keys(policy)
@@ -111,7 +121,9 @@ def score_evidence_equal_groups(
     return score_evidence_group_weights(rows, policy, weight_override=equal)
 
 
-def score_flags_off(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[float]:
+def score_flags_off(
+    rows: Sequence[PanelRow], policy: ChallengeExecutionPolicy
+) -> list[float]:
     """Challenger: ignore flag penalties — raw_score only."""
     del policy
     return [float(r.components.get("production_raw_score", 0.0)) for r in rows]
@@ -119,7 +131,7 @@ def score_flags_off(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[fl
 
 def score_classification_shift(
     rows: Sequence[PanelRow],
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     *,
     strong_delta: float = 5.0,
     moderate_delta: float = 5.0,
@@ -146,7 +158,9 @@ def score_classification_shift(
     return out
 
 
-def score_gate_off(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[float]:
+def score_gate_off(
+    rows: Sequence[PanelRow], policy: ChallengeExecutionPolicy
+) -> list[float]:
     """Challenger: never block — all names allowed (1.0)."""
     del policy
     return [1.0] * len(rows)
@@ -154,7 +168,7 @@ def score_gate_off(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[flo
 
 def score_gate_off_named(
     rows: Sequence[PanelRow],
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     gate_key: str,
 ) -> list[float]:
     """Challenger: disable one gate; other enabled gates still block."""
@@ -189,7 +203,7 @@ def mean_excess_allowed(
 
 def score_production_drop(
     rows: Sequence[PanelRow],
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     factor_key: str,
 ) -> list[float]:
     """Production score with factor_key zeroed (ablation)."""
@@ -207,7 +221,9 @@ def score_production_drop(
     return out
 
 
-def score_equal_sleeves(rows: Sequence[PanelRow], policy: PolicySnapshot) -> list[float]:
+def score_equal_sleeves(
+    rows: Sequence[PanelRow], policy: ChallengeExecutionPolicy
+) -> list[float]:
     """Equal contribution.
 
     weighted_sleeves: mean of component/weight fractions on enabled sleeves.
@@ -233,7 +249,7 @@ def score_equal_sleeves(rows: Sequence[PanelRow], policy: PolicySnapshot) -> lis
 
 def score_feature_equal_z(
     rows: Sequence[PanelRow],
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
 ) -> list[float]:
     """Within-date z-score mean of policy.feature_keys() — no leakage across dates."""
     keys = list(policy.feature_keys())
@@ -265,7 +281,7 @@ def score_feature_equal_z(
 def score_ridge_reweight(
     train: Sequence[PanelRow],
     test: Sequence[PanelRow],
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     *,
     primary_horizon: int,
 ) -> tuple[list[float], dict[str, float]]:
@@ -277,12 +293,16 @@ def score_ridge_reweight(
     if not keys or len(train) < len(keys) + 2:
         return [0.0] * len(test), {k: 0.0 for k in keys}
 
-    X_tr = np.array([[r.components.get(k, 0.0) for k in keys] for r in train], dtype=float)
+    X_tr = np.array(
+        [[r.components.get(k, 0.0) for k in keys] for r in train], dtype=float
+    )
     y_tr = np.array(
         [r.excess.get(primary_horizon, float("nan")) for r in train],
         dtype=float,
     )
-    X_te = np.array([[r.components.get(k, 0.0) for k in keys] for r in test], dtype=float)
+    X_te = np.array(
+        [[r.components.get(k, 0.0) for k in keys] for r in test], dtype=float
+    )
 
     m = np.isfinite(y_tr)
     if int(m.sum()) < len(keys) + 2 or float(np.std(y_tr[m])) < 1e-12:
@@ -296,7 +316,5 @@ def score_ridge_reweight(
     model = Ridge(alpha=1.0, random_state=42)
     model.fit(Xs, y_tr[m])
     pred = model.predict(scaler.transform(X_te))
-    coefs = {
-        k: float(c) for k, c in zip(keys, model.coef_, strict=True)
-    }
+    coefs = {k: float(c) for k, c in zip(keys, model.coef_, strict=True)}
     return pred.tolist(), coefs

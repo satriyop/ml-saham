@@ -8,7 +8,11 @@ from typing import Any
 from ml_saham.challenge.artifacts import write_health_artifact
 from ml_saham.challenge.champion import is_champion_against
 from ml_saham.challenge.diagnostic_validity import run_diagnostic_health
-from ml_saham.challenge.engines import normalize_scenario, resolve_engine_policies, run_engine_portfolio
+from ml_saham.challenge.engines import (
+    normalize_scenario,
+    resolve_engine_policies,
+    run_engine_portfolio,
+)
 from ml_saham.challenge.factor_validity import run_factor_challenge_batch
 from ml_saham.challenge.runner import run_policy_challenge
 from ml_saham.challenge.types import ChallengeResult, HealthReportResult
@@ -46,6 +50,16 @@ def _engine_payload(eng) -> dict[str, Any]:
                 "against_id": r.against_id,
                 "notes": r.notes[-5:],
                 "error": r.error,
+                "observation_compatibility_id": r.observation_compatibility_id,
+                "production_snapshot_id": r.production_snapshot_id,
+                "production_snapshot_digest": r.production_snapshot_digest,
+                "production_policy_id": r.production_policy_id,
+                "production_policy_version": r.production_policy_version,
+                "production_semantic_engine_contract_id": (
+                    r.production_semantic_engine_contract_id
+                ),
+                "challenge_adapter_id": r.challenge_adapter_id,
+                "challenge_adapter_version": r.challenge_adapter_version,
             }
             for r in eng.rows
         ],
@@ -69,6 +83,16 @@ def _challenge_payload(result: ChallengeResult) -> dict[str, Any]:
         "fold_metrics": result.fold_metrics,
         "weights": result.weights,
         "notes": result.notes,
+        "observation_compatibility_id": result.observation_compatibility_id,
+        "production_snapshot_id": result.production_snapshot_id,
+        "production_snapshot_digest": result.production_snapshot_digest,
+        "production_policy_id": result.production_policy_id,
+        "production_policy_version": result.production_policy_version,
+        "production_semantic_engine_contract_id": (
+            result.production_semantic_engine_contract_id
+        ),
+        "challenge_adapter_id": result.challenge_adapter_id,
+        "challenge_adapter_version": result.challenge_adapter_version,
     }
 
 
@@ -81,6 +105,16 @@ def _factors_payload(batch) -> dict[str, Any]:
         "primary_horizon": batch.primary_horizon,
         "blocked": batch.blocked.value if batch.blocked else None,
         "notes": batch.notes,
+        "observation_compatibility_id": batch.observation_compatibility_id,
+        "production_snapshot_id": batch.production_snapshot_id,
+        "production_snapshot_digest": batch.production_snapshot_digest,
+        "production_policy_id": batch.production_policy_id,
+        "production_policy_version": batch.production_policy_version,
+        "production_semantic_engine_contract_id": (
+            batch.production_semantic_engine_contract_id
+        ),
+        "challenge_adapter_id": batch.challenge_adapter_id,
+        "challenge_adapter_version": batch.challenge_adapter_version,
         "factors": [
             {
                 "factor": r.factor,
@@ -122,6 +156,43 @@ def _diagnostics_payload(batch) -> dict[str, Any]:
     }
 
 
+_PRODUCTION_IDENTITY_KEYS = (
+    "observation_compatibility_id",
+    "production_snapshot_id",
+    "production_snapshot_digest",
+    "production_policy_id",
+    "production_policy_version",
+    "production_semantic_engine_contract_id",
+    "challenge_adapter_id",
+    "challenge_adapter_version",
+)
+
+
+def _production_identities(
+    engine_payload: dict[str, Any],
+    champion_payload: dict[str, Any] | None,
+    factors_payload: dict[str, Any] | None,
+) -> list[dict[str, str]]:
+    """Collect stable, deduplicated production bindings for the health manifest."""
+    candidates = list(engine_payload.get("rows") or [])
+    if champion_payload is not None:
+        candidates.append(champion_payload)
+    if factors_payload is not None:
+        candidates.append(factors_payload)
+
+    identities: list[dict[str, str]] = []
+    seen: set[tuple[str, ...]] = set()
+    for candidate in candidates:
+        values = tuple(
+            str(candidate.get(key) or "") for key in _PRODUCTION_IDENTITY_KEYS
+        )
+        if not values[1] or values in seen:
+            continue
+        seen.add(values)
+        identities.append(dict(zip(_PRODUCTION_IDENTITY_KEYS, values, strict=True)))
+    return identities
+
+
 def _attention(
     engine_rows: list[dict[str, Any]],
     champion: dict[str, Any] | None,
@@ -150,7 +221,9 @@ def _attention(
                 f"{champion.get('policy_id')} — human review only"
             )
         elif st and str(st).startswith("BLOCKED"):
-            attn.append(f"champion {st}: {'; '.join((champion.get('notes') or [])[-2:])}")
+            attn.append(
+                f"champion {st}: {'; '.join((champion.get('notes') or [])[-2:])}"
+            )
         elif st == "LOSE":
             attn.append("champion LOSE — production still ahead of learned scorer")
     if factors and not factors.get("blocked"):
@@ -346,6 +419,7 @@ def build_health_report(
     champion_model: str = DEFAULT_CHAMPION_MODEL,
     write_artifact: bool = True,
     artifacts_dir: Path | None = None,
+    compatibility_id: str | None = None,
 ) -> HealthReportResult:
     """Run health recipe; always prefer honest BLOCKED over crash."""
     path = Path(db_path)
@@ -388,6 +462,7 @@ def build_health_report(
         against=DEFAULT_TUNE_AGAINST,
         write_artifact=False,
         artifacts_dir=None,
+        compatibility_id=compatibility_id,
     )
     engine_payload = _engine_payload(eng)
     notes.extend(eng.notes)
@@ -409,18 +484,22 @@ def build_health_report(
                 against=champion_model,
                 write_artifact=False,
                 artifacts_dir=None,
+                compatibility_id=compatibility_id,
             )
             champion_payload = _challenge_payload(ch)
 
     factors_payload: dict[str, Any] | None = None
     if with_factors:
         # Factors always target accum policy (document in notes)
-        notes.append(f"factors always target {ACCUM_POLICY} (independent of scenario filter)")
+        notes.append(
+            f"factors always target {ACCUM_POLICY} (independent of scenario filter)"
+        )
         batch = run_factor_challenge_batch(
             path,
             ACCUM_POLICY,
             write_artifact=False,
             artifacts_dir=None,
+            compatibility_id=compatibility_id,
         )
         factors_payload = _factors_payload(batch)
 
@@ -525,6 +604,9 @@ def build_health_report(
         champion_payload=champion_payload,
         factors_payload=factors_payload,
         diagnostics_payload=diagnostics_payload,
+        production_identities=_production_identities(
+            engine_payload, champion_payload, factors_payload
+        ),
     )
     if write_artifact:
         write_health_artifact(result, db_path=path, artifacts_root=artifacts_dir)

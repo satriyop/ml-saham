@@ -1,0 +1,18 @@
+{
+  "adapter_id": "ml-saham.signal.accum.flags.adapter",
+  "adapter_version": "v1",
+  "supported_policy_id": "signal.accum.flags",
+  "supported_snapshot_contract": "production_policy_snapshot.v2",
+  "supported_semantic_engine_contract_ids": ["signal.semantic_engine.v1.5"],
+  "protocol_id": "accum_path_v1",
+  "panel_kind": "accum_signal_flags",
+  "score_kind": "flag_penalty_adjusted",
+  "supported_challengers": ["production", "flags_off"],
+  "conformance_id": "golden.signal.accum.flags.v1",
+  "components": [
+    {"key": "production_raw_score", "aliases": ["raw_score", "score"]},
+    {"key": "valuation_stretched", "aliases": ["VALUATION_STRETCHED", "valuation"]},
+    {"key": "analyst_bearish", "aliases": ["ANALYST_BEARISH", "analyst"]},
+    {"key": "insider_selling", "aliases": ["INSIDER_SELLING", "insider"]}
+  ]
+}

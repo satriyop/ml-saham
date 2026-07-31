@@ -1,4 +1,5 @@
 {
+  "fixture_only": true,
   "policy_id": "signal.accum.flags",
   "version": "v1",
   "hash": "sigflg03c1d2e4a8",

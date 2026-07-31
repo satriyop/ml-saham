@@ -1,0 +1,16 @@
+{
+  "adapter_id": "ml-saham.signal.accum.evidence_group_weights.adapter",
+  "adapter_version": "v1",
+  "supported_policy_id": "signal.accum.evidence_group_weights",
+  "supported_snapshot_contract": "production_policy_snapshot.v2",
+  "supported_semantic_engine_contract_ids": ["signal.semantic_engine.v1.5"],
+  "protocol_id": "accum_path_v1",
+  "panel_kind": "accum_signal",
+  "score_kind": "evidence_group_weights",
+  "supported_challengers": ["production", "equal_sleeves", "drop_setup"],
+  "conformance_id": "golden.signal.accum.evidence_group_weights.v1",
+  "components": [
+    {"key": "setup_quality", "aliases": ["setup"]},
+    {"key": "flow_confirmation", "aliases": ["flow", "institutional_flow", "institutional_flow_score"]}
+  ]
+}

@@ -7,10 +7,13 @@ from typing import Sequence
 
 import numpy as np
 
-from ml_saham.challenge.artifacts import write_batch_factor_artifact, write_factor_artifact
+from ml_saham.challenge.artifacts import (
+    write_batch_factor_artifact,
+    write_factor_artifact,
+)
 from ml_saham.challenge.metrics import Fold, ic_safe, time_purged_folds
 from ml_saham.challenge.panel import PanelRow
-from ml_saham.challenge.policies.registry import load_policy
+from ml_saham.challenge.policies.registry import load_policy_adapter
 from ml_saham.challenge.protocols import ACCUM_PATH_V1, get_protocol
 from ml_saham.challenge.runner import _horizon_ics, _select_rows, prepare_accum_panel
 from ml_saham.challenge.scorers import score_production, score_production_drop
@@ -19,12 +22,12 @@ from ml_saham.challenge.types import (
     ChallengeStatus,
     FactorChallengeResult,
     FactorVerdict,
-    PolicySnapshot,
+    ChallengeExecutionPolicy,
     Protocol,
 )
 
 
-def resolve_factor_key(policy: PolicySnapshot, raw: str) -> str | None:
+def resolve_factor_key(policy: ChallengeExecutionPolicy, raw: str) -> str | None:
     """Map alias or key → canonical enabled component key; None if invalid."""
     needle = raw.strip().lower().replace("-", "_")
     for c in policy.enabled_components():
@@ -33,11 +36,17 @@ def resolve_factor_key(policy: PolicySnapshot, raw: str) -> str | None:
     return None
 
 
-def list_enabled_factors(policy_id: str = "screener.accum.score_weights") -> list[dict[str, object]]:
-    pol = load_policy(policy_id)
+def list_enabled_factors(
+    policy_id: str = "screener.accum.score_weights",
+) -> list[dict[str, object]]:
+    adapter = load_policy_adapter(policy_id)
     return [
-        {"key": c.key, "weight": c.weight, "aliases": list(c.aliases)}
-        for c in pol.enabled_components()
+        {
+            "key": c.key,
+            "weight": "snapshot-bound at run",
+            "aliases": list(c.aliases),
+        }
+        for c in adapter.components
     ]
 
 
@@ -95,7 +104,9 @@ def _factor_verdict(
         return FactorVerdict.DEMOTE, notes
 
     if abs_u >= eps and abs(mean_delta) < eps:
-        notes.append("univariate signal but little marginal ablation (possible redundancy)")
+        notes.append(
+            "univariate signal but little marginal ablation (possible redundancy)"
+        )
         return FactorVerdict.DEMOTE, notes
 
     if agree < protocol.min_fold_agree:
@@ -111,6 +122,23 @@ def _status_to_factor_blocked(st: ChallengeStatus) -> FactorVerdict:
     return FactorVerdict.BLOCKED_DATA
 
 
+def _identity(policy: ChallengeExecutionPolicy | None) -> dict[str, str]:
+    if policy is None or not policy.production_snapshot_id:
+        return {}
+    return {
+        "observation_compatibility_id": policy.observation_compatibility_id,
+        "production_snapshot_id": policy.production_snapshot_id,
+        "production_snapshot_digest": policy.production_snapshot_digest,
+        "production_policy_id": policy.policy_id,
+        "production_policy_version": policy.version,
+        "production_semantic_engine_contract_id": (
+            policy.production_semantic_engine_contract_id
+        ),
+        "challenge_adapter_id": policy.challenge_adapter_id,
+        "challenge_adapter_version": policy.challenge_adapter_version,
+    }
+
+
 def run_factor_challenge(
     db_path: Path | str,
     policy_id: str = "screener.accum.score_weights",
@@ -119,15 +147,17 @@ def run_factor_challenge(
     protocol_id: str | None = None,
     write_artifact: bool = True,
     artifacts_dir: Path | None = None,
+    compatibility_id: str | None = None,
 ) -> FactorChallengeResult:
     path = Path(db_path)
     factor_raw = factor.strip()
 
     try:
-        policy_probe = load_policy(policy_id)
-        proto_id = protocol_id or policy_probe.protocol_id
+        adapter_probe = load_policy_adapter(policy_id)
+        proto_id = protocol_id or adapter_probe.protocol_id
         get_protocol(proto_id)
     except KeyError as exc:
+        msg = f"factor validity not supported: {exc}"
         return FactorChallengeResult(
             verdict=FactorVerdict.BLOCKED_POLICY,
             policy_id=policy_id,
@@ -136,67 +166,49 @@ def run_factor_challenge(
             factor=factor_raw,
             n_rows=0,
             primary_horizon=ACCUM_PATH_V1.primary_horizon,
-            lines=[f"BLOCKED_POLICY: {exc}"],
-            summary_md=f"# Factor challenge blocked\n\n{exc}\n",
-            notes=[str(exc)],
+            lines=[f"BLOCKED_POLICY: {msg}"],
+            summary_md=f"# Factor challenge blocked\n\n{msg}\n",
+            notes=[msg],
         )
 
-    if policy_probe.panel_kind != "accum_components":
+    if adapter_probe.panel_kind != "accum_components":
         msg = (
             f"factor validity track not supported for panel_kind="
-            f"{policy_probe.panel_kind!r} yet (policy={policy_probe.policy_id})"
+            f"{adapter_probe.panel_kind!r} yet "
+            f"(policy={adapter_probe.supported_policy_id})"
         )
         return FactorChallengeResult(
             verdict=FactorVerdict.BLOCKED_POLICY,
-            policy_id=policy_probe.policy_id,
-            protocol_id=policy_probe.protocol_id,
-            policy_hash=policy_probe.hash,
+            policy_id=adapter_probe.supported_policy_id,
+            protocol_id=adapter_probe.protocol_id,
+            policy_hash="",
             factor=factor_raw,
             n_rows=0,
-            primary_horizon=get_protocol(policy_probe.protocol_id).primary_horizon,
+            primary_horizon=get_protocol(adapter_probe.protocol_id).primary_horizon,
             lines=["BLOCKED_POLICY:", f"  - {msg}"],
             summary_md=f"# Factor challenge BLOCKED_POLICY\n\n{msg}\n",
             notes=[msg],
         )
 
     protocol_id = proto_id
-    canon = resolve_factor_key(policy_probe, factor_raw)
-    if canon is None:
-        all_by = {c.key.lower(): c for c in policy_probe.components}
-        for c in policy_probe.components:
-            for a in c.aliases:
-                all_by[a.lower()] = c
-        hit = all_by.get(factor_raw.lower().replace("-", "_"))
-        if hit is not None and (not hit.enabled or hit.weight <= 0):
-            msg = (
-                f"factor {factor_raw!r} is disabled / weight 0 in production snapshot "
-                f"(v1 challenges enabled sleeves only)"
-            )
-        else:
-            enabled = ", ".join(c.key for c in policy_probe.enabled_components())
-            msg = f"unknown or non-enabled factor {factor_raw!r}. Enabled: {enabled}"
-        return FactorChallengeResult(
-            verdict=FactorVerdict.BLOCKED_POLICY,
-            policy_id=policy_probe.policy_id,
-            protocol_id=protocol_id,
-            policy_hash=policy_probe.hash,
-            factor=factor_raw,
-            n_rows=0,
-            primary_horizon=ACCUM_PATH_V1.primary_horizon,
-            lines=["BLOCKED_POLICY:", f"  - {msg}"],
-            summary_md=f"# Factor challenge BLOCKED_POLICY\n\n{msg}\n",
-            notes=[msg],
-        )
-
-    prep = prepare_accum_panel(path, policy_id, protocol_id)
+    prep = prepare_accum_panel(
+        path,
+        policy_id,
+        protocol_id,
+        preferred_compatibility_id=compatibility_id,
+    )
     if prep.blocked is not None or prep.policy is None or prep.protocol is None:
-        blocked = _status_to_factor_blocked(prep.blocked or ChallengeStatus.BLOCKED_DATA)
+        blocked = _status_to_factor_blocked(
+            prep.blocked or ChallengeStatus.BLOCKED_DATA
+        )
         return FactorChallengeResult(
             verdict=blocked,
             policy_id=policy_id if prep.policy is None else prep.policy.policy_id,
-            protocol_id=protocol_id if prep.protocol is None else prep.protocol.protocol_id,
+            protocol_id=protocol_id
+            if prep.protocol is None
+            else prep.protocol.protocol_id,
             policy_hash="" if prep.policy is None else prep.policy.hash,
-            factor=canon,
+            factor=factor_raw,
             n_rows=len(prep.rows),
             primary_horizon=(
                 ACCUM_PATH_V1.primary_horizon
@@ -208,12 +220,34 @@ def run_factor_challenge(
             + "\n".join(f"- {n}" for n in prep.notes)
             + "\n",
             notes=prep.notes,
+            **_identity(prep.policy),
         )
 
     policy = prep.policy
     protocol = prep.protocol
     rows = prep.rows
     notes = list(prep.notes)
+
+    verified_canon = resolve_factor_key(policy, factor_raw)
+    if verified_canon is None:
+        msg = (
+            f"factor {factor_raw!r} is not enabled by the verified production "
+            "snapshot (sector breadth is outside accumulation snapshot v1)"
+        )
+        return FactorChallengeResult(
+            verdict=FactorVerdict.BLOCKED_POLICY,
+            policy_id=policy.policy_id,
+            protocol_id=protocol.protocol_id,
+            policy_hash=policy.hash,
+            factor=factor_raw,
+            n_rows=len(rows),
+            primary_horizon=protocol.primary_horizon,
+            lines=["BLOCKED_POLICY:", f"  - {msg}"],
+            summary_md=f"# Factor challenge BLOCKED_POLICY\n\n{msg}\n",
+            notes=notes + [msg],
+            **_identity(policy),
+        )
+    canon = verified_canon
 
     folds = time_purged_folds(rows, protocol)
     if not folds:
@@ -227,6 +261,7 @@ def run_factor_challenge(
             primary_horizon=protocol.primary_horizon,
             lines=["BLOCKED_DATA: could not form time folds"],
             notes=notes + ["no folds"],
+            **_identity(policy),
         )
 
     result = _score_factor_on_folds(
@@ -247,7 +282,7 @@ def run_factor_challenge(
 
 def _score_factor_on_folds(
     *,
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     protocol: Protocol,
     rows: Sequence[PanelRow],
     folds: Sequence[Fold],
@@ -312,13 +347,21 @@ def _score_factor_on_folds(
         oos_rows.extend(test)
         oos_factor_vals.extend(fx)
 
-    deltas = [float(f["delta_ic"]) for f in fold_metrics if f.get("delta_ic") is not None]
-    us = [float(f["univariate_ic"]) for f in fold_metrics if f.get("univariate_ic") is not None]
+    deltas = [
+        float(f["delta_ic"]) for f in fold_metrics if f.get("delta_ic") is not None
+    ]
+    us = [
+        float(f["univariate_ic"])
+        for f in fold_metrics
+        if f.get("univariate_ic") is not None
+    ]
     mean_delta = sum(deltas) / len(deltas) if deltas else None
     mean_u = sum(us) / len(us) if us else None
     agree = sum(1 for d in deltas if d > 0) / len(deltas) if deltas else None
 
-    zero_frac = sum(1 for v in oos_factor_vals if abs(v) < 1e-12) / max(len(oos_factor_vals), 1)
+    zero_frac = sum(1 for v in oos_factor_vals if abs(v) < 1e-12) / max(
+        len(oos_factor_vals), 1
+    )
     if zero_frac > 0.8:
         notes.append(f"factor mostly zero on OOS rows ({zero_frac:.0%})")
 
@@ -331,7 +374,9 @@ def _score_factor_on_folds(
         "full": _horizon_ics(oos_rows, oos_full, protocol.horizons_report)
         if oos_rows
         else {},
-        "drop": _horizon_ics(oos_rows, oos_drop, protocol.horizons_report) if oos_rows else {},
+        "drop": _horizon_ics(oos_rows, oos_drop, protocol.horizons_report)
+        if oos_rows
+        else {},
         "univariate": _univariate_ics(oos_rows, factor, protocol.horizons_report)
         if oos_rows
         else {},
@@ -377,6 +422,7 @@ def _score_factor_on_folds(
         lines=lines,
         summary_md=summary,
         notes=notes,
+        **_identity(policy),
     )
 
 
@@ -387,11 +433,12 @@ def run_factor_challenge_batch(
     protocol_id: str | None = None,
     write_artifact: bool = True,
     artifacts_dir: Path | None = None,
+    compatibility_id: str | None = None,
 ) -> BatchFactorResult:
     """Run validity for every enabled sleeve; prep panel/folds once."""
     path = Path(db_path)
     try:
-        probe = load_policy(policy_id)
+        probe = load_policy_adapter(policy_id)
     except KeyError as exc:
         return BatchFactorResult(
             policy_id=policy_id,
@@ -411,9 +458,9 @@ def run_factor_challenge_batch(
             f"{probe.panel_kind!r} yet"
         )
         return BatchFactorResult(
-            policy_id=probe.policy_id,
+            policy_id=probe.supported_policy_id,
             protocol_id=probe.protocol_id,
-            policy_hash=probe.hash,
+            policy_hash="",
             n_rows=0,
             primary_horizon=get_protocol(probe.protocol_id).primary_horizon,
             results=[],
@@ -422,9 +469,16 @@ def run_factor_challenge_batch(
             summary_md=f"# Factor batch BLOCKED_POLICY\n\n{msg}\n",
             notes=[msg],
         )
-    prep = prepare_accum_panel(path, policy_id, protocol_id or probe.protocol_id)
+    prep = prepare_accum_panel(
+        path,
+        policy_id,
+        protocol_id or probe.protocol_id,
+        preferred_compatibility_id=compatibility_id,
+    )
     if prep.blocked is not None or prep.policy is None or prep.protocol is None:
-        blocked = _status_to_factor_blocked(prep.blocked or ChallengeStatus.BLOCKED_DATA)
+        blocked = _status_to_factor_blocked(
+            prep.blocked or ChallengeStatus.BLOCKED_DATA
+        )
         lines = [
             "=== FACTOR VALIDITY BATCH (ADR-002) ===",
             f"Policy: {policy_id}",
@@ -434,7 +488,9 @@ def run_factor_challenge_batch(
         ]
         return BatchFactorResult(
             policy_id=policy_id if prep.policy is None else prep.policy.policy_id,
-            protocol_id=protocol_id if prep.protocol is None else prep.protocol.protocol_id,
+            protocol_id=protocol_id
+            if prep.protocol is None
+            else prep.protocol.protocol_id,
             policy_hash="" if prep.policy is None else prep.policy.hash,
             n_rows=len(prep.rows),
             primary_horizon=(
@@ -449,6 +505,7 @@ def run_factor_challenge_batch(
             + "\n".join(f"- {n}" for n in prep.notes)
             + "\n",
             notes=prep.notes,
+            **_identity(prep.policy),
         )
 
     policy = prep.policy
@@ -469,6 +526,7 @@ def run_factor_challenge_batch(
             lines=["BLOCKED_POLICY:", f"  - {msg}"],
             summary_md=f"# Factor batch BLOCKED_POLICY\n\n{msg}\n",
             notes=notes + [msg],
+            **_identity(policy),
         )
 
     folds = time_purged_folds(rows, protocol)
@@ -485,6 +543,7 @@ def run_factor_challenge_batch(
             lines=["BLOCKED_DATA:", f"  - {msg}"],
             summary_md=f"# Factor batch BLOCKED_DATA\n\n{msg}\n",
             notes=notes + [msg],
+            **_identity(policy),
         )
 
     # Cache full production scores once per fold
@@ -517,6 +576,7 @@ def run_factor_challenge_batch(
                 notes=[f"batch scorer error: {exc}"],
                 lines=[f"INCONCLUSIVE {comp.key}: {exc}"],
                 summary_md=f"# {comp.key}\n\nError: {exc}\n",
+                **_identity(policy),
             )
         results.append(fr)
 
@@ -540,6 +600,7 @@ def run_factor_challenge_batch(
         lines=lines,
         summary_md=summary_md,
         notes=notes,
+        **_identity(policy),
     )
     if write_artifact:
         write_batch_factor_artifact(batch, db_path=path, artifacts_root=artifacts_dir)
@@ -550,7 +611,7 @@ def run_factor_challenge_batch(
 
 def _format_batch_report(
     *,
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     protocol: Protocol,
     n_rows: int,
     n_folds: int,
@@ -599,7 +660,9 @@ def _format_batch_report(
 
     lines.append("")
     lines.append("Dig in: ml-saham challenge factor POLICY --factor KEY")
-    lines.append("Costs: gross · Not investment advice · Never auto-promotes ai-saham config.")
+    lines.append(
+        "Costs: gross · Not investment advice · Never auto-promotes ai-saham config."
+    )
     non_keep = [r for r in results if r.verdict != FactorVerdict.KEEP]
     if non_keep:
         lines.append("")
@@ -625,7 +688,7 @@ def _format_batch_report(
 
 def _format_factor_lines(
     *,
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     protocol: Protocol,
     factor: str,
     verdict: FactorVerdict,
@@ -677,7 +740,9 @@ def _format_factor_lines(
             f"delta={fmt(f.get('delta_ic'))}  univ={fmt(f.get('univariate_ic'))}"
         )
     lines.append("")
-    lines.append("Costs: gross · Not investment advice · Never auto-promotes ai-saham config.")
+    lines.append(
+        "Costs: gross · Not investment advice · Never auto-promotes ai-saham config."
+    )
     if notes:
         lines.append("")
         lines.append("Notes:")
@@ -688,7 +753,7 @@ def _format_factor_lines(
 
 def _format_factor_summary(
     *,
-    policy: PolicySnapshot,
+    policy: ChallengeExecutionPolicy,
     protocol: Protocol,
     factor: str,
     verdict: FactorVerdict,

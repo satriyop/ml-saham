@@ -59,9 +59,7 @@ def list_engines() -> list[dict[str, Any]]:
                 "engine_id": eng,
                 "scenarios": sorted(scenarios.keys()),
                 "n_policies": sum(len(v) for v in scenarios.values()),
-                "policies": {
-                    sc: list(pids) for sc, pids in sorted(scenarios.items())
-                },
+                "policies": {sc: list(pids) for sc, pids in sorted(scenarios.items())},
             }
         )
     return out
@@ -108,10 +106,7 @@ def resolve_engine_policies(
 
     if sc not in sc_map:
         known = ", ".join(sorted(sc_map))
-        return [], (
-            f"Unknown scenario {scenario!r} for engine {eng!r}. "
-            f"Known: {known}"
-        )
+        return [], (f"Unknown scenario {scenario!r} for engine {eng!r}. Known: {known}")
     return [(sc, pid) for pid in sc_map[sc]], None
 
 
@@ -136,6 +131,7 @@ def run_engine_portfolio(
     baseline: str = "production",
     write_artifact: bool = True,
     artifacts_dir: Path | None = None,
+    compatibility_id: str | None = None,
 ) -> EnginePortfolioResult:
     """Run all (or scenario-filtered) PolicySpecs; roll up English report."""
     path = Path(db_path)
@@ -169,6 +165,7 @@ def run_engine_portfolio(
                 baseline=baseline,
                 write_artifact=False,
                 artifacts_dir=None,
+                compatibility_id=compatibility_id,
             )
             rows.append(
                 EnginePolicyRow(
@@ -184,6 +181,16 @@ def run_engine_portfolio(
                     primary_ic_against=result.primary_ic_against,
                     against_id=result.against_id,
                     notes=list(result.notes),
+                    observation_compatibility_id=result.observation_compatibility_id,
+                    production_snapshot_id=result.production_snapshot_id,
+                    production_snapshot_digest=result.production_snapshot_digest,
+                    production_policy_id=result.production_policy_id,
+                    production_policy_version=result.production_policy_version,
+                    production_semantic_engine_contract_id=(
+                        result.production_semantic_engine_contract_id
+                    ),
+                    challenge_adapter_id=result.challenge_adapter_id,
+                    challenge_adapter_version=result.challenge_adapter_version,
                 )
             )
         except Exception as exc:  # noqa: BLE001 — portfolio continues
@@ -214,9 +221,9 @@ def run_engine_portfolio(
 
     counts = Counter(r.status for r in rows)
     counts_dict = dict(counts)
-    n_blocked = counts_dict.get(ChallengeStatus.BLOCKED_DATA.value, 0) + counts_dict.get(
-        ChallengeStatus.BLOCKED_POLICY.value, 0
-    )
+    n_blocked = counts_dict.get(
+        ChallengeStatus.BLOCKED_DATA.value, 0
+    ) + counts_dict.get(ChallengeStatus.BLOCKED_POLICY.value, 0)
     n_err = counts_dict.get("ERROR", 0)
     if n_blocked:
         global_notes.append(f"engine incomplete ({n_blocked} blocked policies)")
@@ -261,7 +268,9 @@ def run_engine_portfolio(
             f"{_fmt_ic(r.primary_ic_against):>9}  {note}"
         )
     lines.append("")
-    lines.append("Costs: gross · Not investment advice · Never auto-promotes ai-saham config")
+    lines.append(
+        "Costs: gross · Not investment advice · Never auto-promotes ai-saham config"
+    )
     lines.append("Dig: ml-saham challenge run <policy_id> --against …")
     if global_notes:
         lines.append("")
