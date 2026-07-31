@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
@@ -400,8 +401,6 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
             )
 
         # Challenge axis: broker graph + observations + market context
-        import json
-
         conn.executescript(
             """
             CREATE TABLE broker_daily_flow (
