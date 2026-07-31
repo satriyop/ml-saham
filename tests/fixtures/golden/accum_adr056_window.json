@@ -1,0 +1,41 @@
+{
+  "ticker": "GOLD",
+  "session_date": "2024-06-03",
+  "canonical_window": 7,
+  "features_by_window": {
+    "7": {
+      "candidate": {
+        "accum_score_breakdown": {
+          "components": [
+            {"key": "cons", "score_points": 9.5, "max_points": 33.3},
+            {"key": "streak", "score_points": 3.3, "max_points": 25.0},
+            {"key": "vwap", "score_points": 4.0, "max_points": 16.7},
+            {"key": "flow", "score_points": 2.0, "max_points": 12.5},
+            {"key": "rsi", "score_points": 1.7, "max_points": 12.5},
+            {"key": "inst", "score_points": 5.0, "max_points": 8.3},
+            {"key": "sector_breadth", "score_points": 10.0, "max_points": 10.0}
+          ],
+          "breakdown": {
+            "cons": 9.5,
+            "streak": 3.3,
+            "vwap": 4.0,
+            "flow": 2.0,
+            "rsi": 1.7,
+            "inst": 5.0,
+            "sector_breadth": 10.0,
+            "bb": null
+          }
+        }
+      }
+    },
+    "30": {
+      "candidate": {
+        "accum_score_breakdown": {
+          "components": [
+            {"key": "cons", "score_points": 99.0}
+          ]
+        }
+      }
+    }
+  }
+}

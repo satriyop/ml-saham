@@ -8,6 +8,8 @@ Does production **SignalEngine score** on accum observations still beat clean fe
 
 Live captures store score under **`features_by_window.<window>.signal`** (`assessment.score` / `raw_exact_score`), not top-level `signal.raw_score`.
 
+Regression: `tests/fixtures/golden/signal_adr056_window.json` + `tests/test_challenge_payload_contracts.py`.
+
 ## Commands
 
 ```bash

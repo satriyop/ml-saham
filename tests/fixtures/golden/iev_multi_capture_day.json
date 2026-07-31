@@ -1,0 +1,77 @@
+{
+  "comment": "Same session date; pick must prefer NCP pre-open 08:56 over larger early or post-open batches.",
+  "rows": [
+    {
+      "date": "2024-06-17",
+      "ticker": "AAA",
+      "iev": 1000000,
+      "rank": 1,
+      "iep": 100,
+      "collected_at": "2024-06-17T02:00:26",
+      "is_ncp_locked": 0
+    },
+    {
+      "date": "2024-06-17",
+      "ticker": "BBB",
+      "iev": 900000,
+      "rank": 2,
+      "iep": 200,
+      "collected_at": "2024-06-17T02:00:26",
+      "is_ncp_locked": 0
+    },
+    {
+      "date": "2024-06-17",
+      "ticker": "CCC",
+      "iev": 800000,
+      "rank": 3,
+      "iep": 50,
+      "collected_at": "2024-06-17T02:00:26",
+      "is_ncp_locked": 0
+    },
+    {
+      "date": "2024-06-17",
+      "ticker": "AAA",
+      "iev": 173236,
+      "rank": 1,
+      "iep": 175,
+      "collected_at": "2024-06-17T08:56:04",
+      "is_ncp_locked": 1
+    },
+    {
+      "date": "2024-06-17",
+      "ticker": "BBB",
+      "iev": 163968,
+      "rank": 2,
+      "iep": 6250,
+      "collected_at": "2024-06-17T08:56:04",
+      "is_ncp_locked": 1
+    },
+    {
+      "date": "2024-06-17",
+      "ticker": "AAA",
+      "iev": 9999999,
+      "rank": 9,
+      "iep": 1,
+      "collected_at": "2024-06-17T09:08:29",
+      "is_ncp_locked": 1
+    },
+    {
+      "date": "2024-06-17",
+      "ticker": "BBB",
+      "iev": 9999998,
+      "rank": 8,
+      "iep": 1,
+      "collected_at": "2024-06-17T09:08:29",
+      "is_ncp_locked": 1
+    },
+    {
+      "date": "2024-06-17",
+      "ticker": "CCC",
+      "iev": 9999997,
+      "rank": 7,
+      "iep": 1,
+      "collected_at": "2024-06-17T09:08:29",
+      "is_ncp_locked": 1
+    }
+  ]
+}

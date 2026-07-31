@@ -1,0 +1,20 @@
+{
+  "contract_id": "price_path.open_30m.v1",
+  "comment": "open_to_close_return_pct is percent points (live ai-saham). -0.6173 means -0.6173%, not -61.73%.",
+  "metrics": {
+    "ticker": "GOLD",
+    "opening_price": 162.0,
+    "close_proxy_09_30": 161.0,
+    "open_to_close_return_pct": -0.6173,
+    "max_adverse_excursion_pct": -1.8519,
+    "max_favorable_excursion_pct": 1.2346,
+    "peak_09_30": 164.0,
+    "trough_09_30": 159.0
+  },
+  "metrics_pct_only": {
+    "open_to_close_return_pct": -0.6173
+  },
+  "metrics_large_move_pct": {
+    "open_to_close_return_pct": -1.3333
+  }
+}

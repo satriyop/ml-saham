@@ -1,0 +1,49 @@
+{
+  "ticker": "GOLD",
+  "session_date": "2024-06-03",
+  "canonical_window": 7,
+  "features_by_window": {
+    "7": {
+      "signal": {
+        "raw_exact_score": 55.29,
+        "raw_group_score": 55.0,
+        "active_flags": ["VALUATION_STRETCHED"],
+        "assessment": {
+          "score": 55.0,
+          "raw_exact_score": 55.29,
+          "legacy_conditioned_score": 55.0
+        },
+        "alpha_trigger_score": {
+          "group_contributions": [
+            {
+              "group": "setup_quality",
+              "score": 0.0,
+              "present": false
+            },
+            {
+              "group": "institutional_flow",
+              "score": 55.29,
+              "present": true
+            },
+            {
+              "group": "sector_context",
+              "score": 10.0,
+              "present": true
+            },
+            {
+              "group": "company_quality_context",
+              "score": 20.0,
+              "present": true
+            }
+          ]
+        }
+      }
+    },
+    "30": {
+      "signal": {
+        "raw_exact_score": 1.0,
+        "assessment": {"score": 1.0}
+      }
+    }
+  }
+}
