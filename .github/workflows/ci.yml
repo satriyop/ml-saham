@@ -24,6 +24,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[ml,dev]"
 
+      - name: Challenge extract contracts (golden + pattern bans)
+        run: |
+          chmod +x scripts/check_challenge_contracts.sh
+          ./scripts/check_challenge_contracts.sh
+
       - name: Challenge acceptance (ADR-001)
         run: pytest tests/test_challenge_acceptance.py -q --tb=short
 

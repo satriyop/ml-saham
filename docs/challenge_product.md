@@ -302,6 +302,7 @@ Pre-ADR-002 chapter-loop batch (`challenge legacy` / `ENGINE_FACTORS`) is **reti
 | Doc | Role |
 |-----|------|
 | This file | Product map + commands |
+| [challenge_extract_contract.md](./challenge_extract_contract.md) | **Ship gate:** golden payloads, PR checklist, anti-patterns, CI script |
 | [challenge_product_roadmap.md](./challenge_product_roadmap.md) | Planned PolicySpec expansion (P0–P4); not a ship gate |
 | [challenge_diagnostic_validity.md](./challenge_diagnostic_validity.md) | Diagnostic track (display keep/hide / promote-candidate) — shipped v1 |
 | [challenge_champion.md](./challenge_champion.md) | Champion track (learned vs production) |

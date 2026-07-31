@@ -15,3 +15,14 @@ do **not** depend on a maintainer DB or only on `build_mvp_fixture`.
 | `mce_bound_market_context.json` | Observation-bound `shared.market_context` (PIT MCE) |
 
 Tickers/dates are synthetic or redacted; structure and units match live.
+
+## Ship rule
+
+New/changed product extracts **must** add or extend a golden here and a test that calls
+the shipped helper. Gate:
+
+```bash
+./scripts/check_challenge_contracts.sh
+```
+
+See [docs/challenge_extract_contract.md](../../../docs/challenge_extract_contract.md).

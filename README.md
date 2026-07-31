@@ -158,6 +158,7 @@ Curriculum list: [chapters.md](./chapters.md). Registry SSOT: `src/ml_saham/chap
 | Progress (curriculum) | `~/.ml-saham/progress.json` |
 | Artifacts | `./artifacts` or `ML_SAHAM_ARTIFACTS` |
 | Challenge acceptance (ADR-002 fixture suite) | [challenge_acceptance.md](./challenge_acceptance.md) |
+| Extract contracts (golden + CI gate) | [docs/challenge_extract_contract.md](./docs/challenge_extract_contract.md) · `./scripts/check_challenge_contracts.sh` |
 
 Hard rules: **no** ai-saham Python imports · **no** scrapers · **no** auto-promote.  
 Sibling contract: **[BOUNDARY.md](./BOUNDARY.md)**.

@@ -18,6 +18,7 @@ Curriculum phase checklists (historical, local only): `archive/mvp_acceptance.md
 - [x] Chapter-loop product surface **retired** (`challenge legacy` removed; no `ENGINE_FACTORS` batch)  
 - [x] Honest statuses: WIN / LOSE / INCONCLUSIVE / BLOCKED_* (no silent fake wins)  
 - [x] CI installs `pip install -e ".[ml,dev]"` and runs challenge + core tests  
+- [x] Golden payload contracts + pattern bans via `./scripts/check_challenge_contracts.sh` (CI)  
 - [ ] **Language:** new challenge learner-facing strings are **English** (learning `explore` stays Indonesian)
 
 ---
@@ -43,17 +44,26 @@ Curriculum `learn compare <slug>` remains for learning labs — **not** promotio
 
 ```bash
 pip install -e ".[ml,dev]"
+
+# Systematic extract contract gate (goldens + pattern bans + multi-fold WIN)
+./scripts/check_challenge_contracts.sh
+
 pytest tests/test_challenge_acceptance.py -q
 ml-saham challenge list
 ml-saham --db "$ML_SAHAM_DB" challenge run screener.accum.score_weights --against equal_sleeves
 ml-saham --db "$ML_SAHAM_DB" challenge engine screener --scenario accum
 ml-saham --db "$ML_SAHAM_DB" challenge health
+
+# Optional live extract smoke (when DB present)
+# pytest tests/test_challenge_live_smoke.py -q -m live_db
 ```
+
+Ship gate for extract paths: [docs/challenge_extract_contract.md](./docs/challenge_extract_contract.md).
 
 ---
 
 ## Status
 
-**ADR-002 acceptance suite** (fixture-level).  
-Maintainer DB smoke remains optional and environment-specific.  
+**ADR-002 acceptance suite** (fixture-level + **golden payload contracts** in CI).  
+Maintainer DB smoke remains optional (`-m live_db`).  
 Pre-ADR-002 chapter-loop batch (`eval/challenge.py` / `challenge legacy`) is **retired**.
