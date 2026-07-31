@@ -100,6 +100,30 @@ def _stable_snapshot_id(row: Mapping[str, Any]) -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
+def stable_snapshot_id_for(
+    *,
+    compatibility_id: str,
+    policy_id: str,
+    purpose: str = PURPOSE,
+    learning_observation_contract_id: str = LEARNING_OBSERVATION_CONTRACT,
+    producer_observation_contract: str = PRODUCER_OBSERVATION_CONTRACT,
+) -> str:
+    """Recompute production ``snapshot_id`` from cohort + policy identity fields.
+
+    Used by promote reopen validation when exports carry enough identity to
+    check consistency without re-querying the upstream database.
+    """
+    return _stable_snapshot_id(
+        {
+            "purpose": purpose,
+            "learning_observation_contract_id": learning_observation_contract_id,
+            "producer_observation_contract": producer_observation_contract,
+            "compatibility_id": compatibility_id,
+            "policy_id": policy_id,
+        }
+    )
+
+
 def _verify_row(
     row: sqlite3.Row, compatibility_id: str
 ) -> VerifiedProductionPolicySnapshot:

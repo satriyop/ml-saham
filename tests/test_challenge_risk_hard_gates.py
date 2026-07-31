@@ -14,7 +14,7 @@ from ml_saham.challenge.runner import run_policy_challenge
 from ml_saham.challenge.scorers import mean_excess_allowed, score_gate_off, score_production
 from ml_saham.challenge.types import ChallengeStatus
 from ml_saham.cli.app import app
-from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
 
 runner = CliRunner()
 
@@ -92,6 +92,7 @@ def test_run_gate_on_fixture(fixture_db: Path):
         "risk.accum.hard_gates",
         against="gate_off",
         write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert r.status in {
         ChallengeStatus.WIN,
@@ -117,6 +118,7 @@ def test_ridge_remaps_to_gate_off(fixture_db: Path):
         "risk.accum.hard_gates",
         against="ridge_reweight",
         write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert r.against_id == "gate_off" or any(
         "gate_off" in n for n in r.notes
@@ -135,6 +137,8 @@ def test_cli_gate(fixture_db: Path):
             "risk.accum.hard_gates",
             "--against",
             "gate_off",
+            "--compatibility-id",
+            FIXTURE_COMPATIBILITY_ID,
             "--no-artifact",
         ],
     )

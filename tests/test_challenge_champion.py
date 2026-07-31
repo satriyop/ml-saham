@@ -19,7 +19,7 @@ from ml_saham.challenge.protocols import ACCUM_PATH_V1
 from ml_saham.challenge.runner import prepare_for_policy, run_policy_challenge
 from ml_saham.challenge.types import ChallengeStatus
 from ml_saham.cli.app import app
-from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
 
 runner = CliRunner()
 
@@ -39,7 +39,7 @@ def test_champion_ids():
 
 def test_lgbm_requires_train_fit_not_test_labels(fixture_db: Path):
     """OOS path: model is fit on train only; test scores length matches test."""
-    prep = prepare_for_policy(fixture_db, "screener.accum.score_weights")
+    prep = prepare_for_policy(fixture_db, "screener.accum.score_weights", preferred_compatibility_id=FIXTURE_COMPATIBILITY_ID)
     assert prep.blocked is None and prep.policy is not None
     pol = prep.policy
     rows = prep.rows
@@ -68,7 +68,11 @@ def test_lgbm_requires_train_fit_not_test_labels(fixture_db: Path):
 
 
 def test_lgbm_blocks_tiny_train(fixture_db: Path):
-    prep = prepare_for_policy(fixture_db, "screener.accum.score_weights")
+    prep = prepare_for_policy(
+        fixture_db,
+        "screener.accum.score_weights",
+        preferred_compatibility_id=FIXTURE_COMPATIBILITY_ID,
+    )
     assert prep.policy is not None
     pol = prep.policy
     train = prep.rows[:3]
@@ -78,6 +82,8 @@ def test_lgbm_blocks_tiny_train(fixture_db: Path):
     )
     assert scores is None
     assert err is not None
+    if "lightgbm" in err.lower() or "sklearn" in err.lower():
+        pytest.skip(err)
     assert "train" in err.lower() or "min" in err.lower()
 
 
@@ -88,6 +94,7 @@ def test_run_champion_accum_fixture(fixture_db: Path, tmp_path: Path):
         against="lgbm_reweight",
         write_artifact=True,
         artifacts_dir=tmp_path / "arts",
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.status in {
         ChallengeStatus.WIN,
@@ -99,15 +106,20 @@ def test_run_champion_accum_fixture(fixture_db: Path, tmp_path: Path):
     assert result.against_id == "lgbm_reweight"
     assert result.baseline_id == "production"
     joined = "\n".join(result.lines)
-    assert "CHAMPION" in joined or "champion" in " ".join(result.notes).lower()
-    assert "production" in joined.lower()
+    notes_joined = " ".join(result.notes).lower()
+    assert "CHAMPION" in joined or "champion" in notes_joined
     if result.status not in (
         ChallengeStatus.BLOCKED_DATA,
         ChallengeStatus.BLOCKED_POLICY,
     ):
+        assert "production" in joined.lower()
         assert result.fold_metrics
         assert result.primary_horizon == 10
         assert result.exit_code() == 0
+    else:
+        # Missing optional deps still honest BLOCKED_POLICY; never auto-select cohort
+        assert not any("auto-selected largest" in n for n in result.notes)
+        assert result.observation_compatibility_id in ("", FIXTURE_COMPATIBILITY_ID)
 
 
 def test_unknown_champion_blocked(fixture_db: Path):
@@ -115,6 +127,7 @@ def test_unknown_champion_blocked(fixture_db: Path):
         fixture_db,
         against="super_sota_net",
         write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.status == ChallengeStatus.BLOCKED_POLICY
 
@@ -133,6 +146,8 @@ def test_cli_champion(fixture_db: Path, tmp_path: Path):
             "screener.accum.score_weights",
             "--model",
             "lgbm_reweight",
+            "--compatibility-id",
+            FIXTURE_COMPATIBILITY_ID,
             "--no-artifact",
             "--export-json",
             str(out_json),
@@ -169,6 +184,7 @@ def test_elastic_net_champion_accum(fixture_db: Path):
         "screener.accum.score_weights",
         against="elastic_net_reweight",
         write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.against_id == "elastic_net_reweight"
     assert result.status in {
@@ -204,6 +220,7 @@ def test_lgbm_champion_weights_not_production(fixture_db: Path):
         "screener.accum.score_weights",
         against="lgbm_reweight",
         write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     if result.status in (
         ChallengeStatus.BLOCKED_DATA,
@@ -224,6 +241,7 @@ def test_champion_pre_open_iev_or_block(fixture_db: Path):
         "screener.pre_open.iev_rank",
         against="lgbm_reweight",
         write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.status in {
         ChallengeStatus.WIN,

@@ -70,6 +70,29 @@ class AccumPanelPrep:
     blocked: ChallengeStatus | None  # None if ready to score
 
 
+# Production-facing challenges must bind an explicit cohort identity.
+# Largest/single-cohort auto-select remains for exploratory/curriculum loaders only.
+PRODUCTION_COMPATIBILITY_ID_REQUIRED = (
+    "production-facing challenge requires explicit compatibility_id "
+    "(pass --compatibility-id; largest-cohort auto-select is not allowed "
+    "for production verdicts)"
+)
+
+
+def require_production_compatibility_id(
+    compatibility_id: str | None,
+) -> tuple[str | None, str | None]:
+    """Fail-closed gate for production-facing challenge entry points.
+
+    Returns ``(stripped_id, None)`` when present and non-empty, else
+    ``(None, reason)`` suitable for ``BLOCKED_POLICY``.
+    """
+    cid = (compatibility_id or "").strip()
+    if not cid:
+        return None, PRODUCTION_COMPATIBILITY_ID_REQUIRED
+    return cid, None
+
+
 def list_policies() -> list[dict[str, str]]:
     out = []
     for pid in list_policy_ids():
@@ -206,8 +229,25 @@ def prepare_accum_panel(
     """Load policy, vet DB, build labeled panel. blocked set if not runnable.
 
     Dispatches on policy.panel_kind. protocol_id defaults to policy.protocol_id.
+
+    Production-facing: ``preferred_compatibility_id`` must be non-empty. Missing
+    or blank identity returns ``BLOCKED_POLICY`` immediately (no largest-cohort
+    auto-select). Exploratory/curriculum loaders use
+    ``resolve_compatibility_id`` / ``fetch_*`` with auto-select separately.
     """
     path = Path(db_path)
+    explicit_id, missing_note = require_production_compatibility_id(
+        preferred_compatibility_id
+    )
+    if missing_note is not None:
+        return AccumPanelPrep(
+            policy=None,
+            protocol=None,
+            rows=[],
+            notes=[missing_note],
+            blocked=ChallengeStatus.BLOCKED_POLICY,
+        )
+
     selected_compatibility_id: str | None = None
     cohort_notes: list[str] = []
     try:
@@ -220,7 +260,7 @@ def prepare_accum_panel(
                     conn,
                     purposes=ACCUM_PURPOSES,
                     purpose_like=ACCUM_PURPOSE_LIKE,
-                    preferred=preferred_compatibility_id,
+                    preferred=explicit_id,
                     family="ACCUM",
                 )
                 if selected_compatibility_id is None:
@@ -238,6 +278,10 @@ def prepare_accum_panel(
             policy = load_policy(policy_id)
             pid = protocol_id or policy.protocol_id
             protocol = get_protocol(pid)
+            selected_compatibility_id = explicit_id
+            cohort_notes = [
+                f"compatibility_id={explicit_id or '(untagged)'} (explicit)"
+            ]
     except FileNotFoundError as exc:
         return AccumPanelPrep(
             policy=None,
@@ -284,6 +328,7 @@ def prepare_accum_panel(
             path,
             policy,
             primary_horizon=protocol.primary_horizon,
+            compatibility_id=selected_compatibility_id,
         )
     elif policy.panel_kind == "accum_components":
         ok, vet_notes = _vet_for_accum(path, protocol)
@@ -707,9 +752,25 @@ def run_policy_challenge(
                 )
             elif against in ("ridge_reweight", "ridge"):
                 # ridge on group feature keys → excess
-                ag_s, coefs = score_ridge_reweight(
-                    train, test, policy, primary_horizon=protocol.primary_horizon
-                )
+                try:
+                    ag_s, coefs = score_ridge_reweight(
+                        train, test, policy, primary_horizon=protocol.primary_horizon
+                    )
+                except RuntimeError as exc:
+                    if "sklearn" not in str(exc).lower():
+                        raise
+                    return make_result(
+                        status=ChallengeStatus.BLOCKED_POLICY,
+                        policy_id=policy.policy_id,
+                        protocol_id=protocol.protocol_id,
+                        baseline_id=baseline,
+                        against_id=against,
+                        policy_hash=policy.hash,
+                        n_rows=len(rows),
+                        primary_horizon=protocol.primary_horizon,
+                        lines=[f"BLOCKED_POLICY: {exc}"],
+                        notes=notes + [str(exc)],
+                    )
                 last_coefs = coefs
             elif against == "production":
                 ag_s = score_production(test, policy)
@@ -811,9 +872,25 @@ def run_policy_challenge(
             coefs = {c.key: 1.0 for c in policy.enabled_components()}
             scored = True
         elif against in ("ridge_reweight", "ridge"):
-            ag_s, coefs = score_ridge_reweight(
-                train, test, policy, primary_horizon=protocol.primary_horizon
-            )
+            try:
+                ag_s, coefs = score_ridge_reweight(
+                    train, test, policy, primary_horizon=protocol.primary_horizon
+                )
+            except RuntimeError as exc:
+                if "sklearn" not in str(exc).lower():
+                    raise
+                return make_result(
+                    status=ChallengeStatus.BLOCKED_POLICY,
+                    policy_id=policy.policy_id,
+                    protocol_id=protocol.protocol_id,
+                    baseline_id=baseline,
+                    against_id=against,
+                    policy_hash=policy.hash,
+                    n_rows=len(rows),
+                    primary_horizon=protocol.primary_horizon,
+                    lines=[f"BLOCKED_POLICY: {exc}"],
+                    notes=notes + [str(exc)],
+                )
             last_coefs = coefs
             scored = True
         elif against == "production":

@@ -308,8 +308,13 @@ def score_ridge_reweight(
     if int(m.sum()) < len(keys) + 2 or float(np.std(y_tr[m])) < 1e-12:
         return [0.0] * len(test), {k: 0.0 for k in keys}
 
-    from sklearn.linear_model import Ridge
-    from sklearn.preprocessing import StandardScaler
+    try:
+        from sklearn.linear_model import Ridge
+        from sklearn.preprocessing import StandardScaler
+    except ImportError as exc:
+        raise RuntimeError(
+            "ridge_reweight requires sklearn (pip install -e '.[ml]')"
+        ) from exc
 
     scaler = StandardScaler()
     Xs = scaler.fit_transform(X_tr[m])

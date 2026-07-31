@@ -14,7 +14,7 @@ Personal IDX **challenge lab** (`ai-saham` sibling). Challenge first; learning s
 | Doc | Role |
 |-----|------|
 | **[docs/challenge_product.md](./docs/challenge_product.md)** | Shipped product map + commands |
-| **[docs/challenge_product_roadmap.md](./docs/challenge_product_roadmap.md)** | **PolicySpec expansion plan (P0–P4)** — living product roadmap |
+| **[docs/challenge_product_roadmap.md](./docs/challenge_product_roadmap.md)** | **Decision-coverage gaps + PolicySpec expansion (G0–G4 / P0–P4)** — living product roadmap |
 | **[challenge_acceptance.md](./challenge_acceptance.md)** | ADR-002 done definition |
 | [docs/adr/ADR-001-challenge-first-product-axis.md](./docs/adr/ADR-001-challenge-first-product-axis.md) | Challenge > learning |
 | [docs/adr/ADR-002-ideal-challenge-system.md](./docs/adr/ADR-002-ideal-challenge-system.md) | Ideal challenge system |
@@ -46,9 +46,12 @@ Learning: `ml-saham learn list|explore|demo|compare`.
 | **Tune** | Factor worth? Weights / combo sensible? | **Shipped** (accum sleeves + signal raw_score) |
 | **Champion** | Better score rule than production (same protocol)? | **Shipped** (accum default) |
 | **Gate** | Hard-block open-book quality vs gate_off? | **Shipped thin** (`risk.accum.hard_gates`) |
+| **Eligibility** | Screen hard-filter counterfactual? | **Replay shipped; tournament `BLOCKED_POLICY`** |
 | **Diagnostic** | Display / promote-candidate bags (never Action) | **Shipped** (v1, 4 bags) |
 
-Roadmap status: **P0–P3 thin complete**; **P1 skipped**; **P4 Action deferred**.  
+Roadmap status: **not full ENTER coverage**. G0 snapshot-bound corpus depth,
+G1 hard-filter tournament, G2 configured group-breadth authority, G3 risk
+decision-quality metrics, and G4 readiness/Action remain open.
 Details: **[docs/challenge_product_roadmap.md](./docs/challenge_product_roadmap.md)**.
 
 Not investment advice. Artifacts never write ai-saham YAML/code.

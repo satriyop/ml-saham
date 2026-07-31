@@ -38,12 +38,12 @@ See also: [docs/engine_factor_map.md](./docs/engine_factor_map.md) · product ex
 
 | Idea | Tier | Why | Data | Slot |
 |---|---|---|---|---|
-| **BCI + sector breadth as Accum sleeves** | Medium | Production uses them; PolicySpec v1 disables / omits | observation accum breakdown + peer breadth | **P0** on challenge roadmap — prefer product PolicySpec before new chapter |
+| **Configured group-breadth authority and counterfactual** | Hard | Pure bonus applier exists, but production factories currently inject no group mapping; this is configured dead behavior, not a verified baseline | first an ai-saham group-vs-sector/PIT/scoring-order decision and live activation; only then observation fields + versioned snapshot/adapter | **G2 / P0** — architecture gap before challenge work, not a curriculum chapter |
 | **Sector macro context** (routed macros per sector group; ADR-053) | Hard | Distinct from peer breadth; may become score input later | macro series + sector group map; fingerprints `smc_*` | After MCE product lane; roadmap P4-ish / backlog |
 | Insider as **policy / gate** input | Medium | Already a curriculum chapter; SignalEngine penalties | `insider_cache` | **P2** signal flags PolicySpec if scoring uses insider heavily |
-| Setup phase / readiness | Hard | Swing lens / phase gates | observation labels | **P4** challenge roadmap — not scheduled for build |
-| Screen hard filters / min_accum | Medium | Veto path before score | screen config + observations | **P1** only if production knobs move |
-| Risk gate FP/FN | Hard | Hard Action override | risk fields + forward outcomes | **P3** challenge roadmap |
+| Setup phase / readiness | Hard | Swing lens / phase gates materially cap Action | dense snapshot-bound Action/readiness observations + compatible outcomes | **G4 / P4** challenge roadmap — product gap, data/protocol blocked |
+| Screen hard filters / min_accum | Medium | Veto path before score | screen config + observations | **G1 / P1** — replay shipped; tournament conformance/metrics remain open even while defaults are mostly off |
+| Risk gate FP/FN | Hard | Hard Action override; current allowed-book mean does not measure false blocks or harmful allows | risk fields + forward outcomes | **G3 / P3** challenge roadmap — decision-quality deepening |
 | Source-field / reconciliation DQ | Medium | Trust of caches | DQ tables / contracts | Prefer `data-integrity` + doctor (shipped Ch.45) |
 
 When promoting a candidate, write:

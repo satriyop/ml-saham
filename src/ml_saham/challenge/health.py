@@ -14,7 +14,10 @@ from ml_saham.challenge.engines import (
     run_engine_portfolio,
 )
 from ml_saham.challenge.factor_validity import run_factor_challenge_batch
-from ml_saham.challenge.runner import run_policy_challenge
+from ml_saham.challenge.runner import (
+    require_production_compatibility_id,
+    run_policy_challenge,
+)
 from ml_saham.challenge.types import ChallengeResult, HealthReportResult
 
 ACCUM_POLICY = "screener.accum.score_weights"
@@ -425,6 +428,21 @@ def build_health_report(
     path = Path(db_path)
     notes: list[str] = []
     sc = normalize_scenario(scenario)
+
+    explicit_id, missing_note = require_production_compatibility_id(compatibility_id)
+    if missing_note is not None:
+        return HealthReportResult(
+            engine_id=engine_id,
+            scenario_filter=sc,
+            with_champion=with_champion,
+            with_factors=with_factors,
+            with_diagnostics=with_diagnostics,
+            summary_md=f"# Health blocked\n\n{missing_note}\n",
+            lines=[f"BLOCKED_POLICY: {missing_note}"],
+            notes=[missing_note],
+            resolve_error=missing_note,
+        )
+    compatibility_id = explicit_id
 
     # Validate scenario early via resolve (engine still runs and may error too)
     _pairs, resolve_err = resolve_engine_policies(engine_id, sc)

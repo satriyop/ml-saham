@@ -15,7 +15,7 @@ from ml_saham.challenge.runner import run_policy_challenge
 from ml_saham.challenge.scorers import score_equal_sleeves, score_production
 from ml_saham.challenge.types import ChallengeStatus
 from ml_saham.cli.app import app
-from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
 
 runner = CliRunner()
 
@@ -194,6 +194,7 @@ def test_run_policy_challenge_fixture(fixture_db: Path, tmp_path: Path):
         against="equal_sleeves",
         write_artifact=True,
         artifacts_dir=tmp_path / "arts",
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.status in {
         ChallengeStatus.WIN,
@@ -226,8 +227,12 @@ def test_run_ridge_challenger(fixture_db: Path, tmp_path: Path):
         against="ridge_reweight",
         write_artifact=False,
         artifacts_dir=tmp_path / "arts",
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
-    assert result.status != ChallengeStatus.BLOCKED_POLICY
+    # Optional sklearn dep: honest BLOCKED_POLICY when missing; else a tournament outcome
+    if result.status == ChallengeStatus.BLOCKED_POLICY:
+        assert any("sklearn" in n.lower() for n in result.notes)
+        return
     assert result.status in {
         ChallengeStatus.WIN,
         ChallengeStatus.LOSE,
@@ -253,6 +258,8 @@ def test_cli_challenge_list_and_run(fixture_db: Path, tmp_path: Path):
             "screener.accum.score_weights",
             "--against",
             "equal_sleeves",
+            "--compatibility-id",
+            FIXTURE_COMPATIBILITY_ID,
             "--no-artifact",
         ],
     )
@@ -262,6 +269,6 @@ def test_cli_challenge_list_and_run(fixture_db: Path, tmp_path: Path):
 
 def test_blocked_without_db(tmp_path: Path):
     missing = tmp_path / "nope.db"
-    result = run_policy_challenge(missing, write_artifact=False)
+    result = run_policy_challenge(missing, write_artifact=False, compatibility_id=FIXTURE_COMPATIBILITY_ID)
     assert result.status == ChallengeStatus.BLOCKED_DATA
     assert result.exit_code() == 2

@@ -18,7 +18,7 @@ from ml_saham.challenge.policies.registry import load_policy
 from ml_saham.challenge.scorers import score_production, score_production_drop
 from ml_saham.challenge.types import FactorVerdict
 from ml_saham.cli.app import app
-from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
 
 runner = CliRunner()
 
@@ -59,7 +59,7 @@ def test_score_production_drop():
 
 
 def test_blocked_disabled_factor(fixture_db: Path):
-    r = run_factor_challenge(fixture_db, factor="bb_squeeze", write_artifact=False)
+    r = run_factor_challenge(fixture_db, factor="bb_squeeze", write_artifact=False, compatibility_id=FIXTURE_COMPATIBILITY_ID)
     assert r.verdict == FactorVerdict.BLOCKED_POLICY
     assert r.exit_code() == 2
 
@@ -68,7 +68,7 @@ def test_bci_is_enabled_but_sector_breadth_is_blocked_by_snapshot_v1(
     fixture_db: Path,
 ):
     for key in ("bci", "inst"):
-        r = run_factor_challenge(fixture_db, factor=key, write_artifact=False)
+        r = run_factor_challenge(fixture_db, factor=key, write_artifact=False, compatibility_id=FIXTURE_COMPATIBILITY_ID)
         assert r.verdict != FactorVerdict.BLOCKED_POLICY, (key, r.notes)
         assert r.verdict in {
             FactorVerdict.KEEP,
@@ -78,13 +78,13 @@ def test_bci_is_enabled_but_sector_breadth_is_blocked_by_snapshot_v1(
             FactorVerdict.BLOCKED_DATA,
         }
     for key in ("sector_breadth", "breadth"):
-        r = run_factor_challenge(fixture_db, factor=key, write_artifact=False)
+        r = run_factor_challenge(fixture_db, factor=key, write_artifact=False, compatibility_id=FIXTURE_COMPATIBILITY_ID)
         assert r.verdict == FactorVerdict.BLOCKED_POLICY
         assert "outside accumulation snapshot v1" in " ".join(r.notes)
 
 
 def test_blocked_unknown_factor(fixture_db: Path):
-    r = run_factor_challenge(fixture_db, factor="not_a_factor", write_artifact=False)
+    r = run_factor_challenge(fixture_db, factor="not_a_factor", write_artifact=False, compatibility_id=FIXTURE_COMPATIBILITY_ID)
     assert r.verdict == FactorVerdict.BLOCKED_POLICY
 
 
@@ -94,6 +94,7 @@ def test_run_factor_on_fixture(fixture_db: Path, tmp_path: Path):
         factor="consistency",
         write_artifact=True,
         artifacts_dir=tmp_path / "arts",
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert r.verdict in {
         FactorVerdict.KEEP,
@@ -116,6 +117,7 @@ def test_batch_factor_challenge(fixture_db: Path, tmp_path: Path):
         fixture_db,
         write_artifact=True,
         artifacts_dir=tmp_path / "arts",
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     if batch.blocked is None:
         assert len(batch.results) == len(enabled)
@@ -163,6 +165,8 @@ def test_cli_all(fixture_db: Path, tmp_path: Path):
             "factor",
             "screener.accum.score_weights",
             "--all",
+            "--compatibility-id",
+            FIXTURE_COMPATIBILITY_ID,
             "--export-json",
             str(json_path),
             "--no-artifact",
@@ -204,6 +208,8 @@ def test_cli_list_factors_and_run(fixture_db: Path, tmp_path: Path):
             "screener.accum.score_weights",
             "--factor",
             "cons",
+            "--compatibility-id",
+            FIXTURE_COMPATIBILITY_ID,
             "--no-artifact",
         ],
     )

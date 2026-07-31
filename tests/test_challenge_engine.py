@@ -15,7 +15,7 @@ from ml_saham.challenge.engines import (
     run_engine_portfolio,
 )
 from ml_saham.cli.app import app
-from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
 
 runner = CliRunner()
 
@@ -84,6 +84,7 @@ def test_portfolio_fixture(fixture_db: Path, tmp_path: Path):
         against="equal_sleeves",
         write_artifact=True,
         artifacts_dir=tmp_path / "arts",
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.exit_code() == 0
     assert result.resolve_error is None
@@ -110,6 +111,7 @@ def test_scenario_filter_pre_open(fixture_db: Path):
         "screener",
         scenario="pre-open",
         write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.exit_code() == 0
     assert len(result.rows) == 2
@@ -184,6 +186,7 @@ def test_engine_champion_against_opt_in(fixture_db: Path):
         scenario="accum",
         against="lgbm_reweight",
         write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.exit_code() == 0
     assert result.against_id == "lgbm_reweight"

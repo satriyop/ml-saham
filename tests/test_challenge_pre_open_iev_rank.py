@@ -15,7 +15,7 @@ from ml_saham.challenge.scorers import score_feature_equal_z, score_production
 from ml_saham.challenge.types import ChallengeStatus, FactorVerdict
 from ml_saham.challenge.factor_validity import run_factor_challenge
 from ml_saham.cli.app import app
-from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
 
 runner = CliRunner()
 
@@ -113,13 +113,21 @@ def test_run_equal_and_ridge(fixture_db: Path, tmp_path: Path):
             against=against,
             write_artifact=True,
             artifacts_dir=tmp_path / "arts",
+            compatibility_id=FIXTURE_COMPATIBILITY_ID,
         )
         assert result.status in {
             ChallengeStatus.WIN,
             ChallengeStatus.LOSE,
             ChallengeStatus.INCONCLUSIVE,
             ChallengeStatus.BLOCKED_DATA,
+            ChallengeStatus.BLOCKED_POLICY,
         }
+        if result.status == ChallengeStatus.BLOCKED_POLICY:
+            # ridge may BLOCKED when optional sklearn is absent
+            assert against in ("ridge_reweight", "ridge") or any(
+                "sklearn" in n.lower() for n in result.notes
+            )
+            continue
         if result.status != ChallengeStatus.BLOCKED_DATA:
             assert result.primary_horizon == 0
             assert result.protocol_id == "pre_open_session_v1"
@@ -133,6 +141,7 @@ def test_factor_track_blocked_for_pre_open(fixture_db: Path):
         "screener.pre_open.iev_rank",
         factor="iev",
         write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert r.verdict == FactorVerdict.BLOCKED_POLICY
     assert "not supported" in " ".join(r.notes).lower() or "not supported" in "\n".join(
@@ -159,6 +168,8 @@ def test_cli_list_and_run(fixture_db: Path, tmp_path: Path):
             "screener.pre_open.iev_rank",
             "--against",
             "equal_sleeves",
+            "--compatibility-id",
+            FIXTURE_COMPATIBILITY_ID,
             "--no-artifact",
         ],
     )

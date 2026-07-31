@@ -17,7 +17,7 @@ from ml_saham.challenge.protocols import PROTOCOLS, get_protocol
 from ml_saham.chapters.loader import has_chapter_module, load_chapter
 from ml_saham.chapters.types import ChapterContext
 from ml_saham.cli.app import app
-from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
 
 runner = CliRunner()
 
@@ -97,6 +97,8 @@ def test_challenge_run_cli(fixture_db: Path, tmp_path: Path):
             "screener.accum.score_weights",
             "--against",
             "equal_sleeves",
+            "--compatibility-id",
+            FIXTURE_COMPATIBILITY_ID,
         ],
     )
     assert r.exit_code == 0, r.stdout
@@ -121,6 +123,8 @@ def test_challenge_engine_cli(fixture_db: Path, tmp_path: Path):
             "accum",
             "--against",
             "equal_sleeves",
+            "--compatibility-id",
+            FIXTURE_COMPATIBILITY_ID,
         ],
     )
     assert r.exit_code == 0, r.stdout

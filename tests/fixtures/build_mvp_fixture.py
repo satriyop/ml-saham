@@ -9,6 +9,10 @@ from pathlib import Path
 
 from tests.fixtures.policy_snapshots import insert_verified_policy_snapshots
 
+# Primary ACCUM cohort stamped on fixture observations + verified snapshots.
+# Production-facing challenge APIs require this explicitly (no largest auto-select).
+FIXTURE_COMPATIBILITY_ID = "sha256:fixture_cohort_primary"
+
 # Must intersect LQ45_LIKE in universe.py
 _STOCKS = (
     "BBCA",
@@ -658,7 +662,7 @@ def build_mvp_fixture(
                         (
                             oid,
                             purpose,
-                            "sha256:fixture_cohort_primary",
+                            FIXTURE_COMPATIBILITY_ID,
                             captured,
                             json.dumps(payload),
                         )
@@ -703,7 +707,7 @@ def build_mvp_fixture(
             "VALUES (?,?,?,?,?)",
             obs_rows,
         )
-        insert_verified_policy_snapshots(conn, "sha256:fixture_cohort_primary")
+        insert_verified_policy_snapshots(conn, FIXTURE_COMPATIBILITY_ID)
         conn.commit()
     finally:
         conn.close()

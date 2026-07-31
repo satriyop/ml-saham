@@ -1,7 +1,7 @@
 # Challenge product roadmap
 
 **Status:** Living plan (not a ship gate)  
-**Date:** 2026-07-30  
+**Date:** 2026-07-31
 **Audience:** maintainer + agents expanding ADR-002 PolicySpecs
 
 Shipped catalog: [challenge_product.md](./challenge_product.md)  
@@ -15,7 +15,16 @@ Root pointer: [roadmap.md](../roadmap.md) · Curriculum catalog: [chapters.md](.
 
 ## North star
 
-Ship **versioned PolicySpec tournaments** for production decisions you actually retune — not a mirror of every YAML knob, and not a clone of the accum enter inventory.
+Give every material production influence an explicit validation owner and
+method. Ship **versioned PolicySpec tournaments** for independently tunable
+decisions; use factor validity, gate evaluation, Action protocols, diagnostic
+validity, or PIT/data-quality contracts where those are the correct tests.
+
+The goal is complete **decision coverage**, not a mechanical one-inventory-row
+to one-PolicySpec mapping. An inventory row may be a policy lever, a component,
+a derived result, a display-only diagnostic, or a raw input; treating all five
+as equivalent tournaments would duplicate correlated tests and apply the wrong
+metric to gates, diagnostics, and Action.
 
 ```text
 ai-saham live judgment map  →  evidence_diagnostic_factor_accum.md
@@ -25,10 +34,46 @@ curriculum                  →  learn explore / demo / compare (never promotion
 
 | Question | Product answer today |
 |----------|----------------------|
-| Whole evidence + diagnostic inventory under challenge? | **No** |
-| What is product-challenged on the **accum** journey? | **AccumScore sleeves only** (7 enabled after P0; BB off) |
-| Can challenge tune “should we ENTER this ticker?” | **No** — only sleeve / score rules vs protocol labels |
+| Whole material enter stack has explicit validation coverage? | **No — product gaps are tracked below** |
+| What is product-challenged on the **accum** journey? | Accum sleeves, signal policies, and risk gates; diagnostics use a separate display-validity track |
+| Screen hard filters? | Snapshot identity + replay extract shipped; production tournament still `BLOCKED_POLICY` |
+| Can challenge tune “should we ENTER this ticker?” | **No** — Action/readiness protocol and usable corpus are both missing |
 | Pre-open? | Separate lane (2 policies already shipped) |
+
+---
+
+## Validation coverage standard
+
+Every inventory item that can materially affect eligibility, score, readiness,
+risk, or final Action must map to one of these owned validation surfaces. “Not
+a PolicySpec” must never mean “not validated.”
+
+| Production role | Required validation surface |
+|-----------------|-----------------------------|
+| Independently tunable score/rank policy | PolicySpec tournament under a fixed Protocol |
+| Component inside a score | Factor validity plus ablation/permutation and fold stability |
+| Eligibility or risk veto | Gate evaluation: harmful allow, false block/opportunity cost, block rate, and stability |
+| Setup readiness / final Action | Dedicated Action protocol with outcome definition and class/population reporting |
+| Display-only diagnostic | Diagnostic validity; no Action authority without a new production PolicySpec |
+| Raw enrichment / source field | PIT, availability, reconciliation, and data-quality contract |
+| Derived or duplicated representation | Extract/conformance test; do not create a duplicate tournament |
+
+## Current product gaps — priority order
+
+Live counts below are a **2026-07-31 22:49 WIB maintainer-DB snapshot**, not
+permanent acceptance constants.
+
+| Priority | Gap | Current evidence | Owner / exit condition |
+|----------|-----|------------------|------------------------|
+| **G0** | Snapshot-bound corpus depth | Historical cohort `sha256:005363…` has 1,890 rows / 42 sessions but 0/7 v2 snapshots, so production comparison correctly returns `BLOCKED_POLICY`. Active v2 cohort `sha256:8ba8fc…` has 304 rows / 1 session / 7 snapshots and yields only one valid OOS fold. | **ai-saham:** accumulate prospective v2-bound observations across enough independent sessions/regimes. **ml-saham:** keep explicit-cohort and snapshot gates. Exit only when the fixed protocol yields at least two valid post-embargo OOS folds; never retrofit snapshots onto the historical cohort. |
+| **G1** | Screen hard-filter tournament | Four-gate extract and pure replay are shipped; v2 policy identity is verified. The local adapter has no conformance evidence, is not in the screener engine portfolio, and execution returns `BLOCKED_POLICY`. | **ml-saham:** lock challenger/grid, population, outcome, false-block/opportunity-cost metrics, folds, and adapter golden conformance; then register the PolicySpec. Defaults being mostly off is not a reason to leave material eligibility logic permanently unvalidated. |
+| **G2** | Configured group-breadth authority | The pure applier can add a breadth bonus, but current production factories do not inject `idx_groups`; `_ticker_to_group` is empty and the executable path skips it. ADR-059 v2 therefore correctly excludes it. The configured mapping is conglomerate/group membership, not the sector-universe index. | **ai-saham architecture first:** decide whether this is a real production policy, define group-vs-sector meaning, PIT membership, overlap and scoring order, then activate it explicitly or retire the dead configuration. Only an activated policy may receive a new snapshot and ml-saham counterfactual. |
+| **G3** | Risk gate decision quality | Current lane reports mean H10 excess among allowed rows. On the current v2 slice production blocks 83% OOS and outperforms `gate_off`, but the report does not establish false-block cost, harmful-allow rate, or regime stability. | **ml-saham:** add a versioned gate protocol/report for blocked-book outcomes, opportunity cost, gate-family attribution, and multi-fold stability without weakening safety constraints. |
+| **G4** | Setup readiness and final Action | These paths materially cap/override ENTER, but there is no Action Protocol. Corpus is not ready: historical cohort has only 8 ENTER and 86/1,890 non-null readiness rows; active v2 cohort has 0 ENTER and 11/304 non-null readiness rows. | **ai-saham:** produce dense PIT-bound readiness/Action observations and compatible outcomes. **ml-saham:** define a real Action H0, population, class handling, costs, and walk-forward protocol. Rank IC is not an acceptable substitute. |
+
+Historical/no-snapshot observations remain useful for extract validation,
+replay, and explicitly non-production research. They cannot be relabeled as a
+verified production baseline.
 
 ---
 
@@ -38,15 +83,16 @@ Legend: **Product** = ADR-002 `challenge run` / `factor` / `engine` / `champion`
 
 | Inventory area (ai-saham) | Status | Notes |
 |---------------------------|--------|--------|
-| Hard filters (§3) | **P1 skipped (thin)** | Production floors often 0/off — no unused filter tournament |
-| Accum sleeves (§4) | **Product** | 7 enabled: cons/streak/vwap/rsi/flow/**bci**/**sector_breadth**; **BB off** |
+| Hard filters (§3) | **Replay shipped; tournament gap (G1)** | Verified v2 identity + pure first-match replay; adapter conformance/verdict not shipped |
+| Accum sleeves (§4) | **Product, partial full-book coverage** | 6 verified components: cons/streak/vwap/rsi/flow/**bci**; **BB off**; sector breadth excluded (G2) |
 | BB (§4) | Disabled | Matches production BB-off — not inventing BB-on |
-| BCI + sector breadth (§4) | **Product (P0)** | Enabled sleeves on `screener.accum.score_weights` |
+| BCI (§4) | **Product (P0)** | Enabled verified component on `screener.accum.score_weights` |
+| Configured group breadth (§4) | **Authority gap (G2)** | Pure applier exists, but production composition supplies no mapping and skips it; no challenge baseline yet |
 | Signal raw score / groups (§5) | **Product (P2 thin)** | `signal.accum.raw_score` — raw_score + group features vs excess@H |
-| Named setups / phase / readiness (§6–7) | **None** product | Parked; P4 later |
-| Risk hard gates (§8) | **Product (P3 thin)** | `risk.accum.hard_gates` — gate_off ablation (not sleeve IC) |
+| Named setups / phase / readiness (§6–7) | **Product gap (G4)** | Material Action cap; sparse readiness corpus and no Action Protocol |
+| Risk hard gates (§8) | **Product, thin (G3)** | `gate_off` ablation shipped; blocked-book cost and stability incomplete |
 | Diagnostic bags / MCE (§9) | **Diagnostic track** | `challenge diagnostic` display/promote-candidate — **not** Action |
-| TradeSetup Action composition | **P4 deferred** | Different product; no fake ENTER accuracy path |
+| TradeSetup Action composition | **Product gap (G4)** | Different decision type; current v2 corpus has zero ENTER rows |
 
 Pre-open (not this inventory): `screener.pre_open.iev_rank`, `screener.pre_open.directional_score` — keep on a **separate lane**.
 
@@ -60,19 +106,23 @@ Pre-open (not this inventory): `screener.pre_open.iev_rank`, `screener.pre_open.
 4. **Data readiness gate:** observation (or cache) fields must already be capturable; else `BLOCKED_DATA` is honest, not a ship failure of the *idea*.  
 5. Curriculum (`accum-macro`, `accum-deep`, …) may **demo** full-stack ideas; it never defines the challenge catalog.  
 6. Diagnostics (ADR-057) stay **explain-only** unless production wires them into score/Action.
+7. Every material production influence has a named validation method and owner,
+   even when it is not a PolicySpec.
+8. Historical breadth never overrides identity: no snapshot inference, fallback,
+   or retrospective production eligibility.
 
 ---
 
 ## Phases
 
-### P0 — Close the AccumScore lab
+### P0 — Close the AccumScore lab — **partial; G2 remains**
 
 **Goal:** PolicySpec mirrors production Accum book more honestly; docs stop over-claiming.
 
 | # | Work | Exit when |
 |---|------|-----------|
 | P0.1 | **BCI (`bci` / `inst`) as enabled sleeve** | **Done** — enabled weight 8.3; factor list + extract via `inst` |
-| P0.2 | **Sector breadth bonus** as first-class component | **Done** — `sector_breadth` weight 10.0; fingerprint/candidate extract |
+| P0.2 | **Configured group-breadth bonus** authority decision | **Open (G2)** — currently skipped by production composition; activate/retire through ai-saham architecture before any snapshot/challenge |
 | P0.3 | **Coverage note in product docs** | **Done** — this file + product/engine map |
 | P0.4 | Optional: **BB sleeve** enable only if production re-enables BB | Still off (matches production) |
 
@@ -87,9 +137,14 @@ Suggested policy evolution:
 
 ---
 
-### P1 — Screen hard filters — **SKIPPED (thin / unused knobs)**
+### P1 — Screen hard filters — **replay shipped; tournament open (G1)**
 
-**Decision:** Do not ship filter tournaments while production floors stay 0/off. Revisit only when knobs are actually retuned.
+The four-gate extract, missing-state contract, cohort reconciliation, pure
+first-match replay, and v2 production identity are shipped. The production
+tournament is not: adapter conformance, challenger/grid, winner law,
+blocked-book outcomes, and engine registration remain open. Mostly-off default
+floors lower urgency but do not remove the validation obligation for logic that
+can reject candidates when enabled.
 
 ---
 
@@ -106,7 +161,7 @@ CLI: `challenge engine signal --scenario accum`.
 
 ---
 
-### P3 — Risk hard gates — **shipped thin**
+### P3 — Risk hard gates — **shipped thin; deepen open (G3)**
 
 | policy_id | Against | Metric (not sleeve IC) |
 |-----------|---------|-------------------------|
@@ -114,17 +169,26 @@ CLI: `challenge engine signal --scenario accum`.
 
 CLI: `challenge run risk.accum.hard_gates --against gate_off` · `gate_off:bandar_gate` · `challenge engine risk`.
 
+Deepening exit: report allowed and blocked books, false-block/opportunity cost,
+harmful allows, named gate-family attribution, block-rate stability, and at
+least two valid OOS folds under a versioned gate protocol.
+
 ---
 
-### P4 — Setup readiness & Action — **deferred**
+### P4 — Setup readiness & Action — **product gap, data-blocked (G4)**
 
 Different product from sleeve/signal IC. **Do not** ship rank-IC “ENTER” tournaments as a substitute.
 
 | Prerequisite | Status |
 |--------------|--------|
-| Dense Action + path labels in captures | Required before any ENTER H0 |
+| Dense Action + path labels in snapshot-bound captures | Missing: active v2 cohort has 0 ENTER; readiness non-null on 11/304 rows |
 | Real ENTER protocol (not sleeve IC) | Not started |
 | Diagnostics as Action authority | **Never** by default (ADR-057) |
+
+Do not implement the Action verdict until the positive population, decision
+cutoff, outcome/cost definition, class handling, and walk-forward split can be
+specified without leakage. This is an acknowledged product gap, not a claim
+that the full ENTER desk is already covered.
 
 Operator ritual: [challenge_product.md](./challenge_product.md) § Operator ritual.
 
@@ -146,7 +210,7 @@ Explain-only bags are **not** P0–P4 PolicySpecs. They use a separate Challenge
 
 | Non-goal | Why |
 |----------|-----|
-| Challenge every row of `evidence_diagnostic_factor_accum.md` as production PolicySpec | Inventory is live judgment; production product is falsifiable policies; diagnostics use the diagnostic track instead |
+| Create one production PolicySpec per row of `evidence_diagnostic_factor_accum.md` | Rows have different roles; use the validation coverage standard above. Every material influence still needs an owner and method. |
 | Auto-promote WIN into ai-saham YAML | BOUNDARY / ADR-002 |
 | Treat `learn compare accum-macro` / `accum-deep` as product | Pedagogy only |
 | Rank IC as the only metric for gates/Action | Wrong decision type |
@@ -163,7 +227,7 @@ Copy into the PR / decision memo:
 2. **Tables / observation fields** available read-only in SQLite.  
 3. **Decision type** (`score` | `rank` | `gate` | `action`).  
 4. **Protocol** (horizons, label, folds, min N) — reuse or new versioned id.  
-5. **Production baseline** source (PolicySpec JSON mirror / payload-embedded).  
+5. **Production baseline** source (verified upstream snapshot plus frozen observed output where required).
 6. **Challengers** (ablation-first).  
 7. **Engine portfolio registration** yes/no.  
 8. **Curriculum** only if the *problem* is non-obvious (never as promotion path).
@@ -173,12 +237,13 @@ Copy into the PR / decision memo:
 ## Suggested build order (one line)
 
 ```text
-P0 Accum sleeves honesty          ✅
-P1 hard filters                   ⏭️ skipped (unused knobs)
-P2 signal.accum.raw_score         ✅ thin
-P3 risk.accum.hard_gates          ✅ thin (gate_off metric)
-P4 readiness + Action protocol    ⏸️ deferred
-diagnostic validity (parallel)    ✅ v1
+G0 v2 corpus time/fold depth      🚧 producer accumulation required
+P0 Accum sleeves honesty          🚧 configured group-breadth authority gap (G2)
+P1 hard filters                   🚧 replay shipped; tournament blocked (G1)
+P2 signal policies                ✅ thin
+P3 risk hard gates                🚧 thin; decision-quality metrics open (G3)
+P4 readiness + Action protocol    ⛔ data/protocol blocked (G4)
+diagnostic validity (parallel)    ✅ v1 display authority only
 ```
 
 Pre-open lane: maintain denser captures for existing IEV/directional policies — parallel.

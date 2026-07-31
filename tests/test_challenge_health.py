@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 
 from ml_saham.challenge.health import build_health_report
 from ml_saham.cli.app import app
-from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
 
 runner = CliRunner()
 
@@ -25,6 +25,7 @@ def test_health_engine_only_fixture(fixture_db: Path, tmp_path: Path):
         fixture_db,
         write_artifact=True,
         artifacts_dir=tmp_path / "arts",
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.exit_code() == 0
     assert result.resolve_error is None
@@ -99,6 +100,7 @@ def test_health_next_digs_codify_ritual_and_no_action_from_diagnostics(
         fixture_db,
         with_diagnostics=True,
         write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.exit_code() == 0
     md = result.summary_md
@@ -118,6 +120,7 @@ def test_health_champion_flag(fixture_db: Path, tmp_path: Path):
         with_champion=True,
         write_artifact=True,
         artifacts_dir=tmp_path / "arts",
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.exit_code() == 0
     assert result.artifact_dir is not None
@@ -133,6 +136,7 @@ def test_health_factors_flag(fixture_db: Path, tmp_path: Path):
         with_factors=True,
         write_artifact=True,
         artifacts_dir=tmp_path / "arts",
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.exit_code() == 0
     assert result.factors_payload is not None
@@ -145,6 +149,7 @@ def test_health_diagnostics_flag(fixture_db: Path, tmp_path: Path):
         with_diagnostics=True,
         write_artifact=True,
         artifacts_dir=tmp_path / "arts",
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.exit_code() == 0
     assert result.diagnostics_payload is not None
@@ -176,6 +181,8 @@ def test_health_cli_with_diagnostics(fixture_db: Path, tmp_path: Path):
             "--scenario",
             "accum",
             "--with-diagnostics",
+            "--compatibility-id",
+            FIXTURE_COMPATIBILITY_ID,
             "--no-artifact",
         ],
     )
@@ -189,6 +196,7 @@ def test_health_preopen_skips_champion(fixture_db: Path, tmp_path: Path):
         scenario="pre-open",
         with_champion=True,
         write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.exit_code() == 0
     assert result.champion_payload is None
@@ -196,6 +204,6 @@ def test_health_preopen_skips_champion(fixture_db: Path, tmp_path: Path):
 
 
 def test_health_bad_scenario(fixture_db: Path):
-    result = build_health_report(fixture_db, scenario="nope", write_artifact=False)
+    result = build_health_report(fixture_db, scenario="nope", write_artifact=False, compatibility_id=FIXTURE_COMPATIBILITY_ID)
     assert result.exit_code() == 2
     assert result.resolve_error

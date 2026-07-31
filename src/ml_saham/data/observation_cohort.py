@@ -3,9 +3,13 @@
 ai-saham stamps ``compatibility_id`` when material scoring/config forks.
 Pooling multiple ids is like combining exam scores under different rulebooks.
 
-Default when multiple cohorts exist: **largest n** (ties → newest max
-``captured_at``). Callers may pass ``preferred`` for an explicit override.
-Schemas without the column load unfiltered (legacy fixtures).
+When ``preferred`` is omitted and multiple cohorts exist, loaders may
+auto-select the **largest n** (ties → newest max ``captured_at``). That
+auto-select is for exploratory/curriculum paths only; production-facing
+challenges require an explicit id via
+``ml_saham.challenge.runner.require_production_compatibility_id`` before
+calling resolve/fetch. Schemas without the column load unfiltered (legacy
+fixtures).
 """
 
 from __future__ import annotations

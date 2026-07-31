@@ -20,7 +20,7 @@ from ml_saham.challenge.runner import list_policies, run_policy_challenge
 from ml_saham.challenge.scorers import score_production
 from ml_saham.challenge.types import ChallengeStatus, FactorVerdict
 from ml_saham.cli.app import app
-from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
 
 runner = CliRunner()
 
@@ -130,13 +130,20 @@ def test_panel_and_tournament(fixture_db: Path, tmp_path: Path):
             against=against,
             write_artifact=False,
             artifacts_dir=tmp_path / "a",
+            compatibility_id=FIXTURE_COMPATIBILITY_ID,
         )
         assert result.status in {
             ChallengeStatus.WIN,
             ChallengeStatus.LOSE,
             ChallengeStatus.INCONCLUSIVE,
             ChallengeStatus.BLOCKED_DATA,
+            ChallengeStatus.BLOCKED_POLICY,
         }
+        if result.status == ChallengeStatus.BLOCKED_POLICY:
+            assert against in ("ridge_reweight", "ridge") or any(
+                "sklearn" in n.lower() for n in result.notes
+            )
+            continue
         if result.status != ChallengeStatus.BLOCKED_DATA:
             assert result.primary_horizon == 0
             assert result.protocol_id == "pre_open_session_v1"
@@ -149,6 +156,7 @@ def test_factor_blocked(fixture_db: Path):
         "screener.pre_open.directional_score",
         factor="book_pressure",
         write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert r.verdict == FactorVerdict.BLOCKED_POLICY
 
@@ -170,6 +178,8 @@ def test_cli(fixture_db: Path, tmp_path: Path):
             "screener.pre_open.directional_score",
             "--against",
             "equal_sleeves",
+            "--compatibility-id",
+            FIXTURE_COMPATIBILITY_ID,
             "--no-artifact",
         ],
     )

@@ -161,3 +161,116 @@ def test_legacy_fixture_without_column_loads_all(tmp_path: Path):
         assert resolved is None
         assert len(rows) == 2
         assert notes == []
+
+
+# ---------------------------------------------------------------------------
+# Production-facing entry points: explicit compatibility_id required
+# ---------------------------------------------------------------------------
+
+
+def test_require_production_compatibility_id_pure_gate():
+    """Unit gate: missing/blank → reason; non-empty → stripped id."""
+    from ml_saham.challenge.runner import (
+        PRODUCTION_COMPATIBILITY_ID_REQUIRED,
+        require_production_compatibility_id,
+    )
+
+    cid, err = require_production_compatibility_id(None)
+    assert cid is None and err == PRODUCTION_COMPATIBILITY_ID_REQUIRED
+    cid, err = require_production_compatibility_id("")
+    assert cid is None and err == PRODUCTION_COMPATIBILITY_ID_REQUIRED
+    cid, err = require_production_compatibility_id("   ")
+    assert cid is None and err == PRODUCTION_COMPATIBILITY_ID_REQUIRED
+    cid, err = require_production_compatibility_id("  sha256:abc  ")
+    assert cid == "sha256:abc" and err is None
+
+
+def test_production_entries_block_without_compatibility_id(tmp_path: Path):
+    """run / factor / engine / health / champion fail closed when id omitted/empty."""
+    from ml_saham.challenge.engines import run_engine_portfolio
+    from ml_saham.challenge.factor_validity import run_factor_challenge
+    from ml_saham.challenge.health import build_health_report
+    from ml_saham.challenge.runner import (
+        PRODUCTION_COMPATIBILITY_ID_REQUIRED,
+        prepare_accum_panel,
+        run_policy_challenge,
+    )
+    from ml_saham.challenge.types import ChallengeStatus, FactorVerdict
+    from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+
+    db = build_mvp_fixture(tmp_path / "prod_gate.db", min_bars=100)
+
+    for missing in (None, "", "  "):
+        prep = prepare_accum_panel(
+            db, preferred_compatibility_id=missing  # type: ignore[arg-type]
+        )
+        assert prep.blocked == ChallengeStatus.BLOCKED_POLICY
+        assert any("explicit compatibility_id" in n for n in prep.notes)
+        assert not any("auto-selected largest" in n for n in prep.notes)
+
+        run = run_policy_challenge(db, write_artifact=False, compatibility_id=missing)
+        assert run.status == ChallengeStatus.BLOCKED_POLICY
+        assert any("explicit compatibility_id" in n for n in run.notes)
+        assert not any("auto-selected largest" in n for n in run.notes)
+        assert run.exit_code() == 2
+
+        # champion path = policy challenge with learned against
+        champ = run_policy_challenge(
+            db,
+            against="lgbm_reweight",
+            write_artifact=False,
+            compatibility_id=missing,
+        )
+        assert champ.status == ChallengeStatus.BLOCKED_POLICY
+        assert any("explicit compatibility_id" in n for n in champ.notes)
+
+        fac = run_factor_challenge(
+            db, factor="consistency", write_artifact=False, compatibility_id=missing
+        )
+        assert fac.verdict == FactorVerdict.BLOCKED_POLICY
+        assert any("explicit compatibility_id" in n for n in fac.notes)
+        assert not any("auto-selected largest" in n for n in fac.notes)
+
+        eng = run_engine_portfolio(
+            db, "screener", scenario="accum", write_artifact=False, compatibility_id=missing
+        )
+        assert eng.exit_code() == 2
+        assert eng.resolve_error is not None
+        assert "explicit compatibility_id" in eng.resolve_error
+        assert PRODUCTION_COMPATIBILITY_ID_REQUIRED in "\n".join(eng.lines)
+
+        health = build_health_report(
+            db, write_artifact=False, compatibility_id=missing
+        )
+        assert health.exit_code() == 2
+        assert health.resolve_error is not None
+        assert "explicit compatibility_id" in health.resolve_error
+
+
+def test_production_run_with_explicit_fixture_cohort_binds(tmp_path: Path):
+    """Explicit fixture id binds; not blocked solely for missing identity."""
+    from ml_saham.challenge.runner import run_policy_challenge
+    from ml_saham.challenge.types import ChallengeStatus
+    from tests.fixtures.build_mvp_fixture import (
+        FIXTURE_COMPATIBILITY_ID,
+        build_mvp_fixture,
+    )
+
+    db = build_mvp_fixture(tmp_path / "explicit.db", min_bars=120)
+    result = run_policy_challenge(
+        db,
+        "screener.accum.score_weights",
+        against="equal_sleeves",
+        write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
+    )
+    assert not any("requires explicit compatibility_id" in n for n in result.notes)
+    assert not any("auto-selected largest" in n for n in result.notes)
+    # Fixture cohort is dense enough for a real tournament outcome
+    assert result.status in {
+        ChallengeStatus.WIN,
+        ChallengeStatus.LOSE,
+        ChallengeStatus.INCONCLUSIVE,
+    }
+    assert result.observation_compatibility_id == FIXTURE_COMPATIBILITY_ID
+    assert any("explicit" in n for n in result.notes)

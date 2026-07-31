@@ -12,7 +12,7 @@ from ml_saham.challenge.policies.registry import load_policy
 from ml_saham.challenge.runner import run_policy_challenge
 from ml_saham.challenge.types import ChallengeStatus
 from ml_saham.cli.app import app
-from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
 
 runner = CliRunner()
 
@@ -96,6 +96,7 @@ def test_run_signal_on_fixture(fixture_db: Path):
         "signal.accum.raw_score",
         against="equal_sleeves",
         write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert r.status in {
         ChallengeStatus.WIN,
@@ -131,6 +132,8 @@ def test_cli_list_and_run(fixture_db: Path):
             "signal.accum.raw_score",
             "--against",
             "equal_sleeves",
+            "--compatibility-id",
+            FIXTURE_COMPATIBILITY_ID,
             "--no-artifact",
         ],
     )

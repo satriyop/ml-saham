@@ -19,7 +19,7 @@ from ml_saham.challenge.scorers import (
 )
 from ml_saham.challenge.types import ChallengeStatus
 from ml_saham.cli.app import app
-from tests.fixtures.build_mvp_fixture import build_mvp_fixture
+from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
 
 runner = CliRunner()
 
@@ -85,7 +85,8 @@ def test_run_equal_and_drop_setup(fixture_db: Path):
             "signal.accum.evidence_group_weights",
             against=against,
             write_artifact=False,
-        )
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
+    )
         assert r.status in {
             ChallengeStatus.WIN,
             ChallengeStatus.LOSE,
@@ -123,6 +124,8 @@ def test_cli(fixture_db: Path):
             "signal.accum.evidence_group_weights",
             "--against",
             "drop_setup",
+            "--compatibility-id",
+            FIXTURE_COMPATIBILITY_ID,
             "--no-artifact",
         ],
     )

@@ -8,7 +8,10 @@ from typing import Any
 
 from ml_saham.challenge.artifacts import write_engine_artifact
 from ml_saham.challenge.policies.registry import load_policy
-from ml_saham.challenge.runner import run_policy_challenge
+from ml_saham.challenge.runner import (
+    require_production_compatibility_id,
+    run_policy_challenge,
+)
 from ml_saham.challenge.types import (
     ChallengeStatus,
     EnginePolicyRow,
@@ -137,6 +140,20 @@ def run_engine_portfolio(
     path = Path(db_path)
     against = against.strip().lower().replace("-", "_")
     baseline = baseline.strip().lower().replace("-", "_") or "production"
+
+    explicit_id, missing_note = require_production_compatibility_id(compatibility_id)
+    if missing_note is not None:
+        return EnginePortfolioResult(
+            engine_id=engine_id.strip().lower(),
+            scenario_filter=normalize_scenario(scenario),
+            against_id=against,
+            baseline_id=baseline,
+            lines=[f"BLOCKED_POLICY: {missing_note}"],
+            summary_md=f"# Engine portfolio blocked\n\n{missing_note}\n",
+            notes=[missing_note],
+            resolve_error=missing_note,
+        )
+    compatibility_id = explicit_id
 
     pairs, err = resolve_engine_policies(engine_id, scenario)
     if err:
