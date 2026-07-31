@@ -12,6 +12,13 @@ Before every task:
 Do not load every design document for a small task. Do not skip the required
 boundary, protocol, data, or artifact contracts for challenge work.
 
+Root CLI map: `challenge` (product) · `learn` (curriculum) · `doctor` / `vet`
+(shared). Panel/extractor work must follow `docs/challenge_extract_contract.md`
+and pass `./scripts/check_challenge_contracts.sh` before claiming done. For
+shipped extract paths, CLI map, and multi-fold WIN semantics, prefer
+`docs/challenge_product.md`, `docs/challenge_extract_contract.md`, and
+`data_contract.md` over ADR migration/follow-up prose when they conflict.
+
 Always confirm explicitly that:
 
 - you understand that `ml-saham` is an offline challenge lab first and a
