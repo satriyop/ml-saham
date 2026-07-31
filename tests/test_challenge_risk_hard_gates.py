@@ -35,7 +35,8 @@ def test_policy_and_engines():
     assert "signal.accum.raw_score" in eng["signal"]["policies"]["accum"]
 
 
-def test_extract_bandar_gate():
+def test_extract_bandar_gate_legacy_top_level():
+    """Fixture/legacy shape still works."""
     pol = load_policy("risk.accum.hard_gates")
     payload = {
         "trade_setup": {
@@ -47,6 +48,22 @@ def test_extract_bandar_gate():
     assert comps is not None
     assert comps["bandar_gate"] == 1.0
     assert comps["liquidity_gate"] == 0.0
+
+
+def test_extract_gates_from_adr056_features_by_window():
+    """Live captures nest trade_setup under features_by_window — not root payload."""
+    from tests.fixtures.golden import load_golden
+
+    pol = load_policy("risk.accum.hard_gates")
+    payload = load_golden("risk_adr056_trade_setup.json")
+    assert "trade_setup" not in payload
+    comps = extract_gate_components(payload, pol)
+    assert comps is not None
+    assert comps["free_float_gate"] == 1.0
+    assert comps["bandar_gate"] == 1.0
+    assert comps["liquidity_gate"] == 0.0
+    # empty payload without any trade_setup must not invent all-clear
+    assert extract_gate_components({"ticker": "X"}, pol) is None
 
 
 def test_mean_excess_allowed_and_gate_off():

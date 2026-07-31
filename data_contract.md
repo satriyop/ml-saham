@@ -216,6 +216,7 @@ Guarded by golden fixtures in `tests/fixtures/golden/` + `tests/test_challenge_p
 |-------|----------------------|---------------------------|--------|
 | Accum sleeves | `features_by_window.<w>.candidate.accum_score_breakdown` | H=3/10/20 excess vs IHSG (same horizons) | sleeve points |
 | Signal | `features_by_window.<w>.signal` → `raw_exact_score` / `assessment.score` (top-level `signal.raw_score` = legacy only) | same H=10 path as accum | score 0–100-ish |
+| Risk hard gates | `features_by_window.<w>.trade_setup.blocking_gates` / `action` (top-level `trade_setup` = legacy only) | same H=10 excess; metric = mean excess among allowed | gate fire 0/1 |
 | Pre-open directional | observation features | Prefer open→09:30 stock (**gross**); else open→close − IHSG open→close. **Never** open→09:30 − full-day IHSG | `*_return_pct` = **percent points** (always ÷100) |
 | IEV rank | official rank; challengers `log_iev`, `iev`, `iep` — **not** `iev/iep` | Prefer `is_ncp_locked` / clock **[08:45, 09:00)** over largest post-open batch | IEV=volume, IEP=price |
 | Verdict | — | **WIN needs ≥2 valid OOS folds**; single-fold edge = provisional `INCONCLUSIVE` | — |

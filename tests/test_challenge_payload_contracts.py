@@ -20,6 +20,7 @@ from ml_saham.challenge.panel_pre_open_obs import (
     _pct_points_to_fraction,
     _stock_open_to_0930_return,
 )
+from ml_saham.challenge.panel_gates import extract_gate_components
 from ml_saham.challenge.panel_signal import extract_signal_components
 from ml_saham.challenge.policies.registry import load_policy
 from ml_saham.challenge.protocols import ACCUM_PATH_V1, PRE_OPEN_SESSION_V1
@@ -36,6 +37,7 @@ def test_golden_files_exist_in_repo():
         "signal_adr056_window.json",
         "open_30m_metrics.json",
         "iev_multi_capture_day.json",
+        "risk_adr056_trade_setup.json",
         "README.md",
     )
     for name in required:
@@ -67,6 +69,19 @@ def test_signal_flags_from_window_active_flags():
     assert comps is not None
     assert comps["production_raw_score"] == pytest.approx(55.29)
     assert comps["valuation_stretched"] == 1.0
+
+
+def test_risk_gates_from_window_trade_setup_not_top_level():
+    """Live ACCUM risk is under features_by_window.*.trade_setup — root path is false-clear."""
+    payload = load_golden("risk_adr056_trade_setup.json")
+    pol = load_policy("risk.accum.hard_gates")
+    comps = extract_gate_components(payload, pol)
+    assert comps is not None
+    assert comps["bandar_gate"] == 1.0
+    assert comps["free_float_gate"] == 1.0
+    # Root-only empty would previously report all zeros (false clear)
+    root_empty = {"trade_setup": {}}
+    assert extract_gate_components(root_empty, pol) is None
 
 
 def test_accum_sleeves_from_golden_adr056_prefers_canonical_window():

@@ -6,7 +6,7 @@
   "panel_kind": "accum_gates",
   "score_kind": "gate_block",
   "source": "ai-saham risk_engine.yaml hard gates on accum trade_setup (P3 deepen)",
-  "source_ref": "config/risk_engine.yaml gates; observation trade_setup.blocking_gates",
+  "source_ref": "config/risk_engine.yaml gates; features_by_window.*.trade_setup.blocking_gates (ADR-056)",
   "max_score": 1.0,
   "components": [
     {

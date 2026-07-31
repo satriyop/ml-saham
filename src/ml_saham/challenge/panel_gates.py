@@ -1,4 +1,9 @@
-"""Accum risk gate panel: trade_setup blocking_gates + forward excess."""
+"""Accum risk gate panel: trade_setup blocking_gates + forward excess.
+
+Live ai-saham ACCUM captures nest RiskEngine output under
+``features_by_window.<window>.trade_setup`` (same ADR-056 window as signal /
+sleeves). Top-level ``payload["trade_setup"]`` is fixture/legacy only.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +14,7 @@ from typing import Any
 
 from ml_saham.challenge.panel import (
     PanelRow,
+    _pick_window_blob,
     build_forward_excess,
     fetch_accum_observation_raw,
 )
@@ -25,40 +31,59 @@ def _alias_to_gate_key(policy: PolicySnapshot) -> dict[str, str]:
     return m
 
 
+def _resolve_trade_setup(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Prefer window-nested trade_setup (live ADR-056), else top-level legacy."""
+    window = _pick_window_blob(payload)
+    if isinstance(window, dict):
+        wts = window.get("trade_setup")
+        if isinstance(wts, dict) and wts:
+            return wts
+    top = payload.get("trade_setup")
+    if isinstance(top, dict) and top:
+        return top
+    return None
+
+
+def _gate_key_from_name(name: str, aliases: dict[str, str]) -> str | None:
+    key = aliases.get(name.lower()) or aliases.get(name.replace("Gate", "").lower())
+    if key is not None:
+        return key
+    snake = "".join(
+        ("_" + ch.lower() if ch.isupper() else ch) for ch in name
+    ).lstrip("_")
+    return aliases.get(snake.lower())
+
+
 def extract_gate_components(
     payload: dict[str, Any],
     policy: PolicySnapshot,
 ) -> dict[str, float] | None:
-    """Per-gate fire flags (1.0 fired / 0.0 clear). Always returns enabled keys."""
+    """Per-gate fire flags (1.0 fired / 0.0 clear). None if no trade_setup blob."""
     aliases = _alias_to_gate_key(policy)
     enabled = {c.key for c in policy.enabled_components()}
     if not enabled:
         return None
 
+    ts = _resolve_trade_setup(payload)
+    if ts is None:
+        # Do not invent all-clear — missing setup is not "no gates fired"
+        return None
+
     found = {k: 0.0 for k in enabled}
-    ts = payload.get("trade_setup") if isinstance(payload.get("trade_setup"), dict) else {}
-    gates = ts.get("blocking_gates") if isinstance(ts, dict) else None
+    gates = ts.get("blocking_gates")
     if isinstance(gates, list):
         for g in gates:
             name = str(g or "").strip()
             if not name:
                 continue
-            key = aliases.get(name.lower()) or aliases.get(name.replace("Gate", "").lower())
-            # BandarGate → bandar_gate via aliases
-            if key is None:
-                # try snake of CamelGate
-                snake = "".join(
-                    ("_" + ch.lower() if ch.isupper() else ch) for ch in name
-                ).lstrip("_")
-                key = aliases.get(snake.lower())
+            key = _gate_key_from_name(name, aliases)
             if key in enabled:
                 found[key] = 1.0
-    # also honor action BLOCKED without named gates → mark all enabled as fired
-    action = str(ts.get("action") or "").upper() if isinstance(ts, dict) else ""
+    # honor action BLOCKED* without named gates → first enabled gate
+    action = str(ts.get("action") or "").upper()
     if action in ("BLOCKED", "BLOCKED_STRUCTURAL", "BLOCKED_EXECUTION") and not any(
         v > 0 for v in found.values()
     ):
-        # unknown gate name — treat as structural block on first enabled gate
         first = next(iter(enabled))
         found[first] = 1.0
     return found

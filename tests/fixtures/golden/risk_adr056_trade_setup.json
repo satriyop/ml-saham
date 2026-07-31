@@ -1,0 +1,20 @@
+{
+  "ticker": "GOLD",
+  "session_date": "2024-06-03",
+  "canonical_window": 7,
+  "comment": "Live ACCUM has trade_setup under features_by_window only — not top-level.",
+  "features_by_window": {
+    "7": {
+      "trade_setup": {
+        "action": "BLOCKED_STRUCTURAL",
+        "blocking_gates": ["FreeFloatGate", "BandarGate"]
+      }
+    },
+    "30": {
+      "trade_setup": {
+        "action": "ENTER",
+        "blocking_gates": []
+      }
+    }
+  }
+}
