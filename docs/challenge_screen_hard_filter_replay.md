@@ -67,7 +67,9 @@ Mixed cohorts without an explicit ID fail closed for this audit API.
 
 1. **PIT membership** — not fully reconstructable from observation rows alone.  
 2. **Capture-evaluated** — ADR-056 ticker/session rows in the selected cohort (replay denominator).  
-3. **Metric-evaluable** — capture-evaluated rows with AVAILABLE `price_path.accum_10d.v1` labels (later tournament only).
+3. **Corpus H10-label available** — capture-evaluated rows with AVAILABLE
+   `price_path.accum_10d.v1` labels. This is **not** the future `accum_path_v1`
+   tournament outcome (excess vs IHSG); naming it “metric-evaluable” would overclaim.
 
 Do **not** claim full-universe recall.
 
@@ -123,7 +125,7 @@ Maintainer DB cohort `sha256:005363021f7f792071e43d12506aeefe474abf4fbd7d0a45f82
 | unique ticker/session | 1,890 |
 | extracted_count | 1,890 |
 | unextractable_count | 0 |
-| H=10 AVAILABLE labels | 1,485 |
+| Corpus H10-label AVAILABLE (`price_path.accum_10d.v1`) | 1,485 |
 | market_cap numeric / explicit_missing | 765 / 1,125 |
 | piotroski numeric / explicit_missing | 765 / 1,125 |
 | accum_score / signal_score numeric | 1,890 / 1,890 |

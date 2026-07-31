@@ -17,12 +17,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from ml_saham.data.aisaham_read import connect, table_exists
-from ml_saham.data.observation_cohort import (
-    ACCUM_PURPOSE_LIKE,
-    ACCUM_PURPOSES,
-    fetch_accum_observation_raw,
-    list_compatibility_cohorts,
-)
+from ml_saham.data.observation_cohort import list_compatibility_cohorts
 
 # ---------------------------------------------------------------------------
 # Contracts
@@ -105,21 +100,47 @@ class ScreenFilterClassification:
 
 @dataclass
 class ScreenFilterAuditSummary:
+    """Fail-closed cohort reconciliation for hard-filter extract.
+
+    ``selected_row_count`` / ``unique_ticker_session_count`` count **unique**
+    (ticker, session_date) units that survived purpose/contract/canonical-window
+    filters and de-duplication. Excluded rows are counted separately.
+    """
+
     compatibility_id: str
+    raw_fetch_count: int = 0
     selected_row_count: int = 0
     unique_ticker_session_count: int = 0
     extracted_count: int = 0
     unextractable_count: int = 0
-    duplicate_ticker_session_count: int = 0
-    wrong_purpose_skipped: int = 0
-    wrong_contract_skipped: int = 0
+    duplicate_ticker_session_excluded: int = 0
+    wrong_purpose_excluded: int = 0
+    wrong_contract_excluded: int = 0
+    bad_canonical_window_excluded: int = 0
     notes: list[str] = field(default_factory=list)
     per_gate_numeric: dict[str, int] = field(default_factory=dict)
     per_gate_explicit_missing: dict[str, int] = field(default_factory=dict)
-    h10_available_count: int | None = None
+    # Corpus label availability (price_path.accum_10d.v1) — not tournament y
+    corpus_h10_label_available_count: int | None = None
     classifications: list[
         tuple[ExtractedScreenFilterInputs, ScreenFilterClassification]
     ] = field(default_factory=list)
+
+    @property
+    def h10_available_count(self) -> int | None:
+        return self.corpus_h10_label_available_count
+
+    @property
+    def duplicate_ticker_session_count(self) -> int:
+        return self.duplicate_ticker_session_excluded
+
+    @property
+    def wrong_purpose_skipped(self) -> int:
+        return self.wrong_purpose_excluded
+
+    @property
+    def wrong_contract_skipped(self) -> int:
+        return self.wrong_contract_excluded
 
 
 # ---------------------------------------------------------------------------
@@ -195,10 +216,22 @@ def extract_screen_filter_inputs(
             unextractable_reason="missing_features_by_window",
         )
 
+    # Fail closed: every selected row must declare canonical_window=7
     cw = payload.get("canonical_window")
-    if cw is not None and str(cw) != CANONICAL_WINDOW_KEY:
-        # Still require window "7" pack as the unit
-        pass
+    if cw is None or str(cw) != CANONICAL_WINDOW_KEY:
+        return ExtractedScreenFilterInputs(
+            ticker=ticker,
+            session_date=session,
+            market_cap_idr=None,
+            market_cap_state=RawInputState.UNEXTRACTABLE,
+            piotroski_f_score=None,
+            piotroski_state=RawInputState.UNEXTRACTABLE,
+            accum_score=None,
+            accum_score_state=RawInputState.UNEXTRACTABLE,
+            signal_score=None,
+            signal_score_state=RawInputState.UNEXTRACTABLE,
+            unextractable_reason="canonical_window_not_7",
+        )
 
     window = _window7(payload)
     if window is None:
@@ -481,12 +514,16 @@ def audit_screen_filter_cohort(
     *,
     compatibility_id: str,
     policy: ScreenFilterPolicy | None = None,
-    require_contract_id: str | None = None,
     measure_h10: bool = True,
 ) -> ScreenFilterAuditSummary:
-    """Load one explicit ACCUM cohort and extract/classify every unique ticker/session.
+    """Load one explicit ACCUMULATION_DISCOVERY cohort; unique ticker/session units.
 
-    ``compatibility_id`` is required. Multi-cohort auto-select is not used.
+    Fail-closed cohort rules:
+    - ``compatibility_id`` required (no auto-select)
+    - purpose must be exactly ``ACCUMULATION_DISCOVERY``
+    - ``contract_id`` must be ``learning_observation.accumulation_discovery.v2``
+    - payload ``canonical_window`` must be 7
+    - duplicate (ticker, session_date) rows are excluded (first kept)
     """
     cid = (compatibility_id or "").strip()
     if not cid:
@@ -499,18 +536,23 @@ def audit_screen_filter_cohort(
         summary.per_gate_numeric[g] = 0
         summary.per_gate_explicit_missing[g] = 0
 
+    required_contract = ACCUM_OBSERVATION_CONTRACT
+
     with connect(path) as conn:
         if not table_exists(conn, "learning_observations"):
             summary.notes.append("learning_observations missing")
             return summary
 
+        # Cohort discovery uses ACCUM family only for listing ids; filter is explicit.
         cohorts = list_compatibility_cohorts(
-            conn, purposes=ACCUM_PURPOSES, purpose_like=ACCUM_PURPOSE_LIKE
+            conn,
+            purposes=(ACCUM_DISCOVERY_PURPOSE,),
+            purpose_like=None,
         )
         match = next((c for c in cohorts if c[0] == cid), None)
         if match is None:
             summary.notes.append(
-                f"compatibility_id={cid!r} not found among ACCUM cohorts"
+                f"compatibility_id={cid!r} not found among ACCUMULATION_DISCOVERY cohorts"
             )
             return summary
         if len(cohorts) > 1:
@@ -519,10 +561,9 @@ def audit_screen_filter_cohort(
                 f"excluded {len(cohorts) - 1} other cohort(s)"
             )
 
-        rows_raw, notes, resolved = fetch_accum_observation_raw(
-            conn,
-            preferred_compatibility_id=cid,
-            compatibility_id=cid,
+        select_cols = "purpose, captured_at, decision_payload_json, contract_id"
+        rows_raw, notes, resolved = fetch_observation_discovery_only(
+            conn, compatibility_id=cid, select=select_cols
         )
         summary.notes.extend(notes)
         if resolved is not None and resolved != cid:
@@ -531,53 +572,50 @@ def audit_screen_filter_cohort(
             )
             return summary
 
-        seen: dict[tuple[str, str], int] = {}
+        summary.raw_fetch_count = len(rows_raw)
+        seen: dict[tuple[str, str], ExtractedScreenFilterInputs] = {}
 
         for row in rows_raw:
             if isinstance(row, sqlite3.Row):
                 purpose = str(row["purpose"] or "")
+                contract = row["contract_id"] if "contract_id" in row.keys() else None
             else:
                 purpose = str(row[0] or "")
-            if (
-                purpose != ACCUM_DISCOVERY_PURPOSE
-                and "ACCUMULATION_DISCOVERY" not in purpose
-            ):
-                if purpose not in ACCUM_PURPOSES:
-                    summary.wrong_purpose_skipped += 1
-                    continue
+                contract = row[3] if len(row) > 3 else None
 
-            if require_contract_id is not None and isinstance(row, sqlite3.Row):
-                try:
-                    crow = row["contract_id"] if "contract_id" in row.keys() else None
-                except (KeyError, IndexError, TypeError):
-                    crow = None
-                if crow is not None and str(crow) != require_contract_id:
-                    summary.wrong_contract_skipped += 1
-                    continue
+            if purpose != ACCUM_DISCOVERY_PURPOSE:
+                summary.wrong_purpose_excluded += 1
+                continue
+
+            if str(contract or "") != required_contract:
+                summary.wrong_contract_excluded += 1
+                continue
 
             payload = _payload_from_row(row)
             if payload is None:
-                extracted = ExtractedScreenFilterInputs(
-                    ticker="",
-                    session_date="",
-                    market_cap_idr=None,
-                    market_cap_state=RawInputState.UNEXTRACTABLE,
-                    piotroski_f_score=None,
-                    piotroski_state=RawInputState.UNEXTRACTABLE,
-                    accum_score=None,
-                    accum_score_state=RawInputState.UNEXTRACTABLE,
-                    signal_score=None,
-                    signal_score_state=RawInputState.UNEXTRACTABLE,
-                    unextractable_reason="invalid_decision_payload_json",
-                )
-            else:
-                extracted = extract_screen_filter_inputs(payload)
+                # Malformed payload: exclude from unit set, count exclusion
+                summary.unextractable_count += 1
+                continue
+
+            extracted = extract_screen_filter_inputs(payload)
+
+            if extracted.unextractable_reason == "canonical_window_not_7":
+                summary.bad_canonical_window_excluded += 1
+                continue
 
             key = (extracted.ticker, extracted.session_date)
-            seen[key] = seen.get(key, 0) + 1
+            if not key[0] or not key[1]:
+                summary.unextractable_count += 1
+                continue
+
+            if key in seen:
+                summary.duplicate_ticker_session_excluded += 1
+                continue
+            seen[key] = extracted
 
             if extracted.is_unextractable:
                 summary.unextractable_count += 1
+                # Still a selected unit if identity is valid but fields bad
             else:
                 summary.extracted_count += 1
                 _tally_gate(summary, GATE_MARKET_CAP, extracted.market_cap_state)
@@ -588,16 +626,35 @@ def audit_screen_filter_cohort(
             cls = classify_screen_filters(extracted, policy)
             summary.classifications.append((extracted, cls))
 
-        summary.selected_row_count = len(summary.classifications)
         summary.unique_ticker_session_count = len(seen)
-        summary.duplicate_ticker_session_count = sum(1 for n in seen.values() if n > 1)
+        summary.selected_row_count = len(seen)
 
         if measure_h10:
-            summary.h10_available_count = _count_h10_available(
+            summary.corpus_h10_label_available_count = _count_h10_available(
                 conn, compatibility_id=cid
             )
 
     return summary
+
+
+def fetch_observation_discovery_only(
+    conn: sqlite3.Connection,
+    *,
+    compatibility_id: str,
+    select: str = "purpose, captured_at, decision_payload_json, contract_id",
+) -> tuple[list[Any], list[str], str | None]:
+    """Fetch ACCUMULATION_DISCOVERY rows for one explicit compatibility_id only."""
+    from ml_saham.data.observation_cohort import fetch_observation_raw
+
+    return fetch_observation_raw(
+        conn,
+        purposes=(ACCUM_DISCOVERY_PURPOSE,),
+        purpose_like=None,
+        compatibility_id=compatibility_id,
+        preferred_compatibility_id=compatibility_id,
+        select=select,
+        family="ACCUMULATION_DISCOVERY",
+    )
 
 
 def _tally_gate(
@@ -646,15 +703,24 @@ def _count_h10_available(
 
 
 def sufficiency_verdict(summary: ScreenFilterAuditSummary) -> str:
-    """Return SUFFICIENT_FOR_REPLAY or INSUFFICIENT_NEEDS_CORPUS_EXTENSION."""
+    """Fail-closed sufficiency for hard-filter replay extract.
+
+    SUFFICIENT only when:
+    - explicit cohort selected with ≥1 unique ticker/session unit
+    - every selected unit extracted (no unextractable kept in the unit set)
+    - classifications reconcile 1:1 with selected units
+    - no inventing a pass from contaminated raw fetch alone
+    """
+    if not summary.compatibility_id:
+        return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
     if summary.selected_row_count <= 0:
         return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
-    if summary.unique_ticker_session_count <= 0:
+    if summary.unique_ticker_session_count != summary.selected_row_count:
         return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
-    if summary.extracted_count == 0:
+    if summary.extracted_count != summary.selected_row_count:
         return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
-    # Schema/path failure rate: unextractable must be rare
-    rate = summary.unextractable_count / max(summary.selected_row_count, 1)
-    if rate > 0.05:
+    if summary.unextractable_count != 0:
+        return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
+    if len(summary.classifications) != summary.selected_row_count:
         return "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
     return "SUFFICIENT_FOR_REPLAY"

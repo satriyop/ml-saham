@@ -126,17 +126,18 @@ def test_audit_requires_compatibility_id(tmp_path: Path):
         audit_screen_filter_cohort(db, compatibility_id="")
 
 
-def test_audit_read_only_and_zero_growth(tmp_path: Path):
-    db = tmp_path / "audit.db"
-    conn = sqlite3.connect(db)
+def _obs_table(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE TABLE learning_observations ("
         "observation_id TEXT PRIMARY KEY, purpose TEXT, compatibility_id TEXT, "
         "decision_payload_json TEXT, contract_id TEXT, captured_at TEXT)"
     )
-    payload = {
-        "ticker": "A",
-        "session_date": "2026-06-02",
+
+
+def _good_payload(ticker: str = "A", session: str = "2026-06-02") -> dict:
+    return {
+        "ticker": ticker,
+        "session_date": session,
         "canonical_window": 7,
         "features_by_window": {
             "7": {
@@ -151,6 +152,12 @@ def test_audit_read_only_and_zero_growth(tmp_path: Path):
             }
         },
     }
+
+
+def test_audit_read_only_and_zero_growth(tmp_path: Path):
+    db = tmp_path / "audit.db"
+    conn = sqlite3.connect(db)
+    _obs_table(conn)
     cid = "sha256:testcohort"
     conn.execute(
         "INSERT INTO learning_observations VALUES (?,?,?,?,?,?)",
@@ -158,7 +165,7 @@ def test_audit_read_only_and_zero_growth(tmp_path: Path):
             "oid1",
             "ACCUMULATION_DISCOVERY",
             cid,
-            json.dumps(payload),
+            json.dumps(_good_payload()),
             "learning_observation.accumulation_discovery.v2",
             "2026-06-02T16:00:00+07:00",
         ),
@@ -179,16 +186,118 @@ def test_audit_read_only_and_zero_growth(tmp_path: Path):
     )
     assert summary.selected_row_count == 1
     assert summary.extracted_count == 1
+    assert summary.unextractable_count == 0
     assert sufficiency_verdict(summary) == "SUFFICIENT_FOR_REPLAY"
 
-    # No growth
     with connect(db) as c2:
-        assert c2.execute("SELECT COUNT(*) FROM learning_observations").fetchone()[
-            0
-        ] == (row_count_before)
+        assert (
+            c2.execute("SELECT COUNT(*) FROM learning_observations").fetchone()[0]
+            == row_count_before
+        )
         assert c2.execute("PRAGMA page_count").fetchone()[0] == page_count_before
-    # Read-only URI must not rewrite the file
     assert db.stat().st_mtime_ns == mtime_before
+
+
+def test_adversarial_cohort_fails_closed(tmp_path: Path):
+    """Wrong contract + non-7 window + duplicate → not SUFFICIENT."""
+    db = tmp_path / "adv.db"
+    conn = sqlite3.connect(db)
+    _obs_table(conn)
+    cid = "sha256:adv"
+    bad = _good_payload("X", "2026-06-02")
+    bad["canonical_window"] = 30
+    bad["features_by_window"] = {"30": bad["features_by_window"]["7"]}
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?,?,?,?,?,?)",
+        (
+            "a",
+            "ACCUMULATION_DISCOVERY",
+            cid,
+            json.dumps(bad),
+            "learning_observation.wrong.v0",
+            "2026-06-02T00:00:00+07:00",
+        ),
+    )
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?,?,?,?,?,?)",
+        (
+            "b",
+            "ACCUMULATION_DISCOVERY",
+            cid,
+            json.dumps(bad),
+            "learning_observation.accumulation_discovery.v2",
+            "2026-06-02T01:00:00+07:00",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    summary = audit_screen_filter_cohort(db, compatibility_id=cid, measure_h10=False)
+    assert summary.wrong_contract_excluded >= 1
+    assert summary.selected_row_count == 0
+    assert summary.bad_canonical_window_excluded >= 1
+    assert sufficiency_verdict(summary) == "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
+
+
+def test_duplicate_ticker_session_excluded(tmp_path: Path):
+    db = tmp_path / "dup.db"
+    conn = sqlite3.connect(db)
+    _obs_table(conn)
+    cid = "sha256:dup"
+    payload = json.dumps(_good_payload("A", "2026-06-02"))
+    for i, oid in enumerate(("o1", "o2")):
+        conn.execute(
+            "INSERT INTO learning_observations VALUES (?,?,?,?,?,?)",
+            (
+                oid,
+                "ACCUMULATION_DISCOVERY",
+                cid,
+                payload,
+                "learning_observation.accumulation_discovery.v2",
+                f"2026-06-02T0{i}:00:00+07:00",
+            ),
+        )
+    conn.commit()
+    conn.close()
+
+    summary = audit_screen_filter_cohort(db, compatibility_id=cid, measure_h10=False)
+    assert summary.raw_fetch_count == 2
+    assert summary.selected_row_count == 1
+    assert summary.duplicate_ticker_session_excluded == 1
+    assert summary.extracted_count == 1
+    assert sufficiency_verdict(summary) == "SUFFICIENT_FOR_REPLAY"
+
+
+def test_wrong_purpose_not_fetched(tmp_path: Path):
+    db = tmp_path / "purp.db"
+    conn = sqlite3.connect(db)
+    _obs_table(conn)
+    cid = "sha256:purp"
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?,?,?,?,?,?)",
+        (
+            "o1",
+            "ACCUM_PATH",
+            cid,
+            json.dumps(_good_payload()),
+            "learning_observation.accumulation_discovery.v2",
+            "2026-06-02T00:00:00+07:00",
+        ),
+    )
+    conn.commit()
+    conn.close()
+    summary = audit_screen_filter_cohort(db, compatibility_id=cid, measure_h10=False)
+    assert summary.selected_row_count == 0
+    assert sufficiency_verdict(summary) == "INSUFFICIENT_NEEDS_CORPUS_EXTENSION"
+
+
+def test_canonical_window_30_not_accepted():
+    payload = _good_payload()
+    payload["canonical_window"] = 30
+    payload["features_by_window"]["30"] = payload["features_by_window"]["7"]
+    ext = extract_screen_filter_inputs(payload)
+    assert ext.is_unextractable
+    assert ext.unextractable_reason == "canonical_window_not_7"
 
 
 def test_gate_ids_stable():

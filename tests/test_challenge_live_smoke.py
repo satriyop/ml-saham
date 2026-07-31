@@ -31,7 +31,7 @@ from ml_saham.challenge.panel_signal import extract_signal_components
 from ml_saham.challenge.policies.registry import load_policy
 from ml_saham.data.aisaham_read import connect
 from ml_saham.data.connection import resolve_db_path
-from ml_saham.data.observation_cohort import ACCUM_PURPOSES, list_compatibility_cohorts
+from ml_saham.data.observation_cohort import list_compatibility_cohorts
 
 pytestmark = pytest.mark.live_db
 
@@ -78,7 +78,9 @@ def test_live_signal_extract_hit_rate(live_db: Path):
         if extract_signal_components(p, pol) is not None:
             hit += 1
     assert n >= 50, f"too few ACCUM rows: {n}"
-    assert hit == n, f"signal extract miss {hit}/{n} (likely root-level path regression)"
+    assert hit == n, (
+        f"signal extract miss {hit}/{n} (likely root-level path regression)"
+    )
 
 
 def test_live_risk_gates_not_false_clear(live_db: Path):
@@ -126,35 +128,44 @@ def test_live_iev_no_post_open_primary_batch(live_db: Path):
     if not rows:
         pytest.skip("no IEV history/snapshots")
     post = sum(1 for r in rows if "T09:" in str(r.get("collected_at") or ""))
-    assert post == 0, f"IEV pick includes post-open captures: {post} rows; notes={notes}"
+    assert post == 0, (
+        f"IEV pick includes post-open captures: {post} rows; notes={notes}"
+    )
 
 
 def test_live_screen_hard_filter_extract_cohort(live_db: Path):
-    """Explicit compatibility_id required; extract must not silent-zero."""
+    """Fail-closed live audit on the measured clean-break cohort only."""
     measured = "sha256:005363021f7f792071e43d12506aeefe474abf4fbd7d0a45f823b417e95e84c1"
     with connect(live_db) as conn:
-        cohorts = list_compatibility_cohorts(conn, purposes=ACCUM_PURPOSES)
-    if not cohorts:
-        pytest.skip("no ACCUM compatibility cohorts")
-    cid = measured if any(c[0] == measured for c in cohorts) else cohorts[0][0]
-    if not cid:
-        pytest.skip("untagged-only ACCUM cohort")
-
-    n = hit = 0
-    for p in _iter_accum_payloads(live_db, limit=200):
-        n += 1
-        if not extract_screen_filter_inputs(p).is_unextractable:
-            hit += 1
-    assert n >= 50
-    assert hit == n, f"screen-filter extract miss {hit}/{n}"
+        cohorts = list_compatibility_cohorts(conn, purposes=("ACCUMULATION_DISCOVERY",))
+    if not any(c[0] == measured for c in cohorts):
+        pytest.skip(f"measured cohort not present: {measured[:20]}…")
 
     summary = audit_screen_filter_cohort(
         live_db,
-        compatibility_id=cid,
-        policy=ScreenFilterPolicy(),  # all disabled → pass-only classification
+        compatibility_id=measured,
+        policy=ScreenFilterPolicy(),
         measure_h10=True,
     )
-    assert summary.selected_row_count > 0
-    assert summary.extracted_count == summary.selected_row_count
+    assert summary.selected_row_count == 1890
+    assert summary.unique_ticker_session_count == 1890
+    assert summary.extracted_count == 1890
     assert summary.unextractable_count == 0
+    assert summary.wrong_contract_excluded == 0
+    assert summary.wrong_purpose_excluded == 0
+    assert summary.duplicate_ticker_session_excluded == 0
+    assert summary.bad_canonical_window_excluded == 0
+    assert summary.per_gate_numeric["screen.accum.market_cap_floor"] == 765
+    assert summary.per_gate_explicit_missing["screen.accum.market_cap_floor"] == 1125
+    assert summary.corpus_h10_label_available_count == 1485
     assert sufficiency_verdict(summary) == "SUFFICIENT_FOR_REPLAY"
+
+    # Spot-check extract paths (no root fallback)
+    hit = 0
+    for p in _iter_accum_payloads(live_db, limit=100):
+        if p.get("canonical_window") != 7:
+            continue
+        ext = extract_screen_filter_inputs(p)
+        assert not ext.is_unextractable
+        hit += 1
+    assert hit >= 50
