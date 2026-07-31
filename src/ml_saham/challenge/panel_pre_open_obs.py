@@ -109,18 +109,42 @@ def extract_pre_open_components(
     return found
 
 
-def _pct_to_return(x: float) -> float:
-    """open_to_close_return_pct in live data is percent points (e.g. -1.33 → -0.0133)."""
-    if abs(x) > 1.0:
-        return x / 100.0
-    # already a fraction, or tiny percent — treat as fraction if |x|<=1
-    return x
+def _pct_points_to_fraction(x: float) -> float:
+    """Corpus ``*_return_pct`` fields are **percent points**, never fractions.
+
+    Live example: ``open_to_close_return_pct = -0.6173`` means **-0.6173%**,
+    i.e. fraction ``-0.006173``. The old ``|x|<=1 → treat as fraction`` rule
+    turned that into -61.73% and must not return.
+    """
+    return float(x) / 100.0
 
 
-def _load_outcome_returns(
+def _stock_open_to_0930_return(metrics: dict[str, Any]) -> float | None:
+    """Same-horizon open→09:30 stock return as a fraction.
+
+    Prefer prices (``opening_price`` + ``close_proxy_09_30``) when present;
+    else scale ``open_to_close_return_pct`` (percent points on open_30m contract —
+    name is historical; values track the 09:30 proxy on live captures).
+    """
+    open_p = _f(metrics.get("opening_price"))
+    proxy = _f(metrics.get("close_proxy_09_30"))
+    if open_p is not None and open_p > 0 and proxy is not None:
+        return proxy / open_p - 1.0
+    raw = _f(metrics.get("open_to_close_return_pct"))
+    if raw is None:
+        raw = _f(metrics.get("open_to_0930_return_pct"))
+    if raw is None:
+        return None
+    return _pct_points_to_fraction(raw)
+
+
+def _load_open_30m_stock_returns(
     conn: sqlite3.Connection,
 ) -> dict[str, float]:
-    """observation_id -> open_to_close return (fraction)."""
+    """observation_id -> stock open→09:30 return (fraction), no IHSG.
+
+    Do **not** pair these with full-session IHSG open→close — that mixes horizons.
+    """
     if not table_exists(conn, "learning_outcome_labels"):
         return {}
     cols = {
@@ -128,10 +152,11 @@ def _load_outcome_returns(
     }
     if "observation_id" not in cols or "metrics_json" not in cols:
         return {}
+    # Prefer the explicit open_30m contract; avoid broad '%open%' grabs.
     sql = (
         "SELECT observation_id, metrics_json, availability, contract_id "
         "FROM learning_outcome_labels "
-        "WHERE contract_id LIKE '%open_30m%' OR contract_id LIKE '%open%'"
+        "WHERE contract_id LIKE '%open_30m%' OR contract_id LIKE '%open_to_0930%'"
     )
     out: dict[str, float] = {}
     for row in conn.execute(sql):
@@ -152,11 +177,10 @@ def _load_outcome_returns(
             continue
         if not isinstance(metrics, dict):
             continue
-        raw = metrics.get("open_to_close_return_pct")
-        num = _f(raw)
-        if num is None:
+        ret = _stock_open_to_0930_return(metrics)
+        if ret is None:
             continue
-        out[str(oid)] = _pct_to_return(num)
+        out[str(oid)] = ret
     return out
 
 
@@ -201,9 +225,12 @@ def build_pre_open_obs_panel(
                 "(run ai-saham pre-open captures to densify)"
             ]
 
-        outcome_rets = _load_outcome_returns(conn) if has_oid else {}
-        if outcome_rets:
-            notes.append(f"outcome_open_30m labels available n={len(outcome_rets)}")
+        open_30m_rets = _load_open_30m_stock_returns(conn) if has_oid else {}
+        if open_30m_rets:
+            notes.append(
+                f"open_30m stock open→09:30 labels available n={len(open_30m_rets)} "
+                "(gross; not excess vs full-day IHSG)"
+            )
 
         # parse → (ticker, date, comps, cap, oid)
         staged: list[tuple[str, str, dict[str, float], str, str | None]] = []
@@ -263,29 +290,22 @@ def build_pre_open_obs_panel(
             by_key[(ticker, date)] = (comps, cap, oid)
 
         pairs = list(by_key.keys())
+        # Consistent same-horizon fallback: stock open→close − IHSG open→close.
         candle_excess, lab_notes = _open_close_excess(conn, pairs)
         notes.extend(lab_notes)
 
-        from ml_saham.data.aisaham_read import load_candles
-
-        ihsg_oc: dict[str, float] = {}
-        for c in load_candles(conn, ["IHSG"]):
-            o = _f(c.get("open"))
-            cl = _f(c.get("close"))
-            d = str(c["date"])
-            if o is not None and cl is not None and o > 0:
-                ihsg_oc[d] = cl / o - 1.0
-
-        n_outcome = 0
+        n_open_30m = 0
         n_candle = 0
         rows: list[PanelRow] = []
         dropped_label = 0
         for (ticker, date), (comps, _cap, oid) in sorted(by_key.items()):
             label: float | None = None
-            if oid and oid in outcome_rets:
-                gross = outcome_rets[oid]
-                label = gross - ihsg_oc[date] if date in ihsg_oc else gross
-                n_outcome += 1
+            # Prefer open→09:30 stock path when corpus label exists.
+            # Do **not** subtract full-session IHSG open→close (horizon mismatch).
+            if oid and oid in open_30m_rets:
+                label = open_30m_rets[oid]
+                n_open_30m += 1
+            # Same-horizon excess: both open→close from daily candles.
             if label is None and (ticker, date) in candle_excess:
                 label = candle_excess[(ticker, date)]
                 n_candle += 1
@@ -304,7 +324,8 @@ def build_pre_open_obs_panel(
         if dropped_label:
             notes.append(f"dropped {dropped_label} rows missing open-path label")
         notes.append(
-            f"label_source outcome_rows={n_outcome} candle_excess_rows={n_candle}"
+            f"label_source open_30m_gross_rows={n_open_30m} "
+            f"candle_open_close_excess_rows={n_candle}"
         )
         notes.append(
             f"panel_rows={len(rows)} unique_tickers={len({r.ticker for r in rows})} "

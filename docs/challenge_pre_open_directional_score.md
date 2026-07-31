@@ -30,7 +30,10 @@ Frozen: `src/ml_saham/challenge/policies/pre_open_directional_score.v1.json`
 - **Production:** `signal.raw_score` (fallback `signal.score`)  
 - **Features (challengers):** book_pressure, delta_iev_ratio, iep_gap_pct, iev_intensity, spread_pct, opening_broker_backing_score, fvwap_discount_pct  
 - Source purpose: `PRE_OPEN_AUCTION_DIRECTION`  
-- Labels: outcome `open_30m` when joinable, else candle open→close excess vs IHSG  
+- Labels (same-horizon only):
+  - Prefer corpus `price_path.open_30m` → stock **open→09:30** (from `close_proxy_09_30` / `opening_price`, or `*_return_pct` as **percent points ÷ 100**). **Not** excess vs full-day IHSG (would mix horizons; daily candles lack IHSG 09:30).
+  - Else candle **open→close − IHSG open→close** (both full session).  
+
 
 ## Protocol
 

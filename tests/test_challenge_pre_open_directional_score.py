@@ -9,6 +9,8 @@ from typer.testing import CliRunner
 
 from ml_saham.challenge.factor_validity import run_factor_challenge
 from ml_saham.challenge.panel_pre_open_obs import (
+    _pct_points_to_fraction,
+    _stock_open_to_0930_return,
     extract_pre_open_components,
     build_pre_open_obs_panel,
 )
@@ -71,6 +73,26 @@ def test_extract_requires_raw_score():
     assert comps["production_raw_score"] == 55.0
     assert comps["book_pressure"] == 0.9
     assert comps["delta_iev_ratio"] == 0.1
+
+
+def test_pct_points_never_treated_as_fraction_when_under_one():
+    """Live open_to_close_return_pct=-0.6173 is -0.6173%, not -61.73%."""
+    assert _pct_points_to_fraction(-0.6173) == pytest.approx(-0.006173)
+    assert _pct_points_to_fraction(-1.3333) == pytest.approx(-0.013333)
+    assert _pct_points_to_fraction(2.1645) == pytest.approx(0.021645)
+
+
+def test_stock_open_to_0930_prefers_prices_over_pct_field():
+    metrics = {
+        "opening_price": 162.0,
+        "close_proxy_09_30": 161.0,
+        "open_to_close_return_pct": -0.6173,  # percent points
+    }
+    r = _stock_open_to_0930_return(metrics)
+    assert r == pytest.approx(161.0 / 162.0 - 1.0)
+    # pct-only path still correct (not -0.6173 fraction)
+    r2 = _stock_open_to_0930_return({"open_to_close_return_pct": -0.6173})
+    assert r2 == pytest.approx(-0.006173)
 
 
 def test_extract_bid_offer_maps_to_book_pressure():
