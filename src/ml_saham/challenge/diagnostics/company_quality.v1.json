@@ -13,15 +13,15 @@
   "features": [
     {
       "key": "company_quality_score",
-      "aliases": ["company_quality_context", "cq_group"],
+      "aliases": ["company_quality_context", "cq_group", "cq_aggregate_score", "cq_aggregate"],
       "enabled": true,
-      "note": "group_contributions.company_quality_context score"
+      "note": "group company_quality_context score, else fingerprint cq_aggregate_score"
     },
     {
       "key": "cq_valuation_score",
       "aliases": ["valuation", "cq_valuation"],
       "enabled": true,
-      "note": "fingerprint cq_valuation_score; may also feed VALUATION_STRETCHED flag in production"
+      "note": "fingerprint cq_valuation_score when present (often sparse live)"
     },
     {
       "key": "tp_liquidity_score",

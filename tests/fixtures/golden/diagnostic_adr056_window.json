@@ -1,0 +1,31 @@
+{
+  "ticker": "GOLD",
+  "session_date": "2024-06-03",
+  "canonical_window": 7,
+  "comment": "Live ACCUM: signal groups + fingerprint under features_by_window only.",
+  "features_by_window": {
+    "7": {
+      "signal": {
+        "alpha_trigger_score": {
+          "group_contributions": [
+            {"group": "setup_quality", "score": 0.0, "present": false},
+            {"group": "institutional_flow", "score": 42.5, "present": true},
+            {"group": "sector_context", "score": 12.0, "present": true},
+            {"group": "company_quality_context", "score": 0.0, "present": false}
+          ]
+        }
+      },
+      "candidate": {
+        "sector_breadth": 0.35
+      },
+      "sub_signal_fingerprint": {
+        "ia_foreign_participation": 0.82,
+        "ia_domestic_buy_vwap_distance": 1.0,
+        "cq_aggregate_score": 50.0,
+        "tp_liquidity_score": 0.9,
+        "tp_volatility_score": 0.8,
+        "peer_breadth": 0.4
+      }
+    }
+  }
+}

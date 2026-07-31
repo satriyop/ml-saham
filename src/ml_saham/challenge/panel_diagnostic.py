@@ -1,4 +1,9 @@
-"""Diagnostic bag panel: observation features + production control score + excess labels."""
+"""Diagnostic bag panel: observation features + production control score + excess labels.
+
+Live ACCUM captures nest signal / fingerprint / candidate under
+``features_by_window.<window>`` (ADR-056). Root-level ``signal`` /
+``sub_signal_fingerprint`` are empty on production payloads.
+"""
 
 from __future__ import annotations
 
@@ -8,12 +13,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ml_saham.challenge.panel import build_forward_excess, extract_components
-from ml_saham.data.observation_cohort import fetch_accum_observation_raw
+from ml_saham.challenge.panel import (
+    _pick_window_blob,
+    build_forward_excess,
+    extract_components,
+)
 from ml_saham.challenge.policies.registry import load_policy
 from ml_saham.challenge.scorers import score_production
 from ml_saham.challenge.types import DiagnosticSpec, PolicySnapshot
 from ml_saham.data.aisaham_read import connect, table_exists
+from ml_saham.data.observation_cohort import fetch_accum_observation_raw
 
 
 @dataclass
@@ -85,10 +94,47 @@ def _load_mctx_by_date(conn: sqlite3.Connection) -> dict[str, dict[str, float]]:
     return out
 
 
-def _group_score(payload: dict[str, Any], group_name: str) -> float | None:
-    signal = payload.get("signal") if isinstance(payload.get("signal"), dict) else {}
-    # alpha_trigger_score.group_contributions
+def _payload_views(
+    payload: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Return (signal, fingerprint, candidate, root_or_window) preferring ADR-056 window."""
+    window = _pick_window_blob(payload)
+    if isinstance(window, dict) and window:
+        sig = window.get("signal") if isinstance(window.get("signal"), dict) else {}
+        fp = (
+            window.get("sub_signal_fingerprint")
+            if isinstance(window.get("sub_signal_fingerprint"), dict)
+            else {}
+        )
+        cand = window.get("candidate") if isinstance(window.get("candidate"), dict) else {}
+        # Prefer window signal/fp; fall back to root for hybrid fixtures
+        if not sig:
+            top = payload.get("signal")
+            sig = top if isinstance(top, dict) else {}
+        if not fp:
+            top_fp = payload.get("sub_signal_fingerprint")
+            fp = top_fp if isinstance(top_fp, dict) else {}
+        if not cand:
+            top_c = payload.get("candidate")
+            cand = top_c if isinstance(top_c, dict) else {}
+        return sig, fp, cand, window
+
+    sig = payload.get("signal") if isinstance(payload.get("signal"), dict) else {}
+    fp = (
+        payload.get("sub_signal_fingerprint")
+        if isinstance(payload.get("sub_signal_fingerprint"), dict)
+        else {}
+    )
+    cand = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+    return sig, fp, cand, payload
+
+
+def _group_score_from_signal(signal: dict[str, Any], group_name: str) -> float | None:
     at = signal.get("alpha_trigger_score") if isinstance(signal, dict) else None
+    # assessment may mirror alpha_trigger
+    if not isinstance(at, dict):
+        ass = signal.get("assessment") if isinstance(signal.get("assessment"), dict) else {}
+        at = ass.get("alpha_trigger_score") if isinstance(ass, dict) else None
     if isinstance(at, dict):
         gcs = at.get("group_contributions")
         if isinstance(gcs, list):
@@ -99,9 +145,8 @@ def _group_score(payload: dict[str, Any], group_name: str) -> float | None:
                     raw = g.get("score")
                     if isinstance(raw, (int, float)):
                         return float(raw)
-    # top-level evidence groups
     for key in ("evidence_groups", "group_contributions", "groups"):
-        blob = payload.get(key) or (signal.get(key) if isinstance(signal, dict) else None)
+        blob = signal.get(key) if isinstance(signal, dict) else None
         if isinstance(blob, list):
             for g in blob:
                 if not isinstance(g, dict):
@@ -119,23 +164,68 @@ def _group_score(payload: dict[str, Any], group_name: str) -> float | None:
     return None
 
 
-def _peer_breadth(payload: dict[str, Any]) -> float | None:
-    for path in (
-        ("sector_context", "peer_breadth"),
-        ("sector_context", "breadth"),
-        ("diagnostics", "peer_breadth"),
-        ("candidate", "sector_breadth"),
-    ):
-        cur: Any = payload
-        ok = True
-        for p in path:
-            if not isinstance(cur, dict) or p not in cur:
-                ok = False
-                break
-            cur = cur[p]
-        if ok and isinstance(cur, (int, float)):
-            return float(cur)
-    fp = payload.get("sub_signal_fingerprint")
+def _group_score(payload: dict[str, Any], group_name: str) -> float | None:
+    signal, _fp, _cand, root = _payload_views(payload)
+    sc = _group_score_from_signal(signal, group_name)
+    if sc is not None:
+        return sc
+    # root-level group maps (rare / fixture)
+    for key in ("evidence_groups", "group_contributions", "groups"):
+        blob = payload.get(key) if isinstance(payload, dict) else None
+        if blob is None and isinstance(root, dict):
+            blob = root.get(key)
+        if isinstance(blob, list):
+            for g in blob:
+                if not isinstance(g, dict):
+                    continue
+                if str(g.get("group") or g.get("name") or "").lower() == group_name.lower():
+                    raw = g.get("score")
+                    if isinstance(raw, (int, float)):
+                        return float(raw)
+    return None
+
+
+def _fingerprint_get(
+    fp: dict[str, Any],
+    key: str,
+    *,
+    aliases: tuple[str, ...] = (),
+) -> float | None:
+    for k in (key, *aliases):
+        if isinstance(fp.get(k), (int, float)):
+            return float(fp[k])
+    return None
+
+
+def _peer_breadth(
+    payload: dict[str, Any],
+    *,
+    fingerprint: dict[str, Any] | None = None,
+    candidate: dict[str, Any] | None = None,
+) -> float | None:
+    signal, fp0, cand0, root = _payload_views(payload)
+    del signal
+    fp = fingerprint if fingerprint is not None else fp0
+    cand = candidate if candidate is not None else cand0
+    for src in (cand, root, payload):
+        if not isinstance(src, dict):
+            continue
+        for path in (
+            ("sector_context", "peer_breadth"),
+            ("sector_context", "breadth"),
+            ("diagnostics", "peer_breadth"),
+            ("sector_breadth",),
+            ("peer_breadth",),
+        ):
+            cur: Any = src
+            ok = True
+            for p in path:
+                if not isinstance(cur, dict) or p not in cur:
+                    ok = False
+                    break
+                cur = cur[p]
+            if ok and isinstance(cur, (int, float)):
+                return float(cur)
     if isinstance(fp, dict):
         for k in ("peer_breadth", "sector_breadth", "breadth_at_signal"):
             if isinstance(fp.get(k), (int, float)):
@@ -153,73 +243,97 @@ def extract_diagnostic_features(
     mctx = mctx or {}
     found: dict[str, float] = {}
     enabled = [f.key for f in spec.enabled_features()]
+    signal, fp, cand, root = _payload_views(payload)
+
+    def fp_val(key: str) -> float | None:
+        aliases: tuple[str, ...] = ()
+        for f in spec.enabled_features():
+            if f.key == key:
+                aliases = tuple(f.aliases)
+                break
+        return _fingerprint_get(fp, key, aliases=aliases)
 
     if spec.diagnostic_id == "mce.screen_display":
         for k in enabled:
             if k in mctx and isinstance(mctx[k], (int, float)):
                 found[k] = float(mctx[k])
-        # payload-embedded market context fallback
-        for nest in ("market_context", "mce", "diagnostics"):
-            blob = payload.get(nest)
-            if not isinstance(blob, dict):
+        # payload-embedded market context (root or window)
+        for nest_src in (payload, root):
+            if not isinstance(nest_src, dict):
                 continue
-            if "regime" in blob and "regime_score" in enabled and "regime_score" not in found:
-                rkey = str(blob.get("regime") or "").strip().upper()
-                found["regime_score"] = _REGIME_MAP.get(rkey, 0.0)
-            for k in enabled:
-                if k in found:
+            for nest in ("market_context", "mce", "diagnostics"):
+                blob = nest_src.get(nest)
+                if not isinstance(blob, dict):
                     continue
-                if isinstance(blob.get(k), (int, float)):
-                    found[k] = float(blob[k])
+                if "regime" in blob and "regime_score" in enabled and "regime_score" not in found:
+                    rkey = str(blob.get("regime") or "").strip().upper()
+                    found["regime_score"] = _REGIME_MAP.get(rkey, 0.0)
+                for k in enabled:
+                    if k in found:
+                        continue
+                    if isinstance(blob.get(k), (int, float)):
+                        found[k] = float(blob[k])
 
     elif spec.diagnostic_id == "sector.peer_context":
-        sc = _group_score(payload, "sector_context")
+        sc = _group_score_from_signal(signal, "sector_context")
+        if sc is None:
+            sc = _group_score(payload, "sector_context")
         if sc is not None and "sector_context_score" in enabled:
             found["sector_context_score"] = sc
-        pb = _peer_breadth(payload)
+        pb = _peer_breadth(payload, fingerprint=fp, candidate=cand)
         if pb is not None and "peer_breadth" in enabled:
             found["peer_breadth"] = pb
 
     elif spec.diagnostic_id == "institutional.accumulation_bag":
-        ig = _group_score(payload, "institutional_flow")
+        ig = _group_score_from_signal(signal, "institutional_flow")
+        if ig is None:
+            ig = _group_score(payload, "institutional_flow")
         if ig is not None and "institutional_flow_score" in enabled:
             found["institutional_flow_score"] = ig
-        fp = payload.get("sub_signal_fingerprint")
-        if isinstance(fp, dict):
-            for k in (
-                "ia_foreign_participation",
-                "ia_domestic_buy_vwap_distance",
-            ):
-                if k in enabled and isinstance(fp.get(k), (int, float)):
-                    found[k] = float(fp[k])
+        for k in (
+            "ia_foreign_participation",
+            "ia_domestic_buy_vwap_distance",
+        ):
+            if k not in enabled:
+                continue
+            v = fp_val(k)
+            if v is not None:
+                found[k] = v
 
     elif spec.diagnostic_id == "company_quality.bag":
-        cq = _group_score(payload, "company_quality_context")
+        cq = _group_score_from_signal(signal, "company_quality_context")
+        if cq is None:
+            cq = _group_score(payload, "company_quality_context")
         if cq is not None and "company_quality_score" in enabled:
             found["company_quality_score"] = cq
-        fp = payload.get("sub_signal_fingerprint")
-        if isinstance(fp, dict):
-            for k in ("cq_valuation_score", "tp_liquidity_score", "tp_volatility_score"):
-                if k in enabled and isinstance(fp.get(k), (int, float)):
-                    found[k] = float(fp[k])
+        for k in ("cq_valuation_score", "tp_liquidity_score", "tp_volatility_score"):
+            if k not in enabled:
+                continue
+            v = fp_val(k)
+            if v is not None:
+                found[k] = v
+        # common live aggregate when axis valuation missing
+        if "company_quality_score" in enabled and "company_quality_score" not in found:
+            agg = _fingerprint_get(fp, "cq_aggregate_score", aliases=("cq_aggregate",))
+            if agg is not None:
+                found["company_quality_score"] = agg
 
     else:
-        # generic: fingerprint + group names matching feature keys
-        fp = payload.get("sub_signal_fingerprint")
-        if isinstance(fp, dict):
-            for k in enabled:
-                if isinstance(fp.get(k), (int, float)):
-                    found[k] = float(fp[k])
+        for k in enabled:
+            v = fp_val(k)
+            if v is not None:
+                found[k] = v
         for k in enabled:
             if k in found:
                 continue
-            gs = _group_score(payload, k)
+            gs = _group_score_from_signal(signal, k)
+            if gs is None:
+                gs = _group_score(payload, k)
             if gs is not None:
                 found[k] = gs
 
     if not found:
         return None
-    # require at least one enabled feature present
     present = set(found) & set(enabled)
     if not present:
         return None

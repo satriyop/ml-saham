@@ -20,6 +20,8 @@ from ml_saham.challenge.panel_pre_open_obs import (
     _pct_points_to_fraction,
     _stock_open_to_0930_return,
 )
+from ml_saham.challenge.diagnostics.registry import load_diagnostic
+from ml_saham.challenge.panel_diagnostic import extract_diagnostic_features
 from ml_saham.challenge.panel_gates import extract_gate_components
 from ml_saham.challenge.panel_signal import extract_signal_components
 from ml_saham.challenge.policies.registry import load_policy
@@ -38,6 +40,7 @@ def test_golden_files_exist_in_repo():
         "open_30m_metrics.json",
         "iev_multi_capture_day.json",
         "risk_adr056_trade_setup.json",
+        "diagnostic_adr056_window.json",
         "README.md",
     )
     for name in required:
@@ -82,6 +85,43 @@ def test_risk_gates_from_window_trade_setup_not_top_level():
     # Root-only empty would previously report all zeros (false clear)
     root_empty = {"trade_setup": {}}
     assert extract_gate_components(root_empty, pol) is None
+
+
+def test_diagnostics_from_window_not_root_level():
+    """Sector / institutional / CQ bags read window signal + fingerprint (ADR-056)."""
+    payload = load_golden("diagnostic_adr056_window.json")
+    assert not payload.get("signal")
+    assert not payload.get("sub_signal_fingerprint")
+
+    inst = extract_diagnostic_features(
+        payload, load_diagnostic("institutional.accumulation_bag")
+    )
+    assert inst is not None
+    assert inst["institutional_flow_score"] == pytest.approx(42.5)
+    assert inst["ia_foreign_participation"] == pytest.approx(0.82)
+
+    sector = extract_diagnostic_features(payload, load_diagnostic("sector.peer_context"))
+    assert sector is not None
+    assert sector["sector_context_score"] == pytest.approx(12.0)
+    # candidate.sector_breadth preferred over fingerprint peer_breadth when both exist
+    assert sector["peer_breadth"] == pytest.approx(0.35)
+
+
+    cq = extract_diagnostic_features(payload, load_diagnostic("company_quality.bag"))
+    assert cq is not None
+    # group score 0 present false → fingerprint aggregate / liquidity
+    assert cq["tp_liquidity_score"] == pytest.approx(0.9)
+    assert cq["company_quality_score"] == pytest.approx(50.0) or cq[
+        "company_quality_score"
+    ] == pytest.approx(0.0)
+
+    # root-only empty → no extract
+    assert (
+        extract_diagnostic_features(
+            {"ticker": "X"}, load_diagnostic("institutional.accumulation_bag")
+        )
+        is None
+    )
 
 
 def test_accum_sleeves_from_golden_adr056_prefers_canonical_window():

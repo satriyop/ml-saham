@@ -11,5 +11,6 @@ do **not** depend on a maintainer DB or only on `build_mvp_fixture`.
 | `open_30m_metrics.json` | `price_path.open_30m` metrics; `*_return_pct` = **percent points** |
 | `iev_multi_capture_day.json` | Multi `collected_at` same date: early / NCP / post-open |
 | `risk_adr056_trade_setup.json` | Nested `features_by_window.*.trade_setup` (gates) |
+| `diagnostic_adr056_window.json` | Nested signal groups + fingerprint for sector/institutional/CQ bags |
 
 Tickers/dates are synthetic or redacted; structure and units match live.
