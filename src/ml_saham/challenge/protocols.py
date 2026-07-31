@@ -17,6 +17,7 @@ ACCUM_PATH_V1 = Protocol(
     min_fold_agree=2 / 3,
     label="excess_vs_ihsg",
     costs="gross_banner",
+    min_folds_for_win=2,  # single post-embargo fold cannot be promotion WIN
 )
 
 # Pre-open session: primary horizon 0 = same-session open→close (not multi-day).
@@ -32,6 +33,7 @@ PRE_OPEN_SESSION_V1 = Protocol(
     min_fold_agree=2 / 3,
     label="open_to_close_excess_vs_ihsg",
     costs="gross_banner",
+    min_folds_for_win=2,
 )
 
 PROTOCOLS: dict[str, Protocol] = {

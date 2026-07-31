@@ -324,8 +324,19 @@ def _verdict(
     baseline_id: str,
     against_id: str,
 ) -> tuple[ChallengeStatus, float | None, float | None, list[str]]:
+    """Policy tournament outcome.
+
+    WIN is promotion-oriented: requires multi-fold agreement. A single OOS fold
+    with an IC edge is **INCONCLUSIVE** (“promising but provisional”), never WIN —
+    thin calendars after embargo often yield only one usable fold.
+    """
+    del baseline_id, against_id  # reserved for future baseline-specific gates
     notes: list[str] = []
-    valid = [f for f in fold_rows if f.get("ic_baseline") is not None and f.get("ic_against") is not None]
+    valid = [
+        f
+        for f in fold_rows
+        if f.get("ic_baseline") is not None and f.get("ic_against") is not None
+    ]
     if not valid:
         return ChallengeStatus.INCONCLUSIVE, None, None, ["no valid folds with IC"]
 
@@ -334,8 +345,12 @@ def _verdict(
     mean_b = sum(base_ics) / len(base_ics)
     mean_a = sum(ag_ics) / len(ag_ics)
 
-    fold_wins = sum(1 for f in valid if float(f["ic_against"]) > float(f["ic_baseline"]) + 1e-12)
+    fold_wins = sum(
+        1 for f in valid if float(f["ic_against"]) > float(f["ic_baseline"]) + 1e-12
+    )
     agree = fold_wins / len(valid)
+    n_valid = len(valid)
+    min_folds = max(1, int(getattr(protocol, "min_folds_for_win", 2) or 2))
 
     # tail: against should not be much worse on bottom-decile mean excess
     tail_ok = True
@@ -347,10 +362,22 @@ def _verdict(
             notes.append("tail proxy worse on at least one fold")
             break
 
-    if mean_a > mean_b + protocol.win_margin and agree >= protocol.min_fold_agree and tail_ok:
+    edge = mean_a > mean_b + protocol.win_margin
+    if edge and n_valid < min_folds:
+        notes.append(
+            f"promising but provisional: only {n_valid} valid OOS fold(s); "
+            f"need ≥{min_folds} for WIN (promotion-ready multi-fold evidence)"
+        )
+        return ChallengeStatus.INCONCLUSIVE, mean_b, mean_a, notes
+    if edge and agree >= protocol.min_fold_agree and tail_ok:
         return ChallengeStatus.WIN, mean_b, mean_a, notes
-    if mean_a > mean_b + protocol.win_margin and agree < protocol.min_fold_agree:
-        notes.append(f"IC edge but fold agree {agree:.0%} < {protocol.min_fold_agree:.0%}")
+    if edge and agree < protocol.min_fold_agree:
+        notes.append(
+            f"IC edge but fold agree {agree:.0%} < {protocol.min_fold_agree:.0%}"
+        )
+        return ChallengeStatus.INCONCLUSIVE, mean_b, mean_a, notes
+    if edge and not tail_ok:
+        notes.append("IC edge but tail gate failed")
         return ChallengeStatus.INCONCLUSIVE, mean_b, mean_a, notes
     if abs(mean_a - mean_b) <= protocol.win_margin:
         notes.append("primary IC within margin")

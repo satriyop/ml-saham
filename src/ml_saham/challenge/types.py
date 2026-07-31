@@ -108,6 +108,8 @@ class Protocol:
     min_fold_agree: float  # fraction of folds challenger must win
     label: str = "excess_vs_ihsg"
     costs: str = "gross_banner"
+    # WIN requires this many valid OOS folds (single-fold edge = provisional only)
+    min_folds_for_win: int = 2
 
 
 @dataclass

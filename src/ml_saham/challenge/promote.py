@@ -147,6 +147,7 @@ def build_promote_md(evidence: dict[str, Any], *, mode: str) -> str:
             "- [ ] I understand ml-saham never writes ai-saham config",
             "- [ ] Protocol + policy_hash match the live question I care about",
             "- [ ] Status is WIN or I accept INCONCLUSIVE/LOSE with explicit reason",
+            "- [ ] WIN rests on ≥2 valid OOS folds (single-fold edge is provisional INCONCLUSIVE only)",
             "- [ ] Fold table / n_train reviewed (not one lucky fold)",
             "- [ ] Gross costs disclaimer accepted",
             "- [ ] Proposed change stated in one sentence (weights / drop factor / scorer)",
