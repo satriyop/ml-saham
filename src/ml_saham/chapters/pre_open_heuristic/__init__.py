@@ -164,12 +164,12 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     import sqlite3
     import numpy as np
 
+    from ml_saham.data.observation_cohort import curriculum_payload_rows
+
     with connect(ctx.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            "SELECT decision_payload_json FROM learning_observations WHERE purpose='PRE_OPEN_AUCTION_DIRECTION' ORDER BY captured_at DESC LIMIT 1000"
+        rows, _ = curriculum_payload_rows(
+            conn, "PRE_OPEN_AUCTION_DIRECTION", limit=1000
         )
-        rows = cursor.fetchall()
         
     if not rows:
         raise ChapterDataError(

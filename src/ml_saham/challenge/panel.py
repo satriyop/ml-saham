@@ -11,12 +11,26 @@ from typing import Any
 
 from ml_saham.challenge.types import PolicySnapshot
 from ml_saham.data.aisaham_read import connect, load_candles, table_exists
-
-ACCUM_PURPOSES = (
-    "ACCUMULATION_DISCOVERY",
-    "ACCUM_PATH",
-    "accum_10d",
+from ml_saham.data.observation_cohort import (
+    ACCUM_PURPOSE_LIKE,
+    ACCUM_PURPOSES,
+    fetch_accum_observation_raw,
+    list_compatibility_cohorts,
+    resolve_compatibility_id,
 )
+
+# Re-export for callers / tests that import from challenge.panel
+__all__ = [
+    "ACCUM_PURPOSES",
+    "PanelRow",
+    "build_forward_excess",
+    "build_panel",
+    "extract_components",
+    "fetch_accum_observation_raw",
+    "list_accum_compatibility_cohorts",
+    "load_observation_rows",
+    "resolve_accum_compatibility_id",
+]
 
 
 @dataclass
@@ -250,54 +264,15 @@ def extract_components(payload: dict[str, Any], policy: PolicySnapshot) -> dict[
     return {k: found[k] for k in enabled_keys}
 
 
-def _obs_columns(conn: sqlite3.Connection) -> set[str]:
-    if not table_exists(conn, "learning_observations"):
-        return set()
-    return {
-        r[1]
-        for r in conn.execute("PRAGMA table_info(learning_observations)").fetchall()
-    }
-
-
 def list_accum_compatibility_cohorts(
     conn: sqlite3.Connection,
     *,
     purposes: tuple[str, ...] = ACCUM_PURPOSES,
 ) -> list[tuple[str, int, str | None]]:
-    """Return ``(compatibility_id, n_rows, max_captured_at)`` for ACCUM purposes.
-
-    Empty string is used when the column is null/blank. Returns ``[]`` when the
-    table or column is absent.
-    """
-    cols = _obs_columns(conn)
-    if "decision_payload_json" not in cols or "compatibility_id" not in cols:
-        return []
-    purpose_filter = ",".join("?" * len(purposes))
-    sql = (
-        "SELECT COALESCE(NULLIF(TRIM(compatibility_id), ''), '') AS cid, "
-        "COUNT(*) AS n, MAX(captured_at) AS max_cap "
-        "FROM learning_observations "
-        f"WHERE purpose IN ({purpose_filter}) "
-        "GROUP BY cid ORDER BY n DESC, max_cap DESC"
+    """ACCUM cohorts — see ``ml_saham.data.observation_cohort``."""
+    return list_compatibility_cohorts(
+        conn, purposes=purposes, purpose_like=ACCUM_PURPOSE_LIKE
     )
-    rows = conn.execute(sql, purposes).fetchall()
-    if not rows:
-        sql_like = (
-            "SELECT COALESCE(NULLIF(TRIM(compatibility_id), ''), '') AS cid, "
-            "COUNT(*) AS n, MAX(captured_at) AS max_cap "
-            "FROM learning_observations "
-            "WHERE purpose LIKE '%ACCUM%' OR purpose LIKE '%accum%' "
-            "GROUP BY cid ORDER BY n DESC, max_cap DESC"
-        )
-        rows = conn.execute(sql_like).fetchall()
-    out: list[tuple[str, int, str | None]] = []
-    for r in rows:
-        if isinstance(r, sqlite3.Row):
-            cid, n, max_cap = r["cid"], int(r["n"]), r["max_cap"]
-        else:
-            cid, n, max_cap = str(r[0] or ""), int(r[1]), r[2]
-        out.append((str(cid or ""), n, str(max_cap) if max_cap is not None else None))
-    return out
 
 
 def resolve_accum_compatibility_id(
@@ -306,145 +281,14 @@ def resolve_accum_compatibility_id(
     preferred: str | None = None,
     purposes: tuple[str, ...] = ACCUM_PURPOSES,
 ) -> tuple[str | None, list[str]]:
-    """Pick exactly one ACCUM ``compatibility_id`` cohort (never mix rulebooks).
-
-    Returns ``(selected_id, notes)``:
-    - ``selected_id is None`` and no cohort notes → column missing / legacy fixture
-      (no filter; all purpose-matching rows allowed).
-    - ``selected_id`` is a string (may be ``""`` for untagged rows) → filter to that
-      cohort only.
-    - When multiple cohorts exist and ``preferred`` is unset: auto-select the
-      **largest** cohort (ties → newest ``max(captured_at)``). Always note the
-      choice and excluded cohorts.
-
-    Ideal (ai-saham readiness discipline): one semantic compatibility cohort per
-    evaluation. Mixing is like pooling exam scores under different rulebooks.
-    """
-    notes: list[str] = []
-    cols = _obs_columns(conn)
-    if "compatibility_id" not in cols:
-        return None, notes
-
-    cohorts = list_accum_compatibility_cohorts(conn, purposes=purposes)
-    if not cohorts:
-        notes.append("compatibility_id column present but no ACCUM rows")
-        return None, notes
-
-    if preferred is not None:
-        pref = preferred.strip()
-        match = next((c for c in cohorts if c[0] == pref), None)
-        if match is None:
-            avail = ", ".join(
-                f"{(c[0][:20] + '…') if len(c[0]) > 20 else (c[0] or '(untagged)')} n={c[1]}"
-                for c in cohorts[:6]
-            )
-            notes.append(
-                f"compatibility_id={pref!r} not found among ACCUM cohorts "
-                f"(available: {avail or 'none'})"
-            )
-            return pref, notes  # caller will get zero rows
-        notes.append(
-            f"compatibility_id={pref or '(untagged)'} (explicit) n={match[1]}"
-        )
-        if len(cohorts) > 1:
-            excluded = sum(c[1] for c in cohorts if c[0] != pref)
-            notes.append(
-                f"excluded {len(cohorts) - 1} other cohort(s) totaling n={excluded}"
-            )
-        return pref, notes
-
-    if len(cohorts) == 1:
-        cid, n, _ = cohorts[0]
-        label = cid or "(untagged)"
-        notes.append(f"compatibility_id={label} (single cohort) n={n}")
-        return cid, notes
-
-    # Multiple cohorts: never mix. Prefer largest n (challenge needs sample power).
-    cid, n, _ = cohorts[0]
-    others = ", ".join(
-        f"{(c[0][:16] + '…') if len(c[0]) > 16 else (c[0] or '(untagged)')} n={c[1]}"
-        for c in cohorts[1:6]
+    """Pick exactly one ACCUM compatibility cohort (never mix rulebooks)."""
+    return resolve_compatibility_id(
+        conn,
+        purposes=purposes,
+        purpose_like=ACCUM_PURPOSE_LIKE,
+        preferred=preferred,
+        family="ACCUM",
     )
-    more = f" (+{len(cohorts) - 6} more)" if len(cohorts) > 6 else ""
-    notes.append(
-        f"compatibility_id auto-selected largest cohort "
-        f"{(cid[:24] + '…') if len(cid) > 24 else (cid or '(untagged)')} n={n} "
-        f"of {len(cohorts)} cohorts; excluded: {others}{more}"
-    )
-    return cid, notes
-
-
-def fetch_accum_observation_raw(
-    conn: sqlite3.Connection,
-    *,
-    compatibility_id: str | None = None,
-    preferred_compatibility_id: str | None = None,
-    select: str = "purpose, captured_at, decision_payload_json",
-) -> tuple[list[Any], list[str], str | None]:
-    """Fetch ACCUM learning_observations under a single compatibility cohort.
-
-    ``compatibility_id``:
-      - omitted / use resolver when you pass only ``preferred_compatibility_id``
-      - pass the *resolved* id from ``resolve_accum_compatibility_id`` when known
-
-    Returns ``(rows, notes, resolved_id)``. ``resolved_id is None`` means no
-    cohort filter (legacy schema without the column).
-    """
-    notes: list[str] = []
-    cols = _obs_columns(conn)
-    if "decision_payload_json" not in cols:
-        return [], ["learning_observations.decision_payload_json missing"], None
-
-    resolved = compatibility_id
-    if resolved is None and "compatibility_id" in cols:
-        resolved, cnotes = resolve_accum_compatibility_id(
-            conn, preferred=preferred_compatibility_id
-        )
-        notes.extend(cnotes)
-    elif resolved is not None:
-        notes.append(
-            f"compatibility_id={resolved or '(untagged)'} (caller-selected)"
-        )
-    elif preferred_compatibility_id is not None and "compatibility_id" not in cols:
-        notes.append(
-            "compatibility_id preferred but column missing — loading all ACCUM rows"
-        )
-
-    purpose_filter = ",".join("?" * len(ACCUM_PURPOSES))
-    where = f"purpose IN ({purpose_filter})"
-    params: list[Any] = list(ACCUM_PURPOSES)
-    if resolved is not None and "compatibility_id" in cols:
-        if resolved == "":
-            where += (
-                " AND (compatibility_id IS NULL OR TRIM(compatibility_id) = '')"
-            )
-        else:
-            where += " AND compatibility_id = ?"
-            params.append(resolved)
-
-    sql = (
-        f"SELECT {select} FROM learning_observations "
-        f"WHERE {where} ORDER BY captured_at ASC"
-    )
-    rows = conn.execute(sql, params).fetchall()
-    if not rows:
-        # Fallback purpose LIKE — still respect cohort filter.
-        where_like = "(purpose LIKE '%ACCUM%' OR purpose LIKE '%accum%')"
-        params_like: list[Any] = []
-        if resolved is not None and "compatibility_id" in cols:
-            if resolved == "":
-                where_like += (
-                    " AND (compatibility_id IS NULL OR TRIM(compatibility_id) = '')"
-                )
-            else:
-                where_like += " AND compatibility_id = ?"
-                params_like.append(resolved)
-        rows = conn.execute(
-            f"SELECT {select} FROM learning_observations "
-            f"WHERE {where_like} ORDER BY captured_at ASC",
-            params_like,
-        ).fetchall()
-    return rows, notes, resolved
 
 
 def load_observation_rows(

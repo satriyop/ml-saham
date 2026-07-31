@@ -51,6 +51,13 @@ jobs:
       - name: ADR-002 health + promote-packet tests
         run: pytest tests/test_challenge_health.py tests/test_challenge_promote.py -q --tb=short
 
+      - name: Observation cohort + label SSOT guards
+        run: >
+          pytest tests/test_observation_cohort_guards.py
+          tests/test_challenge_compatibility_cohort.py
+          tests/test_forward_labels_corpus.py
+          -q --tb=short -m "not live_db"
+
       - name: Challenge CLI smoke on fixture
         run: |
           python - <<'PY'

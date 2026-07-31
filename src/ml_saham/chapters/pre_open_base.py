@@ -16,14 +16,16 @@ def fetch_and_evaluate_pre_open(
     feature_keys: list[str],
     mode_name: str,
 ) -> dict:
+    from ml_saham.data.observation_cohort import curriculum_payload_rows
+
     with connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        
-        # 1. Fetch pre-open observations
-        cursor = conn.execute(
-            "SELECT decision_payload_json, captured_at FROM learning_observations WHERE purpose='PRE_OPEN_AUCTION_DIRECTION' ORDER BY captured_at DESC LIMIT 2000"
+        # 1. Fetch pre-open observations (single compatibility cohort)
+        obs_rows, _ = curriculum_payload_rows(
+            conn,
+            "PRE_OPEN_AUCTION_DIRECTION",
+            limit=2000,
+            include_captured_at=True,
         )
-        obs_rows = cursor.fetchall()
 
         if not obs_rows:
             raise ChapterDataError("learning_observations untuk PRE_OPEN kosong.")

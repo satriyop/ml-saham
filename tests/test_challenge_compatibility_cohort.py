@@ -7,11 +7,11 @@ import sqlite3
 from pathlib import Path
 
 from ml_saham.challenge.panel import (
-    fetch_accum_observation_raw,
     list_accum_compatibility_cohorts,
     resolve_accum_compatibility_id,
 )
 from ml_saham.data.aisaham_read import connect
+from ml_saham.data.observation_cohort import fetch_accum_observation_raw
 
 
 def _make_db(path: Path) -> Path:

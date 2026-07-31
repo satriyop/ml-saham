@@ -416,6 +416,7 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                 id INTEGER PRIMARY KEY,
                 observation_id TEXT,
                 purpose TEXT NOT NULL,
+                compatibility_id TEXT,
                 captured_at TEXT NOT NULL,
                 decision_payload_json TEXT NOT NULL
             );
@@ -575,11 +576,54 @@ def build_mvp_fixture(path: Path, *, with_hard: bool = True, min_bars: int = 80)
                         "sub_signal_fingerprint": fingerprint,
                     }
                     oid = f"obs-{t}-{d}-{purpose}"
-                    obs_rows.append((oid, purpose, captured, json.dumps(payload)))
+                    # Large primary cohort for dual-cohort discipline tests.
+                    obs_rows.append(
+                        (
+                            oid,
+                            purpose,
+                            "sha256:fixture_cohort_primary",
+                            captured,
+                            json.dumps(payload),
+                        )
+                    )
+        # Small secondary ACCUM cohort (different rulebook) — must not mix into panels.
+        for si, t in enumerate(_STOCKS[:3]):
+            d = (start + timedelta(days=min_bars - 3)).isoformat()
+            payload_small = {
+                "ticker": t,
+                "snapshot_date": d,
+                "session_date": d,
+                "purpose": "ACCUMULATION_DISCOVERY",
+                "signal": {
+                    "raw_score": 99.0,
+                    "flow_evidence": {
+                        "flow_signals": [
+                            {"key": "cons", "score": 99.0},
+                            {"key": "streak", "score": 99.0},
+                            {"key": "vwap", "score": 99.0},
+                        ]
+                    },
+                },
+                "sub_signal_fingerprint": {
+                    "rsi_at_signal": 99.0,
+                    "sector_breadth": 0.99,
+                },
+                "trade_setup": {"action": "ALLOW", "blocking_gates": []},
+            }
+            obs_rows.append(
+                (
+                    f"obs-small-{t}-{d}-ACCUM",
+                    "ACCUMULATION_DISCOVERY",
+                    "sha256:fixture_cohort_secondary",
+                    f"{d}T18:00:00",
+                    json.dumps(payload_small),
+                )
+            )
         conn.executemany(
             "INSERT INTO learning_observations "
-            "(observation_id, purpose, captured_at, decision_payload_json) "
-            "VALUES (?,?,?,?)",
+            "(observation_id, purpose, compatibility_id, captured_at, "
+            "decision_payload_json) "
+            "VALUES (?,?,?,?,?)",
             obs_rows,
         )
         conn.commit()

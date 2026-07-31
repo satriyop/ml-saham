@@ -106,12 +106,12 @@ def run_compare(ctx: ChapterContext) -> DemoResult:
     from ml_saham.data.aisaham_read import connect
     from ml_saham.chapters.errors import ChapterDataError
 
+    from ml_saham.data.observation_cohort import curriculum_payload_rows
+
     with connect(ctx.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            "SELECT decision_payload_json FROM learning_observations WHERE purpose='ACCUMULATION_DISCOVERY' ORDER BY captured_at DESC LIMIT 1000"
+        rows, _cohort_notes = curriculum_payload_rows(
+            conn, "ACCUMULATION_DISCOVERY", limit=1000
         )
-        rows = cursor.fetchall()
 
     if not rows:
         raise ChapterDataError(

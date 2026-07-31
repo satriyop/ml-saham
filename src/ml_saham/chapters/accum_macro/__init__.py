@@ -21,12 +21,10 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
     raise NotImplementedError("Gunakan run_compare.")
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
+    from ml_saham.data.observation_cohort import curriculum_payload_rows
+
     with connect(ctx.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            "SELECT decision_payload_json FROM learning_observations WHERE purpose='ACCUMULATION_DISCOVERY' ORDER BY captured_at DESC LIMIT 1000"
-        )
-        rows = cursor.fetchall()
+        rows, _ = curriculum_payload_rows(conn, "ACCUMULATION_DISCOVERY", limit=1000)
 
     if not rows:
         raise ChapterDataError("learning_observations untuk ACCUMULATION_DISCOVERY kosong.")

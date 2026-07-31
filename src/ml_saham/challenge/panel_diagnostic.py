@@ -8,11 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ml_saham.challenge.panel import (
-    build_forward_excess,
-    extract_components,
-    fetch_accum_observation_raw,
-)
+from ml_saham.challenge.panel import build_forward_excess, extract_components
+from ml_saham.data.observation_cohort import fetch_accum_observation_raw
 from ml_saham.challenge.policies.registry import load_policy
 from ml_saham.challenge.scorers import score_production
 from ml_saham.challenge.types import DiagnosticSpec, PolicySnapshot

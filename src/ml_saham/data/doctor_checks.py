@@ -439,6 +439,57 @@ def _integrity_checks(conn, *, deep: bool) -> list[CheckItem]:
             )
         )
 
+    # Multi compatibility_id: challenge/curriculum load one cohort (never mix).
+    try:
+        from ml_saham.data.observation_cohort import (
+            ACCUM_PURPOSE_LIKE,
+            ACCUM_PURPOSES,
+            PRE_OPEN_PURPOSE_LIKE,
+            PRE_OPEN_PURPOSES,
+            list_compatibility_cohorts,
+        )
+
+        for family, purposes, like in (
+            ("accum", ACCUM_PURPOSES, ACCUM_PURPOSE_LIKE),
+            ("pre_open", PRE_OPEN_PURPOSES, PRE_OPEN_PURPOSE_LIKE),
+        ):
+            cohorts = list_compatibility_cohorts(
+                conn, purposes=purposes, purpose_like=like
+            )
+            if len(cohorts) > 1:
+                top_n = cohorts[0][1]
+                other_n = sum(c[1] for c in cohorts[1:])
+                items.append(
+                    CheckItem(
+                        f"compatibility_cohorts_{family}",
+                        "partial",
+                        f"{len(cohorts)} {family} compatibility_id cohorts; "
+                        f"challenge uses largest n={top_n}, excludes n={other_n} "
+                        f"(never mixes rulebooks)",
+                        hard=False,
+                    )
+                )
+            elif len(cohorts) == 1:
+                cid, n, _ = cohorts[0]
+                items.append(
+                    CheckItem(
+                        f"compatibility_cohorts_{family}",
+                        "ok",
+                        f"single {family} cohort n={n} "
+                        f"id={(cid[:20] + '…') if len(cid) > 20 else (cid or '(untagged)')}",
+                        hard=False,
+                    )
+                )
+    except Exception as exc:  # pragma: no cover — defensive
+        items.append(
+            CheckItem(
+                "compatibility_cohorts",
+                "partial",
+                f"could not inspect cohorts: {exc}",
+                hard=False,
+            )
+        )
+
     # learning_outcome_labels (canonical corpus labels — not signal_forward_labels)
     if table_exists(conn, "learning_outcome_labels"):
         lol_cols = {

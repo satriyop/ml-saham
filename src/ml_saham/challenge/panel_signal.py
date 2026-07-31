@@ -12,12 +12,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from ml_saham.challenge.panel import (
-    PanelRow,
-    _pick_window_blob,
-    build_forward_excess,
-    fetch_accum_observation_raw,
-)
+from ml_saham.challenge.panel import PanelRow, _pick_window_blob, build_forward_excess
+from ml_saham.data.observation_cohort import fetch_accum_observation_raw
 from ml_saham.challenge.types import PolicySnapshot
 from ml_saham.data.aisaham_read import connect, table_exists
 

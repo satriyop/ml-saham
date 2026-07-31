@@ -38,3 +38,6 @@ packages = ["src/ml_saham"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "."]
+markers = [
+    "live_db: optional tests that need a real ai-saham SQLite (ML_SAHAM_DB)",
+]

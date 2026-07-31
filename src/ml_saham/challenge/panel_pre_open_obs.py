@@ -11,8 +11,12 @@ from ml_saham.challenge.panel import PanelRow
 from ml_saham.challenge.panel_iev import _open_close_excess
 from ml_saham.challenge.types import PolicySnapshot
 from ml_saham.data.aisaham_read import connect, table_exists
+from ml_saham.data.observation_cohort import (
+    PRE_OPEN_PURPOSES,
+    fetch_pre_open_observation_raw,
+)
 
-PRE_OPEN_PURPOSE = "PRE_OPEN_AUCTION_DIRECTION"
+PRE_OPEN_PURPOSE = PRE_OPEN_PURPOSES[0]
 MIN_FEATURES_PRESENT = 3
 
 # payload key / alias → canonical component key (excluding production_raw_score)
@@ -189,8 +193,9 @@ def build_pre_open_obs_panel(
     policy: PolicySnapshot,
     *,
     primary_horizon: int = 0,
+    compatibility_id: str | None = None,
 ) -> tuple[list[PanelRow], list[str]]:
-    """Labeled panel from PRE_OPEN observations."""
+    """Labeled panel from PRE_OPEN observations (single compatibility cohort)."""
     notes: list[str] = []
     path = Path(db_path)
     with connect(path) as conn:
@@ -208,19 +213,14 @@ def build_pre_open_obs_panel(
         if has_oid:
             select = "observation_id, " + select
 
-        rows_db = conn.execute(
-            f"SELECT {select} FROM learning_observations "
-            f"WHERE purpose = ? ORDER BY captured_at ASC",
-            (PRE_OPEN_PURPOSE,),
-        ).fetchall()
+        rows_db, cohort_notes, _ = fetch_pre_open_observation_raw(
+            conn,
+            preferred_compatibility_id=compatibility_id,
+            select=select,
+        )
+        notes.extend(cohort_notes)
         if not rows_db:
-            rows_db = conn.execute(
-                f"SELECT {select} FROM learning_observations "
-                "WHERE purpose LIKE '%PRE_OPEN%' OR purpose LIKE '%pre_open%' "
-                "ORDER BY captured_at ASC"
-            ).fetchall()
-        if not rows_db:
-            return [], [
+            return [], notes + [
                 "no PRE_OPEN_AUCTION_DIRECTION observations "
                 "(run ai-saham pre-open captures to densify)"
             ]

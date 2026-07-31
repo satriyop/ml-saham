@@ -98,6 +98,14 @@ Hard rules (unchanged): **no** ai-saham Python imports · **no** scrapers · **n
 | Corpus path labels | `learning_outcome_labels` | Not default challenge SSOT |
 | Book evaluate rows | `learning_evaluations` | **Ignore for product authority** (legacy / soft doctor only) |
 
+### Compatibility cohort discipline
+
+- ai-saham stamps `learning_observations.compatibility_id` when material config forks.
+- **ml-saham never mixes** multiple `compatibility_id` values in one panel or curriculum load.
+- Shared helper: `src/ml_saham/data/observation_cohort.py` (challenge + curriculum must use it; no ad-hoc `SELECT … FROM learning_observations` in chapters/challenge).
+- Default selection: **largest** cohort; override with explicit id when auditing a thin new rulebook.
+- Doctor soft-flags multi-cohort presence; retired tables `candidate_observations` / `signal_forward_labels` are never hard SSOT.
+
 Horizons **3 / 10 / 20** (primary **10**) align with ai-saham ADR-056 **by number**.  
 Challenge excess and corpus SUCCESS/FAILURE labels remain **different products** unless a protocol explicitly says otherwise.
 

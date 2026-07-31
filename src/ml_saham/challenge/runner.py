@@ -137,15 +137,15 @@ def _vet_for_pre_open_obs(db_path: Path, protocol: Protocol) -> tuple[bool, list
             return False, ["IHSG candles required for open-path excess labels"]
         if not table_exists(conn, "learning_observations"):
             return False, ["learning_observations missing (need PRE_OPEN captures)"]
-        n = int(
-            conn.execute(
-                "SELECT COUNT(*) AS n FROM learning_observations "
-                "WHERE purpose = 'PRE_OPEN_AUCTION_DIRECTION' "
-                "OR purpose LIKE '%PRE_OPEN%'"
-            ).fetchone()["n"]
+        from ml_saham.data.observation_cohort import fetch_pre_open_observation_raw
+
+        rows, cohort_notes, _ = fetch_pre_open_observation_raw(
+            conn, select="purpose"
         )
+        notes.extend(cohort_notes)
+        n = len(rows)
         if n == 0:
-            return False, [
+            return False, notes + [
                 "no PRE_OPEN_AUCTION_DIRECTION rows in learning_observations "
                 "(product ready; wait for denser ai-saham captures)"
             ]
