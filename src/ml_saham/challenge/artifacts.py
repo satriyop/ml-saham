@@ -9,6 +9,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from ml_saham.artifacts.writer import resolve_artifacts_root
+from ml_saham.challenge.champion import is_champion_against
 from ml_saham.challenge.types import (
     BatchDiagnosticResult,
     BatchFactorResult,
@@ -21,6 +22,64 @@ from ml_saham.challenge.types import (
 )
 
 JAKARTA = ZoneInfo("Asia/Jakarta")
+
+# Challenge product artifact / promote-reopen contract (integer, not coerced).
+# Distinct from curriculum pack SCHEMA_VERSION in ml_saham.artifacts.writer.
+CHALLENGE_ARTIFACT_SCHEMA_VERSION = 2
+
+
+def challenge_result_export_payload(
+    result: ChallengeResult,
+    *,
+    mode: str | None = None,
+    artifact_dir: Path | str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a promote-eligible challenge/champion JSON export (schema stamped).
+
+    Used by CLI ``--export-json``, health champion packs, and tests. Always
+    emits integer ``schema_version`` matching writer manifests.
+    """
+    resolved_mode = mode
+    if resolved_mode is None:
+        resolved_mode = (
+            "champion" if is_champion_against(result.against_id) else "tune"
+        )
+    art = artifact_dir
+    if art is None and result.artifact_dir is not None:
+        art = result.artifact_dir
+    payload: dict[str, Any] = {
+        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+        "mode": resolved_mode,
+        "status": result.status.value,
+        "policy_id": result.policy_id,
+        "protocol_id": result.protocol_id,
+        "policy_hash": result.policy_hash,
+        "observation_compatibility_id": result.observation_compatibility_id,
+        "production_snapshot_id": result.production_snapshot_id,
+        "production_snapshot_digest": result.production_snapshot_digest,
+        "production_policy_id": result.production_policy_id,
+        "production_policy_version": result.production_policy_version,
+        "production_semantic_engine_contract_id": (
+            result.production_semantic_engine_contract_id
+        ),
+        "challenge_adapter_id": result.challenge_adapter_id,
+        "challenge_adapter_version": result.challenge_adapter_version,
+        "baseline_id": result.baseline_id,
+        "against_id": result.against_id,
+        "n_rows": result.n_rows,
+        "primary_horizon": result.primary_horizon,
+        "primary_ic_baseline": result.primary_ic_baseline,
+        "primary_ic_against": result.primary_ic_against,
+        "horizon_metrics": result.horizon_metrics,
+        "fold_metrics": result.fold_metrics,
+        "weights": result.weights,
+        "notes": result.notes,
+        "artifact_dir": str(art) if art is not None else None,
+    }
+    if extra:
+        payload.update(extra)
+    return payload
 
 
 def write_challenge_artifact(
@@ -36,7 +95,7 @@ def write_challenge_artifact(
     out.mkdir(parents=True, exist_ok=True)
 
     manifest = {
-        "schema_version": 2,
+        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_run",
         "track": "policy_tournament",
         "policy_id": result.policy_id,
@@ -102,7 +161,7 @@ def write_factor_artifact(
     )
     out.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "schema_version": 2,
+        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_factor",
         "track": "factor_validity",
         "policy_id": result.policy_id,
@@ -168,7 +227,7 @@ def write_batch_factor_artifact(
         for r in result.results
     ]
     manifest = {
-        "schema_version": 2,
+        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_factor_batch",
         "track": "factor_validity_batch",
         "policy_id": result.policy_id,
@@ -223,7 +282,7 @@ def write_diagnostic_artifact(
     )
     out.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "schema_version": 2,
+        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_diagnostic",
         "track": "diagnostic_validity",
         "diagnostic_id": result.diagnostic_id,
@@ -289,7 +348,7 @@ def write_batch_diagnostic_artifact(
         for r in result.results
     ]
     manifest = {
-        "schema_version": 2,
+        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_diagnostic_batch",
         "track": "diagnostic_validity_batch",
         "diagnostic_id": result.diagnostic_id,
@@ -354,7 +413,7 @@ def write_engine_artifact(
         for r in result.rows
     ]
     manifest = {
-        "schema_version": 2,
+        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_engine",
         "engine_id": result.engine_id,
         "scenario_filter": result.scenario_filter,
@@ -400,7 +459,7 @@ def write_health_artifact(
     out = root / "challenge" / "health" / ts
     out.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "schema_version": 2,
+        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_health",
         "engine_id": result.engine_id,
         "scenario_filter": result.scenario_filter,
@@ -449,7 +508,7 @@ def write_promote_packet(
     out = root / "challenge" / "promote" / safe / ts
     out.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "schema_version": 2,
+        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_promote_packet",
         "policy_id": result.policy_id,
         **{

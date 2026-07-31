@@ -5,8 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ml_saham.challenge.artifacts import write_health_artifact
-from ml_saham.challenge.champion import is_champion_against
+from ml_saham.challenge.artifacts import (
+    challenge_result_export_payload,
+    write_health_artifact,
+)
 from ml_saham.challenge.diagnostic_validity import run_diagnostic_health
 from ml_saham.challenge.engines import (
     normalize_scenario,
@@ -14,10 +16,7 @@ from ml_saham.challenge.engines import (
     run_engine_portfolio,
 )
 from ml_saham.challenge.factor_validity import run_factor_challenge_batch
-from ml_saham.challenge.runner import (
-    require_production_compatibility_id,
-    run_policy_challenge,
-)
+from ml_saham.challenge.runner import run_policy_challenge
 from ml_saham.challenge.types import ChallengeResult, HealthReportResult
 
 ACCUM_POLICY = "screener.accum.score_weights"
@@ -70,33 +69,8 @@ def _engine_payload(eng) -> dict[str, Any]:
 
 
 def _challenge_payload(result: ChallengeResult) -> dict[str, Any]:
-    return {
-        "mode": "champion" if is_champion_against(result.against_id) else "tune",
-        "status": result.status.value,
-        "policy_id": result.policy_id,
-        "protocol_id": result.protocol_id,
-        "policy_hash": result.policy_hash,
-        "baseline_id": result.baseline_id,
-        "against_id": result.against_id,
-        "n_rows": result.n_rows,
-        "primary_horizon": result.primary_horizon,
-        "primary_ic_baseline": result.primary_ic_baseline,
-        "primary_ic_against": result.primary_ic_against,
-        "horizon_metrics": result.horizon_metrics,
-        "fold_metrics": result.fold_metrics,
-        "weights": result.weights,
-        "notes": result.notes,
-        "observation_compatibility_id": result.observation_compatibility_id,
-        "production_snapshot_id": result.production_snapshot_id,
-        "production_snapshot_digest": result.production_snapshot_digest,
-        "production_policy_id": result.production_policy_id,
-        "production_policy_version": result.production_policy_version,
-        "production_semantic_engine_contract_id": (
-            result.production_semantic_engine_contract_id
-        ),
-        "challenge_adapter_id": result.challenge_adapter_id,
-        "challenge_adapter_version": result.challenge_adapter_version,
-    }
+    """Champion/tune export for health packs — same schema as CLI promote exports."""
+    return challenge_result_export_payload(result)
 
 
 def _factors_payload(batch) -> dict[str, Any]:
@@ -424,25 +398,16 @@ def build_health_report(
     artifacts_dir: Path | None = None,
     compatibility_id: str | None = None,
 ) -> HealthReportResult:
-    """Run health recipe; always prefer honest BLOCKED over crash."""
+    """Run health recipe; always prefer honest BLOCKED over crash.
+
+    ``compatibility_id`` is forwarded to child runners. Each production-facing
+    policy validates its own purpose-family population identity (ACCUM vs
+    PRE_OPEN vs IEV batch) — health does not treat one id as universal
+    verified provenance.
+    """
     path = Path(db_path)
     notes: list[str] = []
     sc = normalize_scenario(scenario)
-
-    explicit_id, missing_note = require_production_compatibility_id(compatibility_id)
-    if missing_note is not None:
-        return HealthReportResult(
-            engine_id=engine_id,
-            scenario_filter=sc,
-            with_champion=with_champion,
-            with_factors=with_factors,
-            with_diagnostics=with_diagnostics,
-            summary_md=f"# Health blocked\n\n{missing_note}\n",
-            lines=[f"BLOCKED_POLICY: {missing_note}"],
-            notes=[missing_note],
-            resolve_error=missing_note,
-        )
-    compatibility_id = explicit_id
 
     # Validate scenario early via resolve (engine still runs and may error too)
     _pairs, resolve_err = resolve_engine_policies(engine_id, sc)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -161,6 +162,9 @@ def test_cli_champion(fixture_db: Path, tmp_path: Path):
         text = out_json.read_text(encoding="utf-8")
         assert "lgbm_reweight" in text
         assert "production" in text
+        payload = json.loads(text)
+        assert payload.get("schema_version") == 2
+        assert type(payload["schema_version"]) is int
 
 
 def test_feature_keys_accum():

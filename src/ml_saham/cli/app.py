@@ -1263,35 +1263,10 @@ def challenge_champion_cmd(
         console.print(line)
 
     if export_json:
+        from ml_saham.challenge.artifacts import challenge_result_export_payload
+
         export_json.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "mode": "champion",
-            "status": result.status.value,
-            "policy_id": result.policy_id,
-            "protocol_id": result.protocol_id,
-            "policy_hash": result.policy_hash,
-            "observation_compatibility_id": result.observation_compatibility_id,
-            "production_snapshot_id": result.production_snapshot_id,
-            "production_snapshot_digest": result.production_snapshot_digest,
-            "production_policy_id": result.production_policy_id,
-            "production_policy_version": result.production_policy_version,
-            "production_semantic_engine_contract_id": (
-                result.production_semantic_engine_contract_id
-            ),
-            "challenge_adapter_id": result.challenge_adapter_id,
-            "challenge_adapter_version": result.challenge_adapter_version,
-            "baseline_id": result.baseline_id,
-            "against_id": result.against_id,
-            "n_rows": result.n_rows,
-            "primary_horizon": result.primary_horizon,
-            "primary_ic_baseline": result.primary_ic_baseline,
-            "primary_ic_against": result.primary_ic_against,
-            "horizon_metrics": result.horizon_metrics,
-            "fold_metrics": result.fold_metrics,
-            "weights": result.weights,
-            "notes": result.notes,
-            "artifact_dir": str(result.artifact_dir) if result.artifact_dir else None,
-        }
+        payload = challenge_result_export_payload(result, mode="champion")
         export_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         console.print(f"\n[green]Saved JSON to {export_json}[/green]")
     if export_md:
@@ -1361,34 +1336,10 @@ def challenge_run_cmd(
         console.print(line)
 
     if export_json:
+        from ml_saham.challenge.artifacts import challenge_result_export_payload
+
         export_json.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "status": result.status.value,
-            "policy_id": result.policy_id,
-            "protocol_id": result.protocol_id,
-            "policy_hash": result.policy_hash,
-            "observation_compatibility_id": result.observation_compatibility_id,
-            "production_snapshot_id": result.production_snapshot_id,
-            "production_snapshot_digest": result.production_snapshot_digest,
-            "production_policy_id": result.production_policy_id,
-            "production_policy_version": result.production_policy_version,
-            "production_semantic_engine_contract_id": (
-                result.production_semantic_engine_contract_id
-            ),
-            "challenge_adapter_id": result.challenge_adapter_id,
-            "challenge_adapter_version": result.challenge_adapter_version,
-            "baseline_id": result.baseline_id,
-            "against_id": result.against_id,
-            "n_rows": result.n_rows,
-            "primary_horizon": result.primary_horizon,
-            "primary_ic_baseline": result.primary_ic_baseline,
-            "primary_ic_against": result.primary_ic_against,
-            "horizon_metrics": result.horizon_metrics,
-            "fold_metrics": result.fold_metrics,
-            "weights": result.weights,
-            "notes": result.notes,
-            "artifact_dir": str(result.artifact_dir) if result.artifact_dir else None,
-        }
+        payload = challenge_result_export_payload(result)
         export_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         console.print(f"\n[green]Saved JSON to {export_json}[/green]")
     if export_md:

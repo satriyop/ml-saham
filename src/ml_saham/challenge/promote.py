@@ -7,7 +7,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ml_saham.challenge.artifacts import write_promote_packet
+from ml_saham.challenge.artifacts import (
+    CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+    write_promote_packet,
+)
 from ml_saham.challenge.champion import is_champion_against
 from ml_saham.challenge.policies.registry import load_policy_adapter
 from ml_saham.challenge.production_policy_snapshots import (
@@ -37,8 +40,8 @@ _VERIFIED_PRODUCTION_IDENTITY = (
     "challenge_adapter_version",
 )
 
-# Challenge artifact writers emit schema_version: 2 (manifests / promote packs).
-SUPPORTED_ARTIFACT_SCHEMA_VERSIONS = frozenset({2})
+# Exact integer contract; writers stamp CHALLENGE_ARTIFACT_SCHEMA_VERSION.
+SUPPORTED_ARTIFACT_SCHEMA_VERSIONS = frozenset({CHALLENGE_ARTIFACT_SCHEMA_VERSION})
 
 # production_snapshot_id and production_snapshot_digest are raw sha256 hex digests.
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -46,38 +49,52 @@ _HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 _MIN_COMPAT_LEN = 8
 
 
+def validate_artifact_schema_version(data: dict[str, Any]) -> str | None:
+    """Require exact supported integer ``schema_version`` (no coercion).
+
+    Returns an error string, or ``None`` when valid.
+    """
+    if "schema_version" not in data:
+        return (
+            "invalid artifact schema_version: missing "
+            f"(supported: {sorted(SUPPORTED_ARTIFACT_SCHEMA_VERSIONS)})"
+        )
+    raw_sv = data["schema_version"]
+    # type(x) is int rejects bool (subclass of int) and refuses str/float coercion.
+    if type(raw_sv) is not int:
+        return (
+            f"invalid artifact schema_version: {raw_sv!r} "
+            f"(must be integer in {sorted(SUPPORTED_ARTIFACT_SCHEMA_VERSIONS)}; "
+            "no string/float coercion)"
+        )
+    if raw_sv not in SUPPORTED_ARTIFACT_SCHEMA_VERSIONS:
+        return (
+            f"unsupported artifact schema_version={raw_sv} "
+            f"(supported: {sorted(SUPPORTED_ARTIFACT_SCHEMA_VERSIONS)})"
+        )
+    return None
+
+
 def validate_verified_production_identity(
     data: dict[str, Any],
     *,
-    require_schema_version: bool = False,
+    require_schema_version: bool = True,
 ) -> str | None:
     """Validate formats and consistency of production identities for promote reopen.
 
     Presence of identity fields is checked separately. This layer rejects
     fabricated non-empty placeholders that would otherwise look "verified."
 
+    ``require_schema_version`` defaults to True: every promote reopen path must
+    present an exact supported integer schema_version. Pass False only for
+    unit tests that isolate identity format checks without a full artifact.
+
     Returns an error string, or ``None`` when valid.
     """
-    # --- artifact schema (when present or required for artifact-shaped packs) ---
-    if require_schema_version or "schema_version" in data:
-        raw_sv = data.get("schema_version")
-        if raw_sv is None or raw_sv == "":
-            return (
-                "invalid artifact schema_version: missing "
-                f"(supported: {sorted(SUPPORTED_ARTIFACT_SCHEMA_VERSIONS)})"
-            )
-        try:
-            schema_version = int(raw_sv)
-        except (TypeError, ValueError):
-            return (
-                f"invalid artifact schema_version: {raw_sv!r} "
-                f"(supported: {sorted(SUPPORTED_ARTIFACT_SCHEMA_VERSIONS)})"
-            )
-        if schema_version not in SUPPORTED_ARTIFACT_SCHEMA_VERSIONS:
-            return (
-                f"unsupported artifact schema_version={schema_version} "
-                f"(supported: {sorted(SUPPORTED_ARTIFACT_SCHEMA_VERSIONS)})"
-            )
+    if require_schema_version:
+        schema_err = validate_artifact_schema_version(data)
+        if schema_err is not None:
+            return schema_err
 
     policy_id = str(data.get("policy_id") or "").strip()
     prod_policy_id = str(data.get("production_policy_id") or "").strip()
@@ -191,10 +208,12 @@ def validate_verified_production_identity(
 
 def _after_presence_checks(
     data: dict[str, Any],
-    *,
-    require_schema_version: bool = False,
 ) -> tuple[dict[str, Any] | None, str | None]:
-    """Shared presence + validity gate used by JSON and artifact loaders."""
+    """Shared presence + schema + identity gate used by every reopen loader."""
+    # Schema first: missing/wrong version must not be papered over by other fields.
+    schema_err = validate_artifact_schema_version(data)
+    if schema_err is not None:
+        return None, schema_err
     missing = [k for k in _REQUIRED if k not in data or data[k] in (None, "")]
     if missing:
         return None, f"missing required fields: {', '.join(missing)}"
@@ -204,8 +223,9 @@ def _after_presence_checks(
             "historical artifact is not eligible for a verified production-policy "
             "promotion packet; missing: " + ", ".join(missing_identity)
         )
+    # Schema already validated above; identity layer skips a second pass.
     validity_err = validate_verified_production_identity(
-        data, require_schema_version=require_schema_version
+        data, require_schema_version=False
     )
     if validity_err is not None:
         return None, validity_err
@@ -219,60 +239,70 @@ def load_evidence_json(path: Path) -> tuple[dict[str, Any] | None, str | None]:
         return None, f"cannot read JSON: {exc}"
     if not isinstance(data, dict):
         return None, "export root must be a JSON object"
-    # Bare challenge export JSON may omit schema_version; still validate identities.
-    # If schema_version is present, it must be supported.
-    return _after_presence_checks(data, require_schema_version=False)
+    # Same contract as artifact packs: exact integer schema_version required.
+    return _after_presence_checks(data)
 
 
 def load_evidence_artifact(dir_path: Path) -> tuple[dict[str, Any] | None, str | None]:
-    """Load from challenge artifact dir (metrics.json + manifest) or champion export style."""
+    """Load from challenge artifact dir (manifest pack) or standalone export JSON.
+
+    When ``manifest.json`` is present it is authoritative: ``export.json`` /
+    ``result.json`` / ``champion.json`` cannot bypass manifest schema validation.
+    Standalone export-shaped files are accepted only if no manifest is present,
+    and still require the exact supported integer ``schema_version``.
+    """
     if not dir_path.is_dir():
         return None, f"not a directory: {dir_path}"
-    # Prefer full export if present
+    manifest_p = dir_path / "manifest.json"
+    metrics_p = dir_path / "metrics.json"
+    if manifest_p.is_file():
+        try:
+            manifest = json.loads(manifest_p.read_text(encoding="utf-8"))
+            metrics = (
+                json.loads(metrics_p.read_text(encoding="utf-8"))
+                if metrics_p.is_file()
+                else {}
+            )
+        except (OSError, json.JSONDecodeError) as exc:
+            return None, f"cannot read artifact: {exc}"
+        if not isinstance(manifest, dict):
+            return None, "manifest.json root must be a JSON object"
+        if metrics and not isinstance(metrics, dict):
+            return None, "metrics.json root must be a JSON object"
+        # Map challenge artifact layout; schema_version comes only from manifest.
+        data = {
+            "schema_version": manifest.get("schema_version"),
+            "status": metrics.get("status") or manifest.get("status"),
+            "policy_id": manifest.get("policy_id"),
+            "protocol_id": manifest.get("protocol_id"),
+            "policy_hash": manifest.get("policy_hash"),
+            "baseline_id": manifest.get("baseline_id") or "production",
+            "against_id": manifest.get("against_id"),
+            "primary_horizon": manifest.get("primary_horizon"),
+            "primary_ic_baseline": metrics.get("primary_ic_baseline"),
+            "primary_ic_against": metrics.get("primary_ic_against"),
+            "n_rows": manifest.get("n_rows"),
+            "fold_metrics": metrics.get("fold_metrics") or [],
+            "weights": {},
+            "notes": [],
+            "mode": manifest.get("mode"),
+        }
+        for key in _VERIFIED_PRODUCTION_IDENTITY:
+            data[key] = manifest.get(key)
+        weights_p = dir_path / "weights.json"
+        if weights_p.is_file():
+            try:
+                data["weights"] = json.loads(weights_p.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                pass
+        return _after_presence_checks(data)
+
+    # No manifest: standalone export-shaped files only (strict schema required).
     for name in ("export.json", "result.json", "champion.json"):
         p = dir_path / name
         if p.is_file():
             return load_evidence_json(p)
-    manifest_p = dir_path / "manifest.json"
-    metrics_p = dir_path / "metrics.json"
-    if not manifest_p.is_file():
-        return None, "artifact dir missing manifest.json (or export.json)"
-    try:
-        manifest = json.loads(manifest_p.read_text(encoding="utf-8"))
-        metrics = (
-            json.loads(metrics_p.read_text(encoding="utf-8"))
-            if metrics_p.is_file()
-            else {}
-        )
-    except (OSError, json.JSONDecodeError) as exc:
-        return None, f"cannot read artifact: {exc}"
-    # Map challenge artifact layout; schema_version is required for manifest packs.
-    data = {
-        "schema_version": manifest.get("schema_version"),
-        "status": metrics.get("status") or manifest.get("status"),
-        "policy_id": manifest.get("policy_id"),
-        "protocol_id": manifest.get("protocol_id"),
-        "policy_hash": manifest.get("policy_hash"),
-        "baseline_id": manifest.get("baseline_id") or "production",
-        "against_id": manifest.get("against_id"),
-        "primary_horizon": manifest.get("primary_horizon"),
-        "primary_ic_baseline": metrics.get("primary_ic_baseline"),
-        "primary_ic_against": metrics.get("primary_ic_against"),
-        "n_rows": manifest.get("n_rows"),
-        "fold_metrics": metrics.get("fold_metrics") or [],
-        "weights": {},
-        "notes": [],
-        "mode": manifest.get("mode"),
-    }
-    for key in _VERIFIED_PRODUCTION_IDENTITY:
-        data[key] = manifest.get(key)
-    weights_p = dir_path / "weights.json"
-    if weights_p.is_file():
-        try:
-            data["weights"] = json.loads(weights_p.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            pass
-    return _after_presence_checks(data, require_schema_version=True)
+    return None, "artifact dir missing manifest.json (or export.json)"
 
 
 def _fmt_ic(x: Any) -> str:

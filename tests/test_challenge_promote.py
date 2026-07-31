@@ -8,9 +8,14 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from ml_saham.challenge.artifacts import (
+    CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+    challenge_result_export_payload,
+)
 from ml_saham.challenge.promote import (
     build_promote_packet,
     load_evidence_artifact,
+    validate_artifact_schema_version,
     validate_verified_production_identity,
 )
 from ml_saham.challenge.production_policy_snapshots import stable_snapshot_id_for
@@ -21,38 +26,9 @@ from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp
 runner = CliRunner()
 
 
-def _identity(result) -> dict[str, str]:
-    return {
-        "observation_compatibility_id": result.observation_compatibility_id,
-        "production_snapshot_id": result.production_snapshot_id,
-        "production_snapshot_digest": result.production_snapshot_digest,
-        "production_policy_id": result.production_policy_id,
-        "production_policy_version": result.production_policy_version,
-        "production_semantic_engine_contract_id": (
-            result.production_semantic_engine_contract_id
-        ),
-        "challenge_adapter_id": result.challenge_adapter_id,
-        "challenge_adapter_version": result.challenge_adapter_version,
-    }
-
-
 def _export_from_result(result) -> dict:
-    return {
-        "status": result.status.value,
-        "policy_id": result.policy_id,
-        "protocol_id": result.protocol_id,
-        "policy_hash": result.policy_hash,
-        "baseline_id": result.baseline_id or "production",
-        "against_id": result.against_id,
-        "n_rows": result.n_rows,
-        "primary_horizon": result.primary_horizon,
-        "primary_ic_baseline": result.primary_ic_baseline,
-        "primary_ic_against": result.primary_ic_against,
-        "weights": result.weights,
-        "notes": result.notes,
-        "fold_metrics": result.fold_metrics,
-        **_identity(result),
-    }
+    """Promote-eligible export: always stamps exact integer schema_version."""
+    return challenge_result_export_payload(result)
 
 
 @pytest.fixture
@@ -150,10 +126,12 @@ def test_promote_bad_json(tmp_path: Path):
 
 
 def test_legacy_export_is_not_promotion_eligible(tmp_path: Path):
+    # Pre-identity export (even with schema) cannot create a verified promote packet.
     legacy = tmp_path / "legacy.json"
     legacy.write_text(
         json.dumps(
             {
+                "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
                 "status": "WIN",
                 "policy_id": "screener.accum.score_weights",
                 "protocol_id": "accum_path_v1",
@@ -167,6 +145,37 @@ def test_legacy_export_is_not_promotion_eligible(tmp_path: Path):
     assert pack.exit_code() == 2
     assert "historical artifact" in (pack.error or "")
     assert "missing" in (pack.error or "")
+
+
+def test_export_without_schema_version_rejected(verified_export: dict, tmp_path: Path):
+    """Bare challenge export missing schema_version is not promote-eligible."""
+    payload = dict(verified_export)
+    del payload["schema_version"]
+    path = tmp_path / "no_schema.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    pack = build_promote_packet(from_json=path, write_artifact=False)
+    assert pack.exit_code() == 2
+    assert "schema_version" in (pack.error or "")
+    assert "missing" in (pack.error or "")
+
+
+def test_schema_version_must_be_exact_integer(verified_export: dict, tmp_path: Path):
+    """No int(...) coercion: strings, floats, and bools are rejected."""
+    for bad in ("2", 2.0, True, False):
+        payload = dict(verified_export)
+        payload["schema_version"] = bad
+        path = tmp_path / f"schema_bad_{type(bad).__name__}.json"
+        # json.dumps turns True→true; write via dumps for realistic wire form where possible
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        pack = build_promote_packet(from_json=path, write_artifact=False)
+        assert pack.exit_code() == 2, (bad, pack.error)
+        err = pack.error or ""
+        assert "schema_version" in err, (bad, err)
+
+    # Exact integer 2 is the accepted contract.
+    assert verified_export["schema_version"] == CHALLENGE_ARTIFACT_SCHEMA_VERSION
+    assert type(verified_export["schema_version"]) is int
+    assert validate_artifact_schema_version(verified_export) is None
 
 
 def test_fabricated_snapshot_id_rejected(verified_export: dict, tmp_path: Path):
@@ -248,7 +257,7 @@ def test_unsupported_adapter_protocol_and_schema(
     err = pack.error or ""
     assert "protocol" in err.lower()
 
-    # Bare JSON with unsupported schema_version fails closed
+    # Unsupported integer schema_version fails closed
     payload = dict(verified_export)
     payload["schema_version"] = 99
     path = tmp_path / "schema.json"
@@ -256,6 +265,7 @@ def test_unsupported_adapter_protocol_and_schema(
     pack = build_promote_packet(from_json=path, write_artifact=False)
     assert pack.exit_code() == 2
     assert "schema_version" in (pack.error or "")
+    assert "unsupported" in (pack.error or "")
 
 
 def test_artifact_dir_requires_schema_and_valid_identity(
@@ -301,7 +311,7 @@ def test_artifact_dir_requires_schema_and_valid_identity(
     (art_ok / "manifest.json").write_text(
         json.dumps(
             {
-                "schema_version": 2,
+                "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
                 "mode": "challenge_run",
                 "policy_id": verified_export["policy_id"],
                 "protocol_id": verified_export["protocol_id"],
@@ -339,11 +349,76 @@ def test_artifact_dir_requires_schema_and_valid_identity(
     assert pack.evidence["production_snapshot_id"] == verified_export[
         "production_snapshot_id"
     ]
+    assert pack.evidence["schema_version"] == CHALLENGE_ARTIFACT_SCHEMA_VERSION
+
+
+def test_export_json_cannot_bypass_manifest_schema(
+    verified_export: dict, tmp_path: Path
+):
+    """When manifest.json exists, export.json must not skip manifest validation."""
+    art = tmp_path / "mixed"
+    art.mkdir()
+    # Manifest is missing schema_version → must fail even if export.json is rich.
+    (art / "manifest.json").write_text(
+        json.dumps(
+            {
+                "policy_id": verified_export["policy_id"],
+                "protocol_id": verified_export["protocol_id"],
+                "baseline_id": "production",
+                "against_id": "equal_sleeves",
+                "status": verified_export["status"],
+                **{
+                    k: verified_export[k]
+                    for k in (
+                        "observation_compatibility_id",
+                        "production_snapshot_id",
+                        "production_snapshot_digest",
+                        "production_policy_id",
+                        "production_policy_version",
+                        "production_semantic_engine_contract_id",
+                        "challenge_adapter_id",
+                        "challenge_adapter_version",
+                    )
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (art / "metrics.json").write_text(
+        json.dumps({"status": verified_export["status"]}), encoding="utf-8"
+    )
+    # Fully valid standalone export would succeed alone — must not rescue bad manifest.
+    (art / "export.json").write_text(
+        json.dumps(verified_export), encoding="utf-8"
+    )
+    data, err = load_evidence_artifact(art)
+    assert data is None
+    assert err is not None
+    assert "schema_version" in err
+
+    # Standalone export.json (no manifest) with schema works.
+    solo = tmp_path / "solo_export"
+    solo.mkdir()
+    (solo / "export.json").write_text(json.dumps(verified_export), encoding="utf-8")
+    pack = build_promote_packet(from_artifact=solo, write_artifact=False)
+    assert pack.exit_code() == 0, pack.error
+    assert pack.evidence["schema_version"] == CHALLENGE_ARTIFACT_SCHEMA_VERSION
+
+    # Standalone export.json without schema fails closed.
+    solo_bad = tmp_path / "solo_export_bad"
+    solo_bad.mkdir()
+    bare = dict(verified_export)
+    del bare["schema_version"]
+    (solo_bad / "export.json").write_text(json.dumps(bare), encoding="utf-8")
+    pack_bad = build_promote_packet(from_artifact=solo_bad, write_artifact=False)
+    assert pack_bad.exit_code() == 2
+    assert "schema_version" in (pack_bad.error or "")
 
 
 def test_validate_presence_only_placeholders_rejected():
     """Pure unit: truthy placeholders fail validity (not only missing-field path)."""
     fake = {
+        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
         "status": "WIN",
         "policy_id": "screener.accum.score_weights",
         "protocol_id": "accum_path_v1",

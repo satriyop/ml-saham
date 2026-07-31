@@ -54,7 +54,9 @@ from ml_saham.data.aisaham_read import connect as db_connect
 from ml_saham.data.observation_cohort import (
     ACCUM_PURPOSE_LIKE,
     ACCUM_PURPOSES,
-    resolve_compatibility_id,
+    PRE_OPEN_PURPOSE_LIKE,
+    PRE_OPEN_PURPOSES,
+    require_family_compatibility_id,
 )
 from ml_saham.data.doctor_checks import run_doctor
 
@@ -68,10 +70,13 @@ class AccumPanelPrep:
     rows: list[PanelRow]
     notes: list[str]
     blocked: ChallengeStatus | None  # None if ready to score
+    # Population identity actually bound for this panel (empty for IEV batch identity).
+    selected_compatibility_id: str | None = None
 
 
-# Production-facing challenges must bind an explicit cohort identity.
-# Largest/single-cohort auto-select remains for exploratory/curriculum loaders only.
+# Kept for callers/tests that only need a non-empty string check. Production
+# prep must use purpose-family binding (require_family_compatibility_id) —
+# never stamp an arbitrary ID as cohort provenance for the wrong panel kind.
 PRODUCTION_COMPATIBILITY_ID_REQUIRED = (
     "production-facing challenge requires explicit compatibility_id "
     "(pass --compatibility-id; largest-cohort auto-select is not allowed "
@@ -82,7 +87,7 @@ PRODUCTION_COMPATIBILITY_ID_REQUIRED = (
 def require_production_compatibility_id(
     compatibility_id: str | None,
 ) -> tuple[str | None, str | None]:
-    """Fail-closed gate for production-facing challenge entry points.
+    """Non-empty check only. Prefer purpose-family binding in challenge prep.
 
     Returns ``(stripped_id, None)`` when present and non-empty, else
     ``(None, reason)`` suitable for ``BLOCKED_POLICY``.
@@ -91,6 +96,29 @@ def require_production_compatibility_id(
     if not cid:
         return None, PRODUCTION_COMPATIBILITY_ID_REQUIRED
     return cid, None
+
+
+def panel_population_family(panel_kind: str, policy_id: str) -> str:
+    """Which population identity a panel binds.
+
+    - ``accum``: learning_observations ACCUM compatibility cohort (+ verified snapshots)
+    - ``pre_open``: learning_observations PRE_OPEN compatibility cohort
+    - ``iev``: iev snapshot batch identity (not observation compatibility_id)
+    - ``unknown``: fail closed
+    """
+    if policy_id in REQUIRED_POLICIES or panel_kind in (
+        "accum_components",
+        "accum_signal",
+        "accum_signal_flags",
+        "accum_gates",
+        "accum_hard_filters",
+    ):
+        return "accum"
+    if panel_kind == "pre_open_observations":
+        return "pre_open"
+    if panel_kind == "iev_rank":
+        return "iev"
+    return "unknown"
 
 
 def list_policies() -> list[dict[str, str]]:
@@ -186,7 +214,12 @@ def _vet_for_pre_open_iev(db_path: Path, protocol: Protocol) -> tuple[bool, list
     return True, notes
 
 
-def _vet_for_pre_open_obs(db_path: Path, protocol: Protocol) -> tuple[bool, list[str]]:
+def _vet_for_pre_open_obs(
+    db_path: Path,
+    protocol: Protocol,
+    *,
+    preferred_compatibility_id: str | None = None,
+) -> tuple[bool, list[str]]:
     del protocol
     notes: list[str] = []
     report = run_doctor(db_path, deep=False)
@@ -201,12 +234,18 @@ def _vet_for_pre_open_obs(db_path: Path, protocol: Protocol) -> tuple[bool, list
             return False, ["learning_observations missing (need PRE_OPEN captures)"]
         from ml_saham.data.observation_cohort import fetch_pre_open_observation_raw
 
-        rows, cohort_notes, _ = fetch_pre_open_observation_raw(conn, select="purpose")
+        # Bind the same PRE_OPEN cohort the panel will use (no exploratory auto-select).
+        rows, cohort_notes, _ = fetch_pre_open_observation_raw(
+            conn,
+            preferred_compatibility_id=preferred_compatibility_id,
+            select="purpose",
+        )
         notes.extend(cohort_notes)
         n = len(rows)
         if n == 0:
             return False, notes + [
                 "no PRE_OPEN_AUCTION_DIRECTION rows in learning_observations "
+                "for the selected cohort "
                 "(product ready; wait for denser ai-saham captures)"
             ]
         if n < 80:
@@ -230,24 +269,17 @@ def prepare_accum_panel(
 
     Dispatches on policy.panel_kind. protocol_id defaults to policy.protocol_id.
 
-    Production-facing: ``preferred_compatibility_id`` must be non-empty. Missing
-    or blank identity returns ``BLOCKED_POLICY`` immediately (no largest-cohort
-    auto-select). Exploratory/curriculum loaders use
-    ``resolve_compatibility_id`` / ``fetch_*`` with auto-select separately.
+    Population identity is purpose-specific (never a universal fake stamp):
+
+    - Verified ACCUM policies: require explicit ACCUM ``compatibility_id``, load
+      verified production snapshots for that cohort only.
+    - PRE_OPEN observation policies: require explicit PRE_OPEN cohort id; static
+      local policy fixtures are **not** verified production-policy snapshots.
+    - IEV rank panels: bind iev snapshot batch identity; observation
+      ``compatibility_id`` is not a population filter (ignored if supplied).
     """
     path = Path(db_path)
-    explicit_id, missing_note = require_production_compatibility_id(
-        preferred_compatibility_id
-    )
-    if missing_note is not None:
-        return AccumPanelPrep(
-            policy=None,
-            protocol=None,
-            rows=[],
-            notes=[missing_note],
-            blocked=ChallengeStatus.BLOCKED_POLICY,
-        )
-
+    preferred = preferred_compatibility_id
     selected_compatibility_id: str | None = None
     cohort_notes: list[str] = []
     try:
@@ -256,21 +288,23 @@ def prepare_accum_panel(
             pid = protocol_id or adapter.protocol_id
             protocol = get_protocol(pid)
             with db_connect(path) as conn:
-                selected_compatibility_id, cohort_notes = resolve_compatibility_id(
-                    conn,
-                    purposes=ACCUM_PURPOSES,
-                    purpose_like=ACCUM_PURPOSE_LIKE,
-                    preferred=explicit_id,
-                    family="ACCUM",
+                selected_compatibility_id, cohort_notes = (
+                    require_family_compatibility_id(
+                        conn,
+                        purposes=ACCUM_PURPOSES,
+                        purpose_like=ACCUM_PURPOSE_LIKE,
+                        preferred=preferred,
+                        family="ACCUM",
+                    )
                 )
                 if selected_compatibility_id is None:
                     return AccumPanelPrep(
                         policy=None,
                         protocol=protocol,
                         rows=[],
-                        notes=cohort_notes
-                        + ["no accumulation observation cohort selected"],
-                        blocked=ChallengeStatus.BLOCKED_DATA,
+                        notes=cohort_notes,
+                        blocked=ChallengeStatus.BLOCKED_POLICY,
+                        selected_compatibility_id=None,
                     )
                 snapshots = load_verified_snapshot_set(conn, selected_compatibility_id)
             policy = compose_execution_policy(snapshots[policy_id], adapter)
@@ -278,10 +312,82 @@ def prepare_accum_panel(
             policy = load_policy(policy_id)
             pid = protocol_id or policy.protocol_id
             protocol = get_protocol(pid)
-            selected_compatibility_id = explicit_id
-            cohort_notes = [
-                f"compatibility_id={explicit_id or '(untagged)'} (explicit)"
-            ]
+            family = panel_population_family(policy.panel_kind, policy_id)
+
+            if family == "pre_open":
+                with db_connect(path) as conn:
+                    selected_compatibility_id, cohort_notes = (
+                        require_family_compatibility_id(
+                            conn,
+                            purposes=PRE_OPEN_PURPOSES,
+                            purpose_like=PRE_OPEN_PURPOSE_LIKE,
+                            preferred=preferred,
+                            family="PRE_OPEN",
+                        )
+                    )
+                if selected_compatibility_id is None:
+                    return AccumPanelPrep(
+                        policy=policy,
+                        protocol=protocol,
+                        rows=[],
+                        notes=cohort_notes,
+                        blocked=ChallengeStatus.BLOCKED_POLICY,
+                        selected_compatibility_id=None,
+                    )
+                cohort_notes = list(cohort_notes) + [
+                    "static pre-open policy fixture "
+                    "(not a verified production-policy snapshot baseline; "
+                    "cohort binding is PRE_OPEN observations only)"
+                ]
+            elif family == "iev":
+                # IEV binds iev snapshot batch identity — never observation cohort.
+                selected_compatibility_id = None
+                if preferred is not None and str(preferred).strip():
+                    cohort_notes = [
+                        "observation compatibility_id="
+                        f"{str(preferred).strip()!r} not applicable to iev_rank "
+                        "(IEV binds iev snapshot batch identity, not "
+                        "learning_observations.compatibility_id); ignored for "
+                        "population binding"
+                    ]
+                else:
+                    cohort_notes = [
+                        "iev_rank population identity: iev snapshot batch "
+                        "(not learning_observations.compatibility_id)"
+                    ]
+            elif family == "accum":
+                # Non-REQUIRED accum-shaped policies still need ACCUM cohort binding.
+                with db_connect(path) as conn:
+                    selected_compatibility_id, cohort_notes = (
+                        require_family_compatibility_id(
+                            conn,
+                            purposes=ACCUM_PURPOSES,
+                            purpose_like=ACCUM_PURPOSE_LIKE,
+                            preferred=preferred,
+                            family="ACCUM",
+                        )
+                    )
+                if selected_compatibility_id is None:
+                    return AccumPanelPrep(
+                        policy=policy,
+                        protocol=protocol,
+                        rows=[],
+                        notes=cohort_notes,
+                        blocked=ChallengeStatus.BLOCKED_POLICY,
+                        selected_compatibility_id=None,
+                    )
+            else:
+                return AccumPanelPrep(
+                    policy=policy,
+                    protocol=protocol,
+                    rows=[],
+                    notes=[
+                        f"unsupported panel_kind={policy.panel_kind!r} for "
+                        "production-facing population identity binding"
+                    ],
+                    blocked=ChallengeStatus.BLOCKED_POLICY,
+                    selected_compatibility_id=None,
+                )
     except FileNotFoundError as exc:
         return AccumPanelPrep(
             policy=None,
@@ -289,6 +395,7 @@ def prepare_accum_panel(
             rows=[],
             notes=[str(exc)],
             blocked=ChallengeStatus.BLOCKED_DATA,
+            selected_compatibility_id=None,
         )
     except (KeyError, PolicySnapshotError) as exc:
         return AccumPanelPrep(
@@ -297,6 +404,7 @@ def prepare_accum_panel(
             rows=[],
             notes=cohort_notes + [str(exc)],
             blocked=ChallengeStatus.BLOCKED_POLICY,
+            selected_compatibility_id=selected_compatibility_id,
         )
 
     if policy.panel_kind == "iev_rank":
@@ -306,8 +414,9 @@ def prepare_accum_panel(
                 policy=policy,
                 protocol=protocol,
                 rows=[],
-                notes=vet_notes,
+                notes=list(cohort_notes) + list(vet_notes),
                 blocked=ChallengeStatus.BLOCKED_DATA,
+                selected_compatibility_id=None,
             )
         rows, panel_notes = build_iev_panel(
             path,
@@ -315,14 +424,19 @@ def prepare_accum_panel(
             primary_horizon=protocol.primary_horizon,
         )
     elif policy.panel_kind == "pre_open_observations":
-        ok, vet_notes = _vet_for_pre_open_obs(path, protocol)
+        ok, vet_notes = _vet_for_pre_open_obs(
+            path,
+            protocol,
+            preferred_compatibility_id=selected_compatibility_id,
+        )
         if not ok:
             return AccumPanelPrep(
                 policy=policy,
                 protocol=protocol,
                 rows=[],
-                notes=vet_notes,
+                notes=list(cohort_notes) + list(vet_notes),
                 blocked=ChallengeStatus.BLOCKED_DATA,
+                selected_compatibility_id=selected_compatibility_id,
             )
         rows, panel_notes = build_pre_open_obs_panel(
             path,
@@ -337,8 +451,9 @@ def prepare_accum_panel(
                 policy=policy,
                 protocol=protocol,
                 rows=[],
-                notes=vet_notes,
+                notes=list(cohort_notes) + list(vet_notes),
                 blocked=ChallengeStatus.BLOCKED_DATA,
+                selected_compatibility_id=selected_compatibility_id,
             )
         rows, panel_notes = build_panel(
             path,
@@ -354,8 +469,9 @@ def prepare_accum_panel(
                 policy=policy,
                 protocol=protocol,
                 rows=[],
-                notes=vet_notes,
+                notes=list(cohort_notes) + list(vet_notes),
                 blocked=ChallengeStatus.BLOCKED_DATA,
+                selected_compatibility_id=selected_compatibility_id,
             )
         rows, panel_notes = build_signal_panel(
             path,
@@ -371,8 +487,9 @@ def prepare_accum_panel(
                 policy=policy,
                 protocol=protocol,
                 rows=[],
-                notes=vet_notes,
+                notes=list(cohort_notes) + list(vet_notes),
                 blocked=ChallengeStatus.BLOCKED_DATA,
+                selected_compatibility_id=selected_compatibility_id,
             )
         rows, panel_notes = build_gate_panel(
             path,
@@ -388,6 +505,7 @@ def prepare_accum_panel(
             rows=[],
             notes=[f"unsupported panel_kind={policy.panel_kind!r}"],
             blocked=ChallengeStatus.BLOCKED_POLICY,
+            selected_compatibility_id=selected_compatibility_id,
         )
 
     notes = list(cohort_notes) + list(vet_notes) + list(panel_notes)
@@ -401,6 +519,7 @@ def prepare_accum_panel(
             rows=rows,
             notes=notes,
             blocked=ChallengeStatus.BLOCKED_DATA,
+            selected_compatibility_id=selected_compatibility_id,
         )
     return AccumPanelPrep(
         policy=policy,
@@ -408,6 +527,7 @@ def prepare_accum_panel(
         rows=rows,
         notes=notes,
         blocked=None,
+        selected_compatibility_id=selected_compatibility_id,
     )
 
 
@@ -540,8 +660,9 @@ def run_policy_challenge(
 
     def make_result(**kwargs: object) -> ChallengeResult:
         policy = prep.policy
-        identity = {}
+        identity: dict[str, str] = {}
         if policy is not None and policy.production_snapshot_id:
+            # Verified production-policy path (cohort-bound snapshots + adapter).
             identity = {
                 "observation_compatibility_id": policy.observation_compatibility_id,
                 "production_snapshot_id": policy.production_snapshot_id,
@@ -553,6 +674,12 @@ def run_policy_challenge(
                 ),
                 "challenge_adapter_id": policy.challenge_adapter_id,
                 "challenge_adapter_version": policy.challenge_adapter_version,
+            }
+        elif prep.selected_compatibility_id:
+            # Bound observation cohort without verified production snapshot
+            # (e.g. static PRE_OPEN fixtures). Do not invent snapshot/adapter ids.
+            identity = {
+                "observation_compatibility_id": prep.selected_compatibility_id,
             }
         return ChallengeResult(**kwargs, **identity)  # type: ignore[arg-type]
 

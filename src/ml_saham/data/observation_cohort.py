@@ -5,11 +5,14 @@ Pooling multiple ids is like combining exam scores under different rulebooks.
 
 When ``preferred`` is omitted and multiple cohorts exist, loaders may
 auto-select the **largest n** (ties → newest max ``captured_at``). That
-auto-select is for exploratory/curriculum paths only; production-facing
-challenges require an explicit id via
-``ml_saham.challenge.runner.require_production_compatibility_id`` before
-calling resolve/fetch. Schemas without the column load unfiltered (legacy
-fixtures).
+auto-select is for exploratory/curriculum paths only.
+
+Production-facing challenge prep must use
+``require_family_compatibility_id`` for the **purpose family** that the
+panel actually loads (ACCUM vs PRE_OPEN). Never stamp an unrelated ID as
+cohort provenance (e.g. IEV panels use iev snapshot batch identity, not
+``learning_observations.compatibility_id``). Schemas without the column
+load unfiltered (legacy fixtures).
 """
 
 from __future__ import annotations
@@ -119,6 +122,10 @@ def resolve_compatibility_id(
     Returns ``(selected_id, notes)``:
     - ``None`` with empty notes → column missing (no filter).
     - string (possibly ``""``) → filter to that cohort only.
+
+    Exploratory path: when ``preferred`` is omitted, may auto-select largest
+    or single cohort. Production challenge prep should call
+    ``require_family_compatibility_id`` instead (no auto-select).
     """
     notes: list[str] = []
     cols = observation_columns(conn)
@@ -141,6 +148,7 @@ def resolve_compatibility_id(
                 f"compatibility_id={pref!r} not found among {family} cohorts "
                 f"(available: {avail or 'none'})"
             )
+            # Keep pref so SQL filters to zero rows (never fall open to all cohorts).
             return pref, notes
         notes.append(f"compatibility_id={pref or '(untagged)'} (explicit) n={match[1]}")
         if len(cohorts) > 1:
@@ -163,6 +171,63 @@ def resolve_compatibility_id(
         f"{_short(cid, 24)} n={n} of {len(cohorts)} {family} cohorts; "
         f"excluded: {others}{more}"
     )
+    return cid, notes
+
+
+def require_family_compatibility_id(
+    conn: sqlite3.Connection,
+    *,
+    purposes: Sequence[str],
+    purpose_like: Sequence[str] | None = None,
+    preferred: str | None,
+    family: str,
+) -> tuple[str | None, list[str]]:
+    """Production-facing: explicit id required and must exist in this purpose family.
+
+    Never auto-selects largest/single cohort. Returns ``(None, notes)`` when the
+    id is missing, blank, the column is absent, no family rows exist, or the
+    preferred id is not among that family's cohorts.
+    """
+    notes: list[str] = []
+    cid = (preferred or "").strip()
+    if not cid:
+        notes.append(
+            f"production-facing {family} challenge requires explicit "
+            f"compatibility_id for the {family} observation cohort "
+            f"(pass --compatibility-id; largest-cohort auto-select is not allowed)"
+        )
+        return None, notes
+
+    cols = observation_columns(conn)
+    if "compatibility_id" not in cols:
+        notes.append(
+            f"compatibility_id column missing; cannot bind {family} observation cohort"
+        )
+        return None, notes
+
+    cohorts = list_compatibility_cohorts(
+        conn, purposes=purposes, purpose_like=purpose_like
+    )
+    if not cohorts:
+        notes.append(f"compatibility_id column present but no {family} rows")
+        return None, notes
+
+    match = next((c for c in cohorts if c[0] == cid), None)
+    if match is None:
+        avail = ", ".join(f"{_short(c[0])} n={c[1]}" for c in cohorts[:6])
+        notes.append(
+            f"compatibility_id={cid!r} not found among {family} cohorts "
+            f"(available: {avail or 'none'}); refusing production verdict "
+            f"with unbound {family} population identity"
+        )
+        return None, notes
+
+    notes.append(f"compatibility_id={cid} (explicit {family}) n={match[1]}")
+    if len(cohorts) > 1:
+        excluded = sum(c[1] for c in cohorts if c[0] != cid)
+        notes.append(
+            f"excluded {len(cohorts) - 1} other {family} cohort(s) totaling n={excluded}"
+        )
     return cid, notes
 
 

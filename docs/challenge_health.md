@@ -111,6 +111,12 @@ ml-saham challenge promote-packet --from-json /tmp/champ.json
 
 Also: `--from-artifact <challenge_artifact_dir>` (manifest + metrics).
 
+**Schema reopen contract:** challenge/champion JSON exports and artifact packs
+stamp integer `schema_version: 2`. `promote-packet` requires that exact integer
+on every reopen path (`--from-json` and `--from-artifact`). Missing, string,
+float, or unsupported versions fail closed. When `manifest.json` is present it
+is authoritative — a sibling `export.json` cannot bypass manifest validation.
+
 **Never auto-applies.** LOSE/INCONCLUSIVE packets are allowed (document reject / need data).
 
 ---

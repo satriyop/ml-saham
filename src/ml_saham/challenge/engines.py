@@ -8,10 +8,7 @@ from typing import Any
 
 from ml_saham.challenge.artifacts import write_engine_artifact
 from ml_saham.challenge.policies.registry import load_policy
-from ml_saham.challenge.runner import (
-    require_production_compatibility_id,
-    run_policy_challenge,
-)
+from ml_saham.challenge.runner import run_policy_challenge
 from ml_saham.challenge.types import (
     ChallengeStatus,
     EnginePolicyRow,
@@ -136,24 +133,17 @@ def run_engine_portfolio(
     artifacts_dir: Path | None = None,
     compatibility_id: str | None = None,
 ) -> EnginePortfolioResult:
-    """Run all (or scenario-filtered) PolicySpecs; roll up English report."""
+    """Run all (or scenario-filtered) PolicySpecs; roll up English report.
+
+    Population identity is enforced **per policy** (ACCUM cohort vs PRE_OPEN
+    cohort vs IEV batch). A single ``compatibility_id`` is passed through and
+    only binds panels that use that purpose family; mixed engines must not treat
+    one id as universal provenance. Missing/wrong-family ids fail closed on the
+    policies that need them without inventing verified identity for others.
+    """
     path = Path(db_path)
     against = against.strip().lower().replace("-", "_")
     baseline = baseline.strip().lower().replace("-", "_") or "production"
-
-    explicit_id, missing_note = require_production_compatibility_id(compatibility_id)
-    if missing_note is not None:
-        return EnginePortfolioResult(
-            engine_id=engine_id.strip().lower(),
-            scenario_filter=normalize_scenario(scenario),
-            against_id=against,
-            baseline_id=baseline,
-            lines=[f"BLOCKED_POLICY: {missing_note}"],
-            summary_md=f"# Engine portfolio blocked\n\n{missing_note}\n",
-            notes=[missing_note],
-            resolve_error=missing_note,
-        )
-    compatibility_id = explicit_id
 
     pairs, err = resolve_engine_policies(engine_id, scenario)
     if err:
