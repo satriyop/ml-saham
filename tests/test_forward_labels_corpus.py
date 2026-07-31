@@ -13,6 +13,7 @@ from tests.fixtures.build_mvp_fixture import build_mvp_fixture
 
 def test_load_forward_labels_from_learning_outcome_labels(tmp_path: Path):
     db = build_mvp_fixture(tmp_path / "labels.db", min_bars=80)
+    # Plain connection (no Row factory) — load path must not depend on it.
     conn = sqlite3.connect(db)
     try:
         rows = load_forward_labels(conn, horizon=5, limit=500)
@@ -28,6 +29,8 @@ def test_load_forward_labels_from_learning_outcome_labels(tmp_path: Path):
         }
         assert "learning_outcome_labels" in tables
         assert "learning_observations" in tables
+        assert "signal_forward_labels" not in tables
+        assert "candidate_observations" not in tables
     finally:
         conn.close()
 
@@ -35,6 +38,7 @@ def test_load_forward_labels_from_learning_outcome_labels(tmp_path: Path):
 def test_load_forward_labels_prefers_corpus_over_legacy(tmp_path: Path):
     db = tmp_path / "dual.db"
     conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
     try:
         conn.executescript(
             """

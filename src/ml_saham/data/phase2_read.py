@@ -348,9 +348,15 @@ def _load_forward_labels_legacy(
         params.extend(tickers)
     sql += " ORDER BY signal_date DESC LIMIT ?"
     params.append(limit)
-    rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
-    for r in rows:
-        r["label_source"] = "signal_forward_labels"
+    raw = conn.execute(sql, params).fetchall()
+    rows: list[dict[str, Any]] = []
+    for r in raw:
+        if isinstance(r, sqlite3.Row):
+            item = dict(r)
+        else:
+            item = {c: r[i] for i, c in enumerate(select)}
+        item["label_source"] = "signal_forward_labels"
+        rows.append(item)
     return rows
 
 

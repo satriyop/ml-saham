@@ -42,11 +42,23 @@ def table_exists(conn: sqlite3.Connection, name: str) -> bool:
 
 
 def table_columns(conn: sqlite3.Connection, name: str) -> set[str]:
+    """Column names for a table. Works with or without ``sqlite3.Row`` factory.
+
+    ``PRAGMA table_info`` column order is fixed: cid, name, type, … — use
+    index 1 for ``name`` so callers that open plain connections still work.
+    """
     safe_name = _validate_identifier(name)
     if not table_exists(conn, safe_name):
         return set()
     rows = conn.execute(f"PRAGMA table_info({safe_name})").fetchall()
-    return {r["name"] for r in rows}
+    out: set[str] = set()
+    for r in rows:
+        # Prefer named access when row_factory is set; fall back to PRAGMA index.
+        try:
+            out.add(str(r["name"]))
+        except (TypeError, KeyError, IndexError):
+            out.add(str(r[1]))
+    return out
 
 
 def _placeholders(n: int) -> str:
