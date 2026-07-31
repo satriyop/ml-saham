@@ -1,0 +1,280 @@
+{
+  "comment": "Live-shaped ADR-056 hard-filter extract vectors. Redacted tickers. Window 7 only.",
+  "cases": [
+    {
+      "id": "pass_all_enabled",
+      "policy": {
+        "min_market_cap_idr": 1e12,
+        "min_piotroski": 3,
+        "min_accum_score": 40,
+        "min_accum_score_enabled": true,
+        "min_signal_score": 20,
+        "min_signal_score_enabled": true
+      },
+      "expect": { "result": "pass", "firing_gate": null },
+      "payload": {
+        "ticker": "PASS",
+        "session_date": "2026-06-02",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": 55.0,
+              "fundamentals": {
+                "market_cap_idr": 5000000000000,
+                "piotroski_f_score": 6
+              }
+            },
+            "signal": { "assessment": { "score": 48 } }
+          }
+        }
+      }
+    },
+    {
+      "id": "reject_market_cap_first",
+      "policy": {
+        "min_market_cap_idr": 1e12,
+        "min_piotroski": 3,
+        "min_accum_score": 40,
+        "min_accum_score_enabled": true,
+        "min_signal_score": 20,
+        "min_signal_score_enabled": true
+      },
+      "expect": {
+        "result": "rejected_flow",
+        "firing_gate": "screen.accum.market_cap_floor"
+      },
+      "payload": {
+        "ticker": "SMALL",
+        "session_date": "2026-06-02",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": 90.0,
+              "fundamentals": {
+                "market_cap_idr": 100000000,
+                "piotroski_f_score": 1
+              }
+            },
+            "signal": { "assessment": { "score": 10 } }
+          }
+        }
+      }
+    },
+    {
+      "id": "reject_piotroski_second",
+      "policy": {
+        "min_market_cap_idr": 1e12,
+        "min_piotroski": 5,
+        "min_accum_score": 40,
+        "min_accum_score_enabled": true,
+        "min_signal_score": 20,
+        "min_signal_score_enabled": true
+      },
+      "expect": {
+        "result": "rejected_flow",
+        "firing_gate": "screen.accum.piotroski_floor"
+      },
+      "payload": {
+        "ticker": "LOWF",
+        "session_date": "2026-06-02",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": 90.0,
+              "fundamentals": {
+                "market_cap_idr": 5000000000000,
+                "piotroski_f_score": 2
+              }
+            },
+            "signal": { "assessment": { "score": 80 } }
+          }
+        }
+      }
+    },
+    {
+      "id": "reject_accum_score_third",
+      "policy": {
+        "min_market_cap_idr": 0,
+        "min_piotroski": 0,
+        "min_accum_score": 50,
+        "min_accum_score_enabled": true,
+        "min_signal_score": 20,
+        "min_signal_score_enabled": true
+      },
+      "expect": {
+        "result": "rejected_flow",
+        "firing_gate": "screen.accum.accum_score_floor"
+      },
+      "payload": {
+        "ticker": "LOWA",
+        "session_date": "2026-06-02",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": 49.9,
+              "fundamentals": { "market_cap_idr": null, "piotroski_f_score": null }
+            },
+            "signal": { "assessment": { "score": 90 } }
+          }
+        }
+      }
+    },
+    {
+      "id": "reject_signal_score_fourth",
+      "policy": {
+        "min_market_cap_idr": 0,
+        "min_piotroski": 0,
+        "min_accum_score": 40,
+        "min_accum_score_enabled": true,
+        "min_signal_score": 30,
+        "min_signal_score_enabled": true
+      },
+      "expect": {
+        "result": "rejected_signal",
+        "firing_gate": "screen.accum.signal_score_floor"
+      },
+      "payload": {
+        "ticker": "LOWS",
+        "session_date": "2026-06-02",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": 55.0,
+              "fundamentals": {}
+            },
+            "signal": { "assessment": { "score": 29 } }
+          }
+        }
+      }
+    },
+    {
+      "id": "market_cap_null_explicit_missing_rejects",
+      "policy": {
+        "min_market_cap_idr": 1e12,
+        "min_piotroski": 0,
+        "min_accum_score_enabled": false,
+        "min_signal_score_enabled": false
+      },
+      "expect": {
+        "result": "rejected_flow",
+        "firing_gate": "screen.accum.market_cap_floor"
+      },
+      "payload": {
+        "ticker": "NULLCAP",
+        "session_date": "2026-06-02",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": 80.0,
+              "fundamentals": { "market_cap_idr": null, "piotroski_f_score": 7 }
+            },
+            "signal": { "assessment": { "score": 50 } }
+          }
+        }
+      }
+    },
+    {
+      "id": "boundary_equality_passes",
+      "policy": {
+        "min_market_cap_idr": 1000,
+        "min_piotroski": 3,
+        "min_accum_score": 40,
+        "min_accum_score_enabled": true,
+        "min_signal_score": 20,
+        "min_signal_score_enabled": true
+      },
+      "expect": { "result": "pass", "firing_gate": null },
+      "payload": {
+        "ticker": "EQ",
+        "session_date": "2026-06-02",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": 40.0,
+              "fundamentals": {
+                "market_cap_idr": 1000,
+                "piotroski_f_score": 3
+              }
+            },
+            "signal": { "assessment": { "score": 20 } }
+          }
+        }
+      }
+    },
+    {
+      "id": "disabled_gates_pass",
+      "policy": {
+        "min_market_cap_idr": 0,
+        "min_piotroski": 0,
+        "min_accum_score": 99,
+        "min_accum_score_enabled": false,
+        "min_signal_score": 99,
+        "min_signal_score_enabled": false
+      },
+      "expect": { "result": "pass", "firing_gate": null },
+      "payload": {
+        "ticker": "OFF",
+        "session_date": "2026-06-02",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": 1.0,
+              "fundamentals": {
+                "market_cap_idr": 1,
+                "piotroski_f_score": 0
+              }
+            },
+            "signal": { "assessment": { "score": 1 } }
+          }
+        }
+      }
+    },
+    {
+      "id": "malformed_missing_window7",
+      "policy": {
+        "min_market_cap_idr": 1e12,
+        "min_piotroski": 0,
+        "min_accum_score_enabled": false,
+        "min_signal_score_enabled": false
+      },
+      "expect": { "result": "unextractable_contract", "firing_gate": null },
+      "payload": {
+        "ticker": "BAD",
+        "session_date": "2026-06-02",
+        "canonical_window": 7,
+        "features_by_window": {
+          "30": {
+            "candidate": {
+              "accum_score": 80.0,
+              "fundamentals": { "market_cap_idr": 9e15, "piotroski_f_score": 8 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "forbid_root_legacy_fallback",
+      "policy": {
+        "min_accum_score": 50,
+        "min_accum_score_enabled": true,
+        "min_signal_score_enabled": false
+      },
+      "expect": { "result": "unextractable_contract", "firing_gate": null },
+      "payload": {
+        "ticker": "LEG",
+        "session_date": "2026-06-02",
+        "accum_score": 99,
+        "signal": { "assessment": { "score": 99 } },
+        "fundamentals": { "market_cap_idr": 9e15 }
+      }
+    }
+  ]
+}

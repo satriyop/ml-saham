@@ -21,10 +21,17 @@ from ml_saham.challenge.panel_diagnostic import (
 )
 from ml_saham.challenge.panel_gates import extract_gate_components
 from ml_saham.challenge.panel_iev import load_iev_raw_rows
+from ml_saham.challenge.panel_screen_filters import (
+    ScreenFilterPolicy,
+    audit_screen_filter_cohort,
+    extract_screen_filter_inputs,
+    sufficiency_verdict,
+)
 from ml_saham.challenge.panel_signal import extract_signal_components
 from ml_saham.challenge.policies.registry import load_policy
 from ml_saham.data.aisaham_read import connect
 from ml_saham.data.connection import resolve_db_path
+from ml_saham.data.observation_cohort import ACCUM_PURPOSES, list_compatibility_cohorts
 
 pytestmark = pytest.mark.live_db
 
@@ -120,3 +127,34 @@ def test_live_iev_no_post_open_primary_batch(live_db: Path):
         pytest.skip("no IEV history/snapshots")
     post = sum(1 for r in rows if "T09:" in str(r.get("collected_at") or ""))
     assert post == 0, f"IEV pick includes post-open captures: {post} rows; notes={notes}"
+
+
+def test_live_screen_hard_filter_extract_cohort(live_db: Path):
+    """Explicit compatibility_id required; extract must not silent-zero."""
+    measured = "sha256:005363021f7f792071e43d12506aeefe474abf4fbd7d0a45f823b417e95e84c1"
+    with connect(live_db) as conn:
+        cohorts = list_compatibility_cohorts(conn, purposes=ACCUM_PURPOSES)
+    if not cohorts:
+        pytest.skip("no ACCUM compatibility cohorts")
+    cid = measured if any(c[0] == measured for c in cohorts) else cohorts[0][0]
+    if not cid:
+        pytest.skip("untagged-only ACCUM cohort")
+
+    n = hit = 0
+    for p in _iter_accum_payloads(live_db, limit=200):
+        n += 1
+        if not extract_screen_filter_inputs(p).is_unextractable:
+            hit += 1
+    assert n >= 50
+    assert hit == n, f"screen-filter extract miss {hit}/{n}"
+
+    summary = audit_screen_filter_cohort(
+        live_db,
+        compatibility_id=cid,
+        policy=ScreenFilterPolicy(),  # all disabled → pass-only classification
+        measure_h10=True,
+    )
+    assert summary.selected_row_count > 0
+    assert summary.extracted_count == summary.selected_row_count
+    assert summary.unextractable_count == 0
+    assert sufficiency_verdict(summary) == "SUFFICIENT_FOR_REPLAY"

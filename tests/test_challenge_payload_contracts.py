@@ -45,12 +45,44 @@ def test_golden_files_exist_in_repo():
         "risk_adr056_trade_setup.json",
         "diagnostic_adr056_window.json",
         "mce_bound_market_context.json",
+        "accum_screen_hard_filters.json",
         "README.md",
     )
     for name in required:
         assert golden_path(name).is_file(), name
     # Must not be the only source of truth: goldens live outside build_mvp_fixture
     assert not str(GOLDEN_DIR).endswith("build_mvp_fixture.py")
+
+
+def test_screen_hard_filter_extract_paths_from_golden():
+    """Hard-filter inputs come from features_by_window.7 only — not root legacy."""
+    from ml_saham.challenge.panel_screen_filters import (
+        ScreenFilterPolicy,
+        ScreenFilterResult,
+        classify_screen_filters,
+        extract_screen_filter_inputs,
+    )
+
+    doc = load_golden("accum_screen_hard_filters.json")
+    pass_case = next(c for c in doc["cases"] if c["id"] == "pass_all_enabled")
+    extracted = extract_screen_filter_inputs(pass_case["payload"])
+    assert extracted.market_cap_idr == pytest.approx(5e12)
+    assert extracted.piotroski_f_score == pytest.approx(6)
+    assert extracted.accum_score == pytest.approx(55.0)
+    assert extracted.signal_score == pytest.approx(48)
+    pol = ScreenFilterPolicy(
+        min_market_cap_idr=1e12,
+        min_piotroski=3,
+        min_accum_score=40,
+        min_accum_score_enabled=True,
+        min_signal_score=20,
+        min_signal_score_enabled=True,
+    )
+    assert classify_screen_filters(extracted, pol).result is ScreenFilterResult.PASS
+
+    legacy = next(c for c in doc["cases"] if c["id"] == "forbid_root_legacy_fallback")
+    bad = extract_screen_filter_inputs(legacy["payload"])
+    assert bad.is_unextractable
 
 
 # --- (c) Signal score path: features_by_window, not top-level signal.raw_score ---

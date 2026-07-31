@@ -64,6 +64,7 @@ required=(
   risk_adr056_trade_setup.json
   diagnostic_adr056_window.json
   mce_bound_market_context.json
+  accum_screen_hard_filters.json
   README.md
 )
 for f in "${required[@]}"; do
@@ -76,6 +77,7 @@ echo "-- pytest payload contracts + verdict folds --"
 PYTHONPATH=src:. python -m pytest \
   tests/test_challenge_payload_contracts.py \
   tests/test_challenge_verdict_folds.py \
+  tests/test_challenge_screen_filter_replay.py \
   -q --tb=short
 
 echo "== challenge extract contracts: PASS =="
