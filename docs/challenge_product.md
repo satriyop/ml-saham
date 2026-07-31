@@ -189,7 +189,7 @@ Live judgment inventory (ai-saham): `docs/evidence_diagnostic_factor_accum.md`.
 
 | Status / verdict | Meaning |
 |------------------|---------|
-| `WIN` / `LOSE` / `INCONCLUSIVE` | Challenger vs production under protocol rules |
+| `WIN` / `LOSE` / `INCONCLUSIVE` | Challenger vs production under protocol rules. **WIN requires ≥2 valid OOS folds** (+ fold-agree / margin / tail). A single post-embargo fold with an IC edge is **INCONCLUSIVE** (“promising but provisional”), not promotion-ready. |
 | `BLOCKED_DATA` | Insufficient / unextractable panel (honest; product may still be complete) |
 | `BLOCKED_POLICY` | Unknown policy, wrong track, or unsupported combination |
 | Factor `KEEP` / `DEMOTE` / `DROP_CANDIDATE` / `INCONCLUSIVE` | Sleeve validity (accum factor track only today) |
