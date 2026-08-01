@@ -306,7 +306,72 @@ prove the upstream DB was unchanged.
 - Formatting/bulk rewrites must not touch unrelated files.
 - Stage and commit only files owned by the active task.
 
-## 11. Required Reading Matrix
+## 11. Dependency-Ordered Authority Harness
+
+Any task that creates or changes readiness, eligibility, production-baseline
+verification, challenge handoff, artifact reopen, verdict, or promotion must
+contain a completed task-specific authority matrix before coding. Inventory
+every upstream/reference artifact and every field that can grant, deny, group,
+or identify authority; do not leave source, coverage, identity, missing state,
+or failure behavior to implementer judgment.
+
+Required implementation order:
+
+1. Lock the authority owner/source and missing/failure semantics.
+2. Lock data/artifact schema, identity, compatibility, and cross-repo blast
+   radius.
+3. Implement or verify the canonical upstream producer contract.
+4. Implement persistence/export and genuinely read-only retrieval.
+5. Implement extractors, challengers, validators, reopen, and promotion
+   consumers.
+6. Wire every CLI, artifact, batch, and alternate production composition root.
+7. Run real producer/export -> read-only load -> extraction -> artifact/reopen
+   round trips, independent mutation tests, and complete close gates.
+
+Do not tighten a consumer before proving its canonical producer/export emits
+the required contract. Do not substitute a static mirror, reconstructed value,
+or existing provider merely because its return type fits.
+
+Minimum authority-matrix rows:
+
+| Artifact / boundary | Authority owner/source | Exact identity and coverage | Integrity/lineage proof | Missing state | Invalid/conflicting state | May contribute when |
+|---|---|---|---|---|---|---|
+| Upstream observation/label/population | Exact ai-saham producer and read-only contract | Schema/contract, cohort, population, cutoff/session/horizon, row keys | Recompute/verify identity and digest; preserve exact consumed rows | Typed blocked/insufficient state | Wrong schema/cohort/population/PIT/linkage fails closed | Every consumed row and its population/PIT meaning verifies |
+| External/reference authority | Named calendar, benchmark, embargo/session, or other reference owner | Source contract/version, coverage bounds, revision/completeness identity, consumed keys | Prove the exact interval/set complete; absence is not proof of holiday, zero, or non-membership | Unproven coverage is distinct from authoritative empty | Stale, partial, future-dependent, ambiguous, or mismatched authority fails closed | Exact consumed coverage and revision are proven through a read-only path |
+| Production policy snapshot/baseline | Authoritative ai-saham snapshot store | Snapshot ID/digest, compatibility cohort, purpose, adapter and policy versions | Re-resolve from upstream read-only DB; no hash-shape or packaged-mirror proof | Historical/display-only or `BLOCKED_POLICY` as locked | Missing DB authority, mismatch, fallback, or unsupported contract blocks | Current supported production identity verifies |
+| Challenge panel/protocol/verdict | Named ml-saham extractor and Protocol | Panel grain, feature/target/horizon, split/embargo, adapter/protocol IDs | Preserve upstream lineage through folds and artifact identity | Exact `BLOCKED_DATA`/`INCONCLUSIVE` behavior | Leakage, pooling, identity loss, insufficient folds, or semantic mismatch blocks | All upstream authority and Protocol gates pass |
+| Artifact/export/reopen/promotion | Named ml-saham writer and reader | Artifact schema/ID, cohort, population, snapshot, protocol, baseline/challenger, revisions | Round-trip and re-resolve production authority; immutable content digest | Historical artifacts remain ineligible | Unsupported schema or any identity mismatch blocks reopen/promotion | Current artifact and authoritative upstream identities both verify |
+| Repository/transport boundary | Named port and concrete adapter | DB/file URI, row keys, serialized identity fields, connection mode | Prove no upstream writes and no replacement rows/defaults | Missing file/table/row is explicit | Query/schema/serialization errors fail closed | Exact authoritative rows arrive through the permitted read-only path |
+
+Enforcement rules:
+
+- Read-only applies transitively to every constructor, connection factory,
+  context manager, lazy initializer, schema ensure, migration, repair hook,
+  directory creation, attach, and persistent PRAGMA. Tests must prove missing
+  paths remain missing and upstream file metadata, schema, page/count state,
+  and rows remain unchanged; use SQLite `mode=ro`/query-only where applicable.
+- For every tightened consumer invariant, tests must use a real canonical
+  producer/export artifact or shared golden emitted by it, then read,
+  deserialize, extract, write/reopen where applicable, and validate it through
+  the real downstream boundary. Hand-built consumer-shaped happy paths are not
+  sufficient.
+- Producer and consumer must use the same cohort, population, session, horizon,
+  cutoff, policy, and provenance axes. Value-equivalent reconstruction is not
+  lineage equivalence.
+- Derive calendar, benchmark, embargo/session, and other reference coverage
+  from the exact consumed rows/artifacts. Test newest immature rows, older
+  mature rows, unavailable future dates, holidays/interior gaps, and cohorts
+  with different ranges. Never request hypothetical future coverage for an
+  artifact that does not yet exist.
+- Before changing a shared or cross-repo schema/version, inventory every
+  producer, consumer, compatibility hash, command, Protocol, and artifact that
+  imports it. Use a purpose-specific version when the change is purpose-specific
+  unless every affected workflow is explicitly authorized to fork.
+- Close-gate evidence must be rerun after the final production/test edit and on
+  the exact commit/state claimed complete. Any later code, fixture, composition,
+  schema, dependency, or golden change invalidates earlier green output.
+
+## 12. Required Reading Matrix
 
 Always read:
 
@@ -340,7 +405,7 @@ index. Trust current executable code/tests for implemented behavior, accepted
 ADRs for intended contracts, then current product/data docs. Flag drift rather
 than silently choosing whichever source is convenient.
 
-## 12. Before Editing
+## 13. Before Editing
 
 1. Identify task type and semantic classifications.
 2. Read the selected sources.
@@ -352,7 +417,7 @@ than silently choosing whichever source is convenient.
 7. Stop if the contract would permit leakage, upstream writes, identity
    inference, silent fallback, or auto-promotion.
 
-## 13. Final Reporting
+## 14. Final Reporting
 
 Lead with the result. Report:
 
