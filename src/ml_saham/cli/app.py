@@ -1181,6 +1181,7 @@ def challenge_promote_packet_cmd(
         from_artifact=from_artifact,
         write_artifact=not no_artifact,
         artifacts_dir=Path(arts) if arts else None,
+        db_path=ctx.obj["db"],
     )
     for line in result.lines:
         console.print(line)

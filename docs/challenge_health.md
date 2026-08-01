@@ -119,6 +119,13 @@ and not promote-reopen eligible. Missing, string, float, or unsupported versions
 fail closed. When `manifest.json` is present it is authoritative — a sibling
 `export.json` cannot bypass manifest validation.
 
+**v3 population identity (promote reopen):** verified production ACCUM exports
+must carry non-empty `population_identity_kind` / `population_identity_id` /
+`population_identity_detail`. For ACCUM promote eligibility:
+`population_identity_kind == "accum_compat"` and
+`population_identity_id == observation_compatibility_id`. Omitting these fields
+fails closed even when production snapshot ids are present.
+
 **Baselines:** `baseline=production` requires a verified production-policy
 snapshot + adapter (ACCUM path today). Static pre-open / IEV fixtures must pass
 `--baseline static_reference` explicitly; production is never silently remapped.

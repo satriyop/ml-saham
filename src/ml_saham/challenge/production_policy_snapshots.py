@@ -211,6 +211,42 @@ def _verify_row(
     )
 
 
+def verify_export_snapshot_against_db(
+    conn: sqlite3.Connection,
+    *,
+    compatibility_id: str,
+    policy_id: str,
+    snapshot_id: str,
+    payload_digest: str,
+) -> str | None:
+    """Prove export identities match an immutable learning_policy_snapshots row.
+
+    Returns an error string, or ``None`` when the digest/id/cohort/policy match
+    a verified production row. Does not invent authority from format alone.
+    """
+    try:
+        verified = load_verified_snapshot_set(conn, compatibility_id)
+    except PolicySnapshotError as exc:
+        return f"production identity invalid: authoritative snapshot set failed: {exc}"
+    snap = verified.get(policy_id)
+    if snap is None:
+        return (
+            "production identity invalid: policy_id="
+            f"{policy_id!r} missing from verified snapshot set for cohort"
+        )
+    if snap.snapshot_id != snapshot_id:
+        return (
+            "production identity invalid: production_snapshot_id does not match "
+            "authoritative learning_policy_snapshots.snapshot_id"
+        )
+    if snap.payload_digest != payload_digest:
+        return (
+            "production identity invalid: production_snapshot_digest does not match "
+            "authoritative learning_policy_snapshots.payload_digest"
+        )
+    return None
+
+
 def load_verified_snapshot_set(
     conn: sqlite3.Connection, compatibility_id: str
 ) -> dict[str, VerifiedProductionPolicySnapshot]:

@@ -162,9 +162,13 @@ def test_cli_champion(fixture_db: Path, tmp_path: Path):
         text = out_json.read_text(encoding="utf-8")
         assert "lgbm_reweight" in text
         assert "production" in text
+        from ml_saham.challenge.artifacts import CHALLENGE_ARTIFACT_SCHEMA_VERSION
+
         payload = json.loads(text)
-        assert payload.get("schema_version") == 2
+        assert payload.get("schema_version") == CHALLENGE_ARTIFACT_SCHEMA_VERSION
         assert type(payload["schema_version"]) is int
+        assert payload.get("population_identity_kind") == "accum_compat"
+        assert payload.get("population_identity_id") == FIXTURE_COMPATIBILITY_ID
 
 
 def test_feature_keys_accum():

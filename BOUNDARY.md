@@ -143,7 +143,9 @@ Hard rules (unchanged): **no** ai-saham Python imports · **no** scrapers · **n
   `pre_open_compat` (observation cohort id) or `iev_batch` (selection contract
   + stable hash of selected IEV row material: capture time, NCP lock, rank,
   IEV, IEP — not mere ticker/date membership). Carried on results/artifacts as
-  `population_identity_*` (challenge artifact schema **v3**).
+  `population_identity_*` (challenge artifact schema **v3**). Promote reopen of
+  production ACCUM packets **requires** these fields and enforces
+  `kind=accum_compat` with `id == observation_compatibility_id`.
 
 Horizons **3 / 10 / 20** (primary **10**) align with ai-saham ADR-056 **by number**.  
 Challenge excess and corpus SUCCESS/FAILURE labels remain **different products** unless a protocol explicitly says otherwise.
