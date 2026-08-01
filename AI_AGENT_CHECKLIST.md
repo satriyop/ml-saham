@@ -56,6 +56,10 @@ not load unrelated documents merely to tick boxes.
 ## 6. Production Policy And Adapter
 
 - [ ] `baseline=production` has a verified cohort-bound snapshot.
+- [ ] The `PROMPT_CONTRACT.md` section 5 baseline truth table is covered:
+      omitted/`production` without verified identity blocks; explicit
+      `static_reference` runs non-promotably; unknown blocks.
+- [ ] The requested baseline is never rewritten or substituted.
 - [ ] Snapshot canonical bytes/digest/identity are validated, not trusted labels.
 - [ ] Production snapshot and challenge adapter are separate typed concepts.
 - [ ] Adapter supports the exact policy and semantic contract.
@@ -108,6 +112,12 @@ not load unrelated documents merely to tick boxes.
 ## 11. Artifacts And Writes
 
 - [ ] Artifact schema/version and ID inputs are explicit.
+- [ ] Every semantic identity declares its material dimensions, and tests mutate
+      each dimension independently to prove the identity changes.
+- [ ] Membership identity and input-content/batch identity are separate when
+      they cover different material.
+- [ ] Adding or changing material identity fields bumps the artifact schema or
+      follows an explicit accepted clean-break contract.
 - [ ] Cohort, snapshot, adapter, Protocol, baseline/challenger, range, counts,
       folds, code/dependency, and seed identities are carried as applicable.
 - [ ] Writes target only ml-saham-owned paths/stores.

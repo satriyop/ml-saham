@@ -48,6 +48,11 @@ labels, production claims, or promotion.
 - Never downgrade a blocked or inconclusive result to a warning plus success.
 - Never call a baseline `production` without a verifiable production-policy
   identity for the selected cohort and a supported challenge adapter.
+- Follow the closed production-baseline truth table in `PROMPT_CONTRACT.md`
+  section 5. Never rewrite the requested baseline: omitted/explicit
+  `production` without verified identity is `BLOCKED_POLICY`, while
+  `static_reference` runs only when explicitly requested and is never
+  promotion-eligible.
 - Never use a packaged/static mirror as a silent fallback when a verified
   upstream policy contract is required.
 - A result may create a human review memo or promote packet. It must never edit
@@ -141,6 +146,12 @@ A challenge result must keep these concepts separate:
 Value-equivalent reconstructed objects are not identity-equivalent. Do not
 discard provenance early, re-query a replacement row, or combine these concepts
 inside one overloaded `hash` string.
+
+Every semantic identity must change when any material dimension it claims to
+cover changes. Require mutation tests for each dimension; a non-empty or
+hash-shaped ID is not evidence that the correct material was bound. Keep
+membership identity separate from input-content/batch identity when their
+material sets differ.
 
 When reopening an artifact, validate its schema and identities. Historical
 artifacts may be displayed as historical output but must not acquire current

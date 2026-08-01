@@ -65,6 +65,25 @@ used, a before/after mutation tripwire.
 
 `production` is a claim, not a convenient label.
 
+The baseline decision is closed by this truth table. "Verified production
+identity" means the exact cohort-bound production snapshot and a supported
+versioned challenge adapter have both passed their contract checks.
+
+| Requested baseline | Verified production identity | Required result |
+|---|---:|---|
+| omitted | yes | Run as `production` |
+| omitted | no | `BLOCKED_POLICY` |
+| `production` | yes | Run as `production` |
+| `production` | no | `BLOCKED_POLICY` |
+| `static_reference` | yes or no | Run as `static_reference`; never promotion-eligible |
+| unknown | any | `BLOCKED_POLICY` |
+
+The requested baseline is never rewritten. In particular, a request for
+`production` must not be remapped to `static_reference`, even with a visible
+warning. `baseline_id == "production"` if and only if the result carries the
+verified snapshot and adapter identities required by the active policy
+contract. `static_reference` is an explicit caller choice, not a fallback.
+
 Before allowing it, require:
 
 - one explicit observation compatibility cohort;
@@ -78,6 +97,26 @@ Before allowing it, require:
 Observed production outputs should be preferred when recomputation is not
 required. Missing or unverifiable identity is `BLOCKED_POLICY`, not
 `BLOCKED_DATA`, and never an approximate run.
+
+Required negative coverage:
+
+- omitted/`production` plus missing identity returns `BLOCKED_POLICY`;
+- `production` is never rewritten as `static_reference`;
+- explicit `static_reference` remains non-promotable even when a verified
+  production identity is available;
+- an unknown baseline returns `BLOCKED_POLICY`;
+- artifact reopening preserves the recorded baseline and cannot make a
+  non-production result promotion-eligible.
+
+### Semantic identity materiality
+
+Every semantic identity must declare the material dimensions it covers and
+must change when any one of those dimensions changes. Tests must mutate every
+material dimension independently and assert identity sensitivity; checking
+only that an ID is present, hash-shaped, or stable on identical input is
+insufficient. If membership and input-content identity answer different
+questions, represent them as separate typed identities instead of overloading
+one hash.
 
 ## 6. Protocol Immutability And Leakage Rule
 

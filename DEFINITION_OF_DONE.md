@@ -69,9 +69,16 @@ A leakage finding is a correctness failure, not a caveat to append after a
 - Production-facing runs select the cohort explicitly.
 - `baseline=production` has a verifiable, cohort-bound upstream snapshot and a
   supported local adapter; no static fallback.
+- Baseline behavior matches the closed truth table in `PROMPT_CONTRACT.md`
+  section 5: requested baselines are never rewritten; omitted/explicit
+  `production` without verified identity is `BLOCKED_POLICY`; explicit
+  `static_reference` is never promotion-eligible; unknown baselines block.
 - Policy snapshot, challenge adapter, Protocol, challenger, population, and
   artifact identities remain separate and are carried into result/artifact
   surfaces.
+- Every semantic identity names its material dimensions and changes when each
+  dimension is mutated independently. Membership and input-content/batch
+  identities remain separate when they answer different questions.
 - Historical/legacy artifacts remain historical and cannot acquire current
   eligibility through default values or translation.
 
