@@ -232,26 +232,61 @@ def load_iev_raw_rows(
     return picked, notes, "iev_snapshots"
 
 
+def _canonical_iev_selected_unit(row: dict[str, Any]) -> dict[str, Any]:
+    """Material fields of one selected IEV decision row (not mere membership)."""
+    capture = str(
+        row.get("collected_at") or row.get("fetched_at") or ""
+    ).strip()
+    try:
+        locked = int(row.get("is_ncp_locked") or 0)
+    except (TypeError, ValueError):
+        locked = 0
+    try:
+        rank = int(row.get("rank") or 0)
+    except (TypeError, ValueError):
+        rank = 0
+    return {
+        "date": str(row.get("date") or "").strip(),
+        "ticker": str(row.get("ticker") or "").upper().strip(),
+        "capture_at": capture,
+        "is_ncp_locked": locked,
+        "rank": rank,
+        # Quantize floats for stable JSON across platforms.
+        "iev": round(_f(row.get("iev")), 8),
+        "iep": round(_f(row.get("iep")), 8),
+    }
+
+
 def _stable_iev_population_id(
     *,
     source_table: str,
     selection_contract: str,
-    panel_rows: list[PanelRow],
+    selected_rows: list[dict[str, Any]],
 ) -> str:
-    """Deterministic population id for the labeled IEV panel units."""
+    """Deterministic population id over **selected batch material**.
+
+    Includes capture/fetch timestamp, NCP lock, rank, IEV, and IEP — not only
+    (date, ticker) membership — so value changes in selected inputs change the id.
+    """
     units = sorted(
-        ({"date": r.date, "ticker": r.ticker} for r in panel_rows),
-        key=lambda u: (u["date"], u["ticker"]),
+        (
+            _canonical_iev_selected_unit(r)
+            for r in selected_rows
+            if str(r.get("ticker") or "").upper().strip()
+            and str(r.get("ticker") or "").upper().strip() != "IHSG"
+        ),
+        key=lambda u: (u["date"], u["ticker"], u["capture_at"]),
     )
     material = json.dumps(
         {
             "selection_contract": selection_contract,
             "source_table": source_table,
-            "units": units,
+            "selected_units": units,
         },
         ensure_ascii=True,
         sort_keys=True,
         separators=(",", ":"),
+        allow_nan=False,
     )
     digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
     return f"sha256:{digest}"
@@ -350,6 +385,7 @@ def build_iev_panel(
 
         pairs: list[tuple[str, str]] = []
         staged: list[tuple[str, str, dict[str, float]]] = []
+        selected_for_identity: list[dict[str, Any]] = []
         for date, items in sorted(by_date.items()):
             ranks: list[int] = []
             for it in items:
@@ -372,14 +408,17 @@ def build_iev_panel(
                 comps = _component_features(iev, iep, rank, max_rank)
                 staged.append((t, date, comps))
                 pairs.append((t, date))
+                selected_for_identity.append(it)
 
         excess_map, lab_notes = _open_close_excess(conn, pairs)
         notes.extend(lab_notes)
 
         rows: list[PanelRow] = []
+        labeled_keys = set()
         for t, date, comps in staged:
             if (t, date) not in excess_map:
                 continue
+            labeled_keys.add((t, date))
             rows.append(
                 PanelRow(
                     ticker=t,
@@ -389,6 +428,8 @@ def build_iev_panel(
                 )
             )
         rows.sort(key=lambda r: (r.date, r.ticker))
+        # Population id uses **selected** decision rows (batch material), including
+        # those later dropped for missing labels — so capture/IEV changes always bind.
         n_dates = len({r.date for r in rows})
         n_tickers = len({r.ticker for r in rows})
         dates = sorted({r.date for r in rows})
@@ -401,18 +442,21 @@ def build_iev_panel(
         population_id = _stable_iev_population_id(
             source_table=source_table,
             selection_contract=IEV_SELECTION_CONTRACT,
-            panel_rows=rows,
+            selected_rows=selected_for_identity,
         )
         identity: dict[str, Any] = {
             "kind": IEV_POPULATION_KIND,
             "selection_contract": IEV_SELECTION_CONTRACT,
             "source_table": source_table,
             "population_id": population_id,
+            "n_selected_units": len(selected_for_identity),
+            "n_labeled_rows": len(rows),
             "n_rows": len(rows),
             "n_dates": n_dates,
             "n_tickers": n_tickers,
             "date_min": dates[0] if dates else "",
             "date_max": dates[-1] if dates else "",
+            "n_unlabeled_selected": max(0, len(selected_for_identity) - len(labeled_keys)),
         }
         notes.append(
             f"iev population_id={population_id} "

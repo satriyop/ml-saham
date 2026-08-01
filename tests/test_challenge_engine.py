@@ -112,6 +112,7 @@ def test_scenario_filter_pre_open(fixture_db: Path):
         scenario="pre-open",
         write_artifact=False,
         compatibility_id=FIXTURE_COMPATIBILITY_ID,
+        baseline="static_reference",
     )
     assert result.exit_code() == 0
     assert len(result.rows) == 2
@@ -120,6 +121,9 @@ def test_scenario_filter_pre_open(fixture_db: Path):
         "accum" not in r.policy_id or "pre_open" in r.policy_id for r in result.rows
     )
     assert not any(r.policy_id == "screener.accum.score_weights" for r in result.rows)
+    for r in result.rows:
+        if r.status not in ("BLOCKED_DATA", "BLOCKED_POLICY", "ERROR"):
+            assert r.baseline_id == "static_reference"
 
 
 def test_cli_list_and_run(fixture_db: Path, tmp_path: Path):

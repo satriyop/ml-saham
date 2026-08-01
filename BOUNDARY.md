@@ -134,6 +134,16 @@ Hard rules (unchanged): **no** ai-saham Python imports · **no** scrapers · **n
   PRE_OPEN observation challenge (not only thin/new rulebooks). Omitting it
   fails closed with `BLOCKED_POLICY`. A mixed engine reuses one flag only as a
   pass-through; each policy still validates its own purpose family.
+- **`baseline=production`** is allowed only with a verified production-policy
+  snapshot and supported challenge adapter. Static pre-open / IEV fixtures have
+  no such identity today: requesting `production` is **`BLOCKED_POLICY`** (no
+  silent remap). Reference digs require an explicit
+  `--baseline static_reference` and are not promote-eligible.
+- **Population identity** is typed and purpose-specific: `accum_compat` /
+  `pre_open_compat` (observation cohort id) or `iev_batch` (selection contract
+  + stable hash of selected IEV row material: capture time, NCP lock, rank,
+  IEV, IEP — not mere ticker/date membership). Carried on results/artifacts as
+  `population_identity_*` (challenge artifact schema **v3**).
 
 Horizons **3 / 10 / 20** (primary **10**) align with ai-saham ADR-056 **by number**.  
 Challenge excess and corpus SUCCESS/FAILURE labels remain **different products** unless a protocol explicitly says otherwise.

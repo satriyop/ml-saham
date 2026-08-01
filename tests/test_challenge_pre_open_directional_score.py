@@ -131,6 +131,7 @@ def test_panel_and_tournament(fixture_db: Path, tmp_path: Path):
             write_artifact=False,
             artifacts_dir=tmp_path / "a",
             compatibility_id=FIXTURE_COMPATIBILITY_ID,
+            baseline="static_reference",
         )
         assert result.status in {
             ChallengeStatus.WIN,
@@ -181,6 +182,8 @@ def test_cli(fixture_db: Path, tmp_path: Path):
             "screener.pre_open.directional_score",
             "--against",
             "equal_sleeves",
+            "--baseline",
+            "static_reference",
             "--compatibility-id",
             FIXTURE_COMPATIBILITY_ID,
             "--no-artifact",

@@ -246,6 +246,7 @@ def test_champion_pre_open_iev_or_block(fixture_db: Path):
         against="lgbm_reweight",
         write_artifact=False,
         compatibility_id=FIXTURE_COMPATIBILITY_ID,
+        baseline="static_reference",
     )
     assert result.status in {
         ChallengeStatus.WIN,

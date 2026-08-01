@@ -134,14 +134,13 @@ def resolve_challenge_baseline(
     *,
     has_verified_production_identity: bool,
 ) -> tuple[str, list[str], ChallengeStatus | None]:
-    """Bind baseline honesty to verified production identity.
+    """Bind baseline honesty to verified production identity (fail closed).
 
-    - ``production`` is allowed only with a verified production-policy snapshot
-      and supported challenge adapter on the composed policy.
-    - Policies without that identity (static pre-open / IEV fixtures today) run
-      under ``static_reference`` and are not production promote-eligible.
-    - Requested ``production`` without verified identity is remapped to
-      ``static_reference`` (never labeled as production).
+    - ``production`` requires a verified production-policy snapshot and supported
+      challenge adapter. Without that identity → ``BLOCKED_POLICY`` (no silent
+      remap to another baseline).
+    - ``static_reference`` is an explicit caller choice for static fixture digs
+      (pre-open / IEV today) and is never promote-eligible as production.
     """
     notes: list[str] = []
     raw = (requested or "").strip().lower().replace("-", "_")
@@ -157,25 +156,31 @@ def resolve_challenge_baseline(
             ChallengeStatus.BLOCKED_POLICY,
         )
 
-    if has_verified_production_identity:
-        if raw == BASELINE_STATIC_REFERENCE:
-            notes.append(
-                "baseline=static_reference on a verified production policy "
-                "(reference dig only; not the production promote path)"
-            )
-        return raw, notes, None
-
-    # No verified production-policy snapshot/adapter identity.
     if raw == BASELINE_PRODUCTION:
+        if not has_verified_production_identity:
+            return (
+                BASELINE_PRODUCTION,
+                [
+                    "BLOCKED_POLICY: baseline=production requires a verified "
+                    "production-policy snapshot and supported challenge adapter "
+                    "for this policy/cohort; static fixtures (pre-open/IEV) must "
+                    f"pass --baseline {BASELINE_STATIC_REFERENCE} explicitly "
+                    "(no silent production→static_reference remap)"
+                ],
+                ChallengeStatus.BLOCKED_POLICY,
+            )
+        return BASELINE_PRODUCTION, notes, None
+
+    # Explicit static_reference
+    if has_verified_production_identity:
         notes.append(
-            "baseline remapped production→static_reference: policy has no "
-            "verified production-policy snapshot + challenge adapter identity; "
-            "static_reference dig is not promote-eligible as production"
+            "baseline=static_reference on a verified production policy "
+            "(reference dig only; not the production promote path)"
         )
     else:
         notes.append(
-            "baseline=static_reference (static policy fixture / reference dig; "
-            "not verified production-policy)"
+            "baseline=static_reference (static policy fixture dig; "
+            "not verified production-policy; not promote-eligible as production)"
         )
     return BASELINE_STATIC_REFERENCE, notes, None
 
@@ -795,14 +800,15 @@ def run_policy_challenge(
 
     if prep.blocked is not None or prep.policy is None or prep.protocol is None:
         st = prep.blocked or ChallengeStatus.BLOCKED_DATA
-        # Even on early block, do not claim production without verified identity.
+        # Record baseline honesty notes, but do not overwrite BLOCKED_DATA
+        # (e.g. missing DB) with a production-identity BLOCKED_POLICY.
         has_verified = bool(
             prep.policy is not None and prep.policy.production_snapshot_id
         )
         baseline_id, base_notes, base_block = resolve_challenge_baseline(
             requested_baseline, has_verified_production_identity=has_verified
         )
-        if base_block is not None:
+        if base_block is not None and prep.blocked is None:
             st = base_block
         early_notes = list(prep.notes) + list(base_notes)
         return make_result(

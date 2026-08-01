@@ -279,6 +279,7 @@ def test_iev_does_not_stamp_irrelevant_compatibility_id(tmp_path: Path):
         against="equal_sleeves",
         write_artifact=False,
         compatibility_id="made-up-id",
+        baseline="static_reference",
     )
     joined = "\n".join(result.notes)
     assert "compatibility_id=made-up-id (explicit)" not in joined
@@ -323,6 +324,7 @@ def test_pre_open_requires_real_pre_open_cohort(tmp_path: Path):
         against="equal_sleeves",
         write_artifact=False,
         compatibility_id=None,
+        baseline="static_reference",
     )
     assert missing.status == ChallengeStatus.BLOCKED_POLICY
     assert any("PRE_OPEN" in n and "explicit" in n for n in missing.notes)
@@ -333,6 +335,7 @@ def test_pre_open_requires_real_pre_open_cohort(tmp_path: Path):
         against="equal_sleeves",
         write_artifact=False,
         compatibility_id="made-up-id",
+        baseline="static_reference",
     )
     assert fake.status == ChallengeStatus.BLOCKED_POLICY
     assert any("not found among PRE_OPEN" in n for n in fake.notes)
@@ -344,6 +347,7 @@ def test_pre_open_requires_real_pre_open_cohort(tmp_path: Path):
         against="equal_sleeves",
         write_artifact=False,
         compatibility_id=FIXTURE_COMPATIBILITY_ID,
+        baseline="static_reference",
     )
     assert ok.status in {
         ChallengeStatus.WIN,
@@ -364,8 +368,43 @@ def test_pre_open_requires_real_pre_open_cohort(tmp_path: Path):
         assert not ok.has_verified_production_identity()
 
 
+def test_production_baseline_blocked_without_verified_identity(tmp_path: Path):
+    """Requested baseline=production without verified snapshot → BLOCKED_POLICY."""
+    from ml_saham.challenge.runner import run_policy_challenge
+    from ml_saham.challenge.types import ChallengeStatus
+    from tests.fixtures.build_mvp_fixture import (
+        FIXTURE_COMPATIBILITY_ID,
+        build_mvp_fixture,
+    )
+
+    db = build_mvp_fixture(tmp_path / "prod_block.db", min_bars=100)
+    blocked = run_policy_challenge(
+        db,
+        "screener.pre_open.iev_rank",
+        against="equal_sleeves",
+        write_artifact=False,
+        baseline="production",
+    )
+    assert blocked.status == ChallengeStatus.BLOCKED_POLICY
+    assert blocked.baseline_id == "production"
+    assert blocked.exit_code() == 2
+    assert any("baseline=production requires" in n for n in blocked.notes)
+    assert "Baseline: static_reference" not in "\n".join(blocked.lines)
+
+    # Explicit static_reference is the only way to dig static fixtures.
+    ok = run_policy_challenge(
+        db,
+        "screener.pre_open.iev_rank",
+        against="equal_sleeves",
+        write_artifact=False,
+        baseline="static_reference",
+    )
+    if ok.status not in (ChallengeStatus.BLOCKED_DATA, ChallengeStatus.BLOCKED_POLICY):
+        assert ok.baseline_id == "static_reference"
+
+
 def test_mixed_engine_purpose_specific_identity(tmp_path: Path):
-    """Screener engine: one id is not universal provenance across ACCUM/IEV/PRE_OPEN."""
+    """Screener engine: purpose-family + baseline honesty per policy."""
     from ml_saham.challenge.engines import run_engine_portfolio
     from tests.fixtures.build_mvp_fixture import (
         FIXTURE_COMPATIBILITY_ID,
@@ -374,45 +413,53 @@ def test_mixed_engine_purpose_specific_identity(tmp_path: Path):
 
     db = build_mvp_fixture(tmp_path / "eng.db", min_bars=100)
 
-    fake = run_engine_portfolio(
-        db, "screener", write_artifact=False, compatibility_id="made-up-id"
-    )
-    assert fake.resolve_error is None  # per-policy fail-closed, not global gate
-    by_pid = {r.policy_id: r for r in fake.rows}
-    accum = by_pid["screener.accum.score_weights"]
-    iev = by_pid["screener.pre_open.iev_rank"]
-    directional = by_pid["screener.pre_open.directional_score"]
-
-    assert accum.status == "BLOCKED_POLICY"
-    assert any("not found among ACCUM" in n for n in accum.notes)
-    assert accum.observation_compatibility_id == ""
-
-    # IEV may score; must not stamp made-up observation cohort as explicit binding.
-    assert "compatibility_id=made-up-id (explicit)" not in "\n".join(iev.notes)
-    assert iev.observation_compatibility_id == ""
-    assert any(
-        "not applicable to iev_rank" in n or "iev" in n.lower() for n in iev.notes
-    )
-
-    assert directional.status == "BLOCKED_POLICY"
-    assert any("not found among PRE_OPEN" in n for n in directional.notes)
-
-    # Valid fixture id exists in both ACCUM and PRE_OPEN in the MVP fixture.
-    good = run_engine_portfolio(
+    # Default baseline=production: static pre-open/IEV fail closed (no remap).
+    prod = run_engine_portfolio(
         db,
         "screener",
         write_artifact=False,
         compatibility_id=FIXTURE_COMPATIBILITY_ID,
+        baseline="production",
     )
-    by_ok = {r.policy_id: r for r in good.rows}
-    assert by_ok["screener.accum.score_weights"].status != "BLOCKED_POLICY" or not any(
-        "requires explicit" in n for n in by_ok["screener.accum.score_weights"].notes
+    by_prod = {r.policy_id: r for r in prod.rows}
+    assert by_prod["screener.accum.score_weights"].status != "ERROR"
+    assert by_prod["screener.accum.score_weights"].baseline_id == "production"
+    assert by_prod["screener.pre_open.iev_rank"].status == "BLOCKED_POLICY"
+    assert any(
+        "baseline=production requires" in n
+        for n in by_prod["screener.pre_open.iev_rank"].notes
     )
-    assert by_ok["screener.accum.score_weights"].observation_compatibility_id == (
-        FIXTURE_COMPATIBILITY_ID
+    assert by_prod["screener.pre_open.directional_score"].status == "BLOCKED_POLICY"
+
+    # Explicit static_reference digs: IEV/PRE_OPEN can run; ACCUM also allowed as ref dig.
+    ref = run_engine_portfolio(
+        db,
+        "screener",
+        write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
+        baseline="static_reference",
     )
-    # IEV still must not claim the observation cohort as its population id.
-    assert by_ok["screener.pre_open.iev_rank"].observation_compatibility_id == ""
+    by_ref = {r.policy_id: r for r in ref.rows}
+    iev = by_ref["screener.pre_open.iev_rank"]
+    assert iev.observation_compatibility_id == ""
+    assert iev.baseline_id == "static_reference"
+    if iev.status not in ("BLOCKED_DATA", "BLOCKED_POLICY"):
+        assert iev.population_identity_kind == "iev_batch"
+        assert iev.population_identity_id.startswith("sha256:")
+
+    fake = run_engine_portfolio(
+        db,
+        "screener",
+        write_artifact=False,
+        compatibility_id="made-up-id",
+        baseline="static_reference",
+    )
+    by_fake = {r.policy_id: r for r in fake.rows}
+    assert by_fake["screener.accum.score_weights"].status == "BLOCKED_POLICY"
+    assert by_fake["screener.pre_open.directional_score"].status == "BLOCKED_POLICY"
+    assert "compatibility_id=made-up-id (explicit)" not in "\n".join(
+        by_fake["screener.pre_open.iev_rank"].notes
+    )
 
 
 def test_production_run_with_explicit_fixture_cohort_binds(tmp_path: Path):
@@ -472,7 +519,7 @@ def test_static_reference_not_promote_eligible(tmp_path: Path):
     export.write_text(
         json.dumps(
             {
-                "schema_version": 2,
+                "schema_version": 3,
                 "status": result.status.value,
                 "policy_id": result.policy_id,
                 "protocol_id": result.protocol_id,

@@ -112,10 +112,17 @@ ml-saham challenge promote-packet --from-json /tmp/champ.json
 Also: `--from-artifact <challenge_artifact_dir>` (manifest + metrics).
 
 **Schema reopen contract:** challenge/champion JSON exports and artifact packs
-stamp integer `schema_version: 2`. `promote-packet` requires that exact integer
-on every reopen path (`--from-json` and `--from-artifact`). Missing, string,
-float, or unsupported versions fail closed. When `manifest.json` is present it
-is authoritative — a sibling `export.json` cannot bypass manifest validation.
+stamp integer `schema_version: 3` (material population identity fields + honest
+`baseline_id`). `promote-packet` requires that exact integer on every reopen
+path (`--from-json` and `--from-artifact`). Historical v2 packs are display-only
+and not promote-reopen eligible. Missing, string, float, or unsupported versions
+fail closed. When `manifest.json` is present it is authoritative — a sibling
+`export.json` cannot bypass manifest validation.
+
+**Baselines:** `baseline=production` requires a verified production-policy
+snapshot + adapter (ACCUM path today). Static pre-open / IEV fixtures must pass
+`--baseline static_reference` explicitly; production is never silently remapped.
+`static_reference` digs are not promote-eligible.
 
 **Never auto-applies.** LOSE/INCONCLUSIVE packets are allowed (document reject / need data).
 

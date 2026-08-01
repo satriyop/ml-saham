@@ -25,7 +25,11 @@ JAKARTA = ZoneInfo("Asia/Jakarta")
 
 # Challenge product artifact / promote-reopen contract (integer, not coerced).
 # Distinct from curriculum pack SCHEMA_VERSION in ml_saham.artifacts.writer.
-CHALLENGE_ARTIFACT_SCHEMA_VERSION = 2
+#
+# v3: material population identity fields (kind/id/detail) and honest
+# baseline_id (production | static_reference). v2 artifacts remain historical
+# display-only and are not promote-reopen eligible.
+CHALLENGE_ARTIFACT_SCHEMA_VERSION = 3
 
 
 def challenge_result_export_payload(

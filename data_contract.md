@@ -170,7 +170,8 @@ candles (+ IHSG)         ─read──►  protocol y (excess / open-close)
 
 | Path | Cohort selection |
 |------|------------------|
-| **Production-facing challenge** (run / factor / engine / health / champion prep) | **Explicit** purpose-family id required (`--compatibility-id`). ACCUM and PRE_OPEN observation panels must find that id in their family; no largest auto-select. IEV rank does **not** use observation `compatibility_id` (binds iev snapshot batch identity). |
+| **Production-facing challenge** (run / factor / engine / health / champion prep) | **Explicit** purpose-family id required (`--compatibility-id`). ACCUM and PRE_OPEN observation panels must find that id in their family; no largest auto-select. IEV rank does **not** use observation `compatibility_id` (binds `iev_batch` population identity from selected row material). |
+| **Baseline honesty** | `baseline=production` only with verified production-policy snapshot + adapter. Static pre-open/IEV fixtures require explicit `--baseline static_reference` (never silent production remap). |
 | **Exploratory / curriculum** (`fetch_*` without preferred, chapters) | May default to largest `n` (ties → newest `max(captured_at)`). Notes record selected id and excluded cohort sizes. |
 | **Legacy fixtures** without the column | Unfiltered path (no cohort stamp). |
 
