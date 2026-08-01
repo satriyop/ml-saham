@@ -87,28 +87,16 @@ def validate_artifact_schema_version(data: dict[str, Any]) -> str | None:
     return None
 
 
-def validate_verified_production_identity(
+def validate_production_identity_format(
     data: dict[str, Any],
     *,
     require_schema_version: bool = True,
-    conn: sqlite3.Connection | None = None,
-    require_authoritative_db: bool = False,
 ) -> str | None:
-    """Validate formats and consistency of production identities for promote reopen.
+    """Format/consistency checks only — not a claim of verified production authority.
 
-    Presence of identity fields is checked separately. This layer rejects
-    fabricated non-empty placeholders that would otherwise look "verified."
-
-    When ``require_authoritative_db`` is True (promote reopen), ``conn`` must be
-    a read-only ai-saham SQLite connection and the export digest/id must match
-    an immutable ``learning_policy_snapshots`` row. Format-only hex checks are
-    never sufficient for promote eligibility.
-
-    ``require_schema_version`` defaults to True: every promote reopen path must
-    present an exact supported integer schema_version. Pass False only for
-    unit tests that isolate identity format checks without a full artifact.
-
-    Returns an error string, or ``None`` when valid.
+    Does **not** prove the export digest exists in ``learning_policy_snapshots``.
+    Callers that need verified authority must use
+    :func:`validate_verified_production_identity` with a live DB connection.
     """
     if require_schema_version:
         schema_err = validate_artifact_schema_version(data)
@@ -154,9 +142,7 @@ def validate_verified_production_identity(
 
     # Schema v3: population identity is material provenance for ACCUM promote.
     missing_pop = [
-        k
-        for k in _POPULATION_IDENTITY_V3
-        if k not in data or data[k] in (None, "")
+        k for k in _POPULATION_IDENTITY_V3 if k not in data or data[k] in (None, "")
     ]
     if missing_pop:
         return (
@@ -269,7 +255,6 @@ def validate_verified_production_identity(
             f"{semantic!r} is not supported by adapter {adapter.adapter_id!r}"
         )
 
-    # Snapshot-id recomputation: cohort + policy identity under shipped contract.
     expected_snapshot_id = stable_snapshot_id_for(
         compatibility_id=compat,
         policy_id=policy_id,
@@ -280,31 +265,44 @@ def validate_verified_production_identity(
             "recomputed snapshot identity for compatibility_id+policy_id "
             "(identity mismatch; not merely missing fields)"
         )
-
-    if require_authoritative_db:
-        if conn is None:
-            return (
-                "production identity invalid: authoritative ai-saham database "
-                "connection is required to verify production_snapshot_digest"
-            )
-        db_err = verify_export_snapshot_against_db(
-            conn,
-            compatibility_id=compat,
-            policy_id=policy_id,
-            snapshot_id=snap_id,
-            payload_digest=digest,
-        )
-        if db_err is not None:
-            return db_err
-
     return None
+
+
+def validate_verified_production_identity(
+    data: dict[str, Any],
+    *,
+    conn: sqlite3.Connection,
+    require_schema_version: bool = True,
+) -> str | None:
+    """Verify production identity against authoritative ai-saham snapshots.
+
+    Always requires a read-only DB connection. Format-only checks live in
+    :func:`validate_production_identity_format` and must not be used alone for
+    promote eligibility.
+    """
+    format_err = validate_production_identity_format(
+        data, require_schema_version=require_schema_version
+    )
+    if format_err is not None:
+        return format_err
+
+    policy_id = str(data.get("policy_id") or "").strip()
+    compat = str(data.get("observation_compatibility_id") or "").strip()
+    snap_id = str(data.get("production_snapshot_id") or "").strip().lower()
+    digest = str(data.get("production_snapshot_digest") or "").strip().lower()
+    return verify_export_snapshot_against_db(
+        conn,
+        compatibility_id=compat,
+        policy_id=policy_id,
+        snapshot_id=snap_id,
+        payload_digest=digest,
+    )
 
 
 def _after_presence_checks(
     data: dict[str, Any],
     *,
-    conn: sqlite3.Connection | None = None,
-    require_authoritative_db: bool = False,
+    conn: sqlite3.Connection,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Shared presence + schema + identity gate used by every reopen loader."""
     # Schema first: missing/wrong version must not be papered over by other fields.
@@ -320,12 +318,10 @@ def _after_presence_checks(
             "historical artifact is not eligible for a verified production-policy "
             "promotion packet; missing: " + ", ".join(missing_identity)
         )
-    # Schema already validated above; identity layer skips a second pass.
     validity_err = validate_verified_production_identity(
         data,
-        require_schema_version=False,
         conn=conn,
-        require_authoritative_db=require_authoritative_db,
+        require_schema_version=False,
     )
     if validity_err is not None:
         return None, validity_err
@@ -335,8 +331,7 @@ def _after_presence_checks(
 def load_evidence_json(
     path: Path,
     *,
-    conn: sqlite3.Connection | None = None,
-    require_authoritative_db: bool = False,
+    conn: sqlite3.Connection,
 ) -> tuple[dict[str, Any] | None, str | None]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -344,17 +339,13 @@ def load_evidence_json(
         return None, f"cannot read JSON: {exc}"
     if not isinstance(data, dict):
         return None, "export root must be a JSON object"
-    # Same contract as artifact packs: exact integer schema_version required.
-    return _after_presence_checks(
-        data, conn=conn, require_authoritative_db=require_authoritative_db
-    )
+    return _after_presence_checks(data, conn=conn)
 
 
 def load_evidence_artifact(
     dir_path: Path,
     *,
-    conn: sqlite3.Connection | None = None,
-    require_authoritative_db: bool = False,
+    conn: sqlite3.Connection,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Load from challenge artifact dir (manifest pack) or standalone export JSON.
 
@@ -409,17 +400,13 @@ def load_evidence_artifact(
                 data["weights"] = json.loads(weights_p.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 pass
-        return _after_presence_checks(
-            data, conn=conn, require_authoritative_db=require_authoritative_db
-        )
+        return _after_presence_checks(data, conn=conn)
 
     # No manifest: standalone export-shaped files only (strict schema required).
     for name in ("export.json", "result.json", "champion.json"):
         p = dir_path / name
         if p.is_file():
-            return load_evidence_json(
-                p, conn=conn, require_authoritative_db=require_authoritative_db
-            )
+            return load_evidence_json(p, conn=conn)
     return None, "artifact dir missing manifest.json (or export.json)"
 
 
@@ -547,14 +534,11 @@ def build_promote_packet(
     try:
         with aisaham_connect(resolved_db) as conn:
             if from_json is not None:
-                evidence, err = load_evidence_json(
-                    Path(from_json), conn=conn, require_authoritative_db=True
-                )
+                evidence, err = load_evidence_json(Path(from_json), conn=conn)
             else:
                 evidence, err = load_evidence_artifact(
                     Path(from_artifact),  # type: ignore[arg-type]
                     conn=conn,
-                    require_authoritative_db=True,
                 )
     except FileNotFoundError as exc:
         return PromotePacketResult(

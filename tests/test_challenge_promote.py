@@ -16,11 +16,13 @@ from ml_saham.challenge.promote import (
     build_promote_packet,
     load_evidence_artifact,
     validate_artifact_schema_version,
+    validate_production_identity_format,
     validate_verified_production_identity,
 )
 from ml_saham.challenge.production_policy_snapshots import stable_snapshot_id_for
 from ml_saham.challenge.runner import run_policy_challenge
 from ml_saham.cli.app import app
+from ml_saham.data.aisaham_read import connect as aisaham_connect
 from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
 
 runner = CliRunner()
@@ -338,7 +340,8 @@ def test_artifact_dir_requires_schema_and_valid_identity(
     (art / "metrics.json").write_text(
         json.dumps({"status": verified_export["status"]}), encoding="utf-8"
     )
-    data, err = load_evidence_artifact(art)
+    with aisaham_connect(fixture_db) as conn:
+        data, err = load_evidence_artifact(art, conn=conn)
     assert data is None
     assert err is not None
     assert "schema_version" in err
@@ -436,7 +439,8 @@ def test_export_json_cannot_bypass_manifest_schema(
     )
     # Fully valid standalone export would succeed alone — must not rescue bad manifest.
     (art / "export.json").write_text(json.dumps(verified_export), encoding="utf-8")
-    data, err = load_evidence_artifact(art)
+    with aisaham_connect(fixture_db) as conn:
+        data, err = load_evidence_artifact(art, conn=conn)
     assert data is None
     assert err is not None
     assert "schema_version" in err
@@ -485,9 +489,16 @@ def test_validate_presence_only_placeholders_rejected():
         "population_identity_id": "x",
         "population_identity_detail": {"kind": "accum_compat", "compatibility_id": "x"},
     }
-    err = validate_verified_production_identity(fake)
+    err = validate_production_identity_format(fake)
     assert err is not None
     assert "production identity invalid" in err or "format" in err
+
+    # "Verified" API always requires a live DB connection (no format-only default).
+    import inspect
+
+    sig = inspect.signature(validate_verified_production_identity)
+    assert "conn" in sig.parameters
+    assert sig.parameters["conn"].default is inspect.Parameter.empty
 
 
 def test_v3_population_identity_required_for_promote(
