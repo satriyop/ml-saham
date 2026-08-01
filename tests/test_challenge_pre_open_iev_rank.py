@@ -85,7 +85,7 @@ def test_no_iev_over_iep_imbalance_feature():
 
 def test_iev_panel_labels(fixture_db: Path):
     pol = load_policy("screener.pre_open.iev_rank")
-    rows, notes = build_iev_panel(
+    rows, notes, _identity = build_iev_panel(
         fixture_db, pol, primary_horizon=PRE_OPEN_SESSION_V1.primary_horizon
     )
     assert len(rows) >= PRE_OPEN_SESSION_V1.min_n_total, notes
@@ -100,7 +100,7 @@ def test_iev_panel_labels(fixture_db: Path):
 
 def test_feature_equal_z_within_date(fixture_db: Path):
     pol = load_policy("screener.pre_open.iev_rank")
-    rows, _ = build_iev_panel(fixture_db, pol, primary_horizon=0)
+    rows, _, _ = build_iev_panel(fixture_db, pol, primary_horizon=0)
     scores = score_feature_equal_z(rows, pol)
     assert len(scores) == len(rows)
 
@@ -133,6 +133,10 @@ def test_run_equal_and_ridge(fixture_db: Path, tmp_path: Path):
             assert result.protocol_id == "pre_open_session_v1"
             assert result.n_rows >= PRE_OPEN_SESSION_V1.min_n_total
             assert result.exit_code() == 0
+            assert result.baseline_id == "static_reference"
+            assert result.population_identity_kind == "iev_batch"
+            assert result.population_identity_id.startswith("sha256:")
+            assert not result.has_verified_production_identity()
 
 
 def test_factor_track_blocked_for_pre_open(fixture_db: Path):

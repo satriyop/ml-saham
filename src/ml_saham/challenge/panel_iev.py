@@ -9,6 +9,8 @@ Challenger features use ``log_iev`` and ``iep`` separately. Do **not** form
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import sqlite3
 from collections import defaultdict
@@ -23,6 +25,10 @@ from ml_saham.data.aisaham_read import connect, load_candles, table_exists
 # Continuous trading starts ~09:00; prefer captures strictly before that.
 _NCP_HHMM_START = "08:45"
 _NCP_HHMM_END = "09:00"  # exclusive
+
+# Versioned selection contract for IEV population identity (not observation cohort).
+IEV_SELECTION_CONTRACT = "iev.batch.ncp_prefer_preopen_clock.v1"
+IEV_POPULATION_KIND = "iev_batch"
 
 
 def _f(v: Any, default: float = 0.0) -> float:
@@ -168,8 +174,12 @@ def _prefer_ncp_snapshot_rows(
 
 def load_iev_raw_rows(
     conn: sqlite3.Connection,
-) -> tuple[list[dict[str, Any]], list[str]]:
-    """Prefer iev_snapshot_history; fallback iev_snapshots."""
+) -> tuple[list[dict[str, Any]], list[str], str]:
+    """Prefer iev_snapshot_history; fallback iev_snapshots.
+
+    Returns ``(rows, notes, source_table)``. ``source_table`` is empty when no
+    IEV source is available.
+    """
     notes: list[str] = []
     if table_exists(conn, "iev_snapshot_history"):
         cols_set = {
@@ -196,10 +206,10 @@ def load_iev_raw_rows(
             notes.append(f"iev source=iev_snapshot_history n={len(raw)}")
             picked, batch_notes = _pick_history_batches(raw)
             notes.extend(batch_notes)
-            return picked, notes
+            return picked, notes, "iev_snapshot_history"
 
     if not table_exists(conn, "iev_snapshots"):
-        return [], ["iev_snapshots and iev_snapshot_history missing"]
+        return [], ["iev_snapshots and iev_snapshot_history missing"], ""
 
     cols_set = {
         r[1] for r in conn.execute("PRAGMA table_info(iev_snapshots)").fetchall()
@@ -217,7 +227,34 @@ def load_iev_raw_rows(
         )
     ]
     notes.append(f"iev source=iev_snapshots n={len(raw)}")
-    return _prefer_ncp_snapshot_rows(raw)
+    picked, pick_notes = _prefer_ncp_snapshot_rows(raw)
+    notes.extend(pick_notes)
+    return picked, notes, "iev_snapshots"
+
+
+def _stable_iev_population_id(
+    *,
+    source_table: str,
+    selection_contract: str,
+    panel_rows: list[PanelRow],
+) -> str:
+    """Deterministic population id for the labeled IEV panel units."""
+    units = sorted(
+        ({"date": r.date, "ticker": r.ticker} for r in panel_rows),
+        key=lambda u: (u["date"], u["ticker"]),
+    )
+    material = json.dumps(
+        {
+            "selection_contract": selection_contract,
+            "source_table": source_table,
+            "units": units,
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
 
 
 def _open_close_excess(
@@ -282,16 +319,30 @@ def build_iev_panel(
     policy: ChallengeExecutionPolicy,
     *,
     primary_horizon: int = 0,
-) -> tuple[list[PanelRow], list[str]]:
-    """Labeled IEV rank panel; excess key = primary_horizon (0 for same-session)."""
+) -> tuple[list[PanelRow], list[str], dict[str, Any]]:
+    """Labeled IEV rank panel; excess key = primary_horizon (0 for same-session).
+
+    Returns ``(rows, notes, population_identity)`` where ``population_identity``
+    is a typed IEV batch identity (selection contract + stable population id).
+    """
     del policy  # policy weights unused for feature extraction; components fixed
     notes: list[str] = []
+    empty_identity: dict[str, Any] = {
+        "kind": IEV_POPULATION_KIND,
+        "selection_contract": IEV_SELECTION_CONTRACT,
+        "source_table": "",
+        "population_id": "",
+        "n_rows": 0,
+        "n_dates": 0,
+        "date_min": "",
+        "date_max": "",
+    }
     path = Path(db_path)
     with connect(path) as conn:
-        raw, src_notes = load_iev_raw_rows(conn)
+        raw, src_notes, source_table = load_iev_raw_rows(conn)
         notes.extend(src_notes)
         if not raw:
-            return [], notes + ["no IEV snapshot rows"]
+            return [], notes + ["no IEV snapshot rows"], empty_identity
 
         by_date: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for r in raw:
@@ -340,9 +391,32 @@ def build_iev_panel(
         rows.sort(key=lambda r: (r.date, r.ticker))
         n_dates = len({r.date for r in rows})
         n_tickers = len({r.ticker for r in rows})
+        dates = sorted({r.date for r in rows})
         notes.append(
             f"panel_rows={len(rows)} unique_tickers={n_tickers} n_dates={n_dates}"
         )
         if n_dates < 5:
             notes.append(f"thin IEV calendar: only {n_dates} labeled dates")
-        return rows, notes
+
+        population_id = _stable_iev_population_id(
+            source_table=source_table,
+            selection_contract=IEV_SELECTION_CONTRACT,
+            panel_rows=rows,
+        )
+        identity: dict[str, Any] = {
+            "kind": IEV_POPULATION_KIND,
+            "selection_contract": IEV_SELECTION_CONTRACT,
+            "source_table": source_table,
+            "population_id": population_id,
+            "n_rows": len(rows),
+            "n_dates": n_dates,
+            "n_tickers": n_tickers,
+            "date_min": dates[0] if dates else "",
+            "date_max": dates[-1] if dates else "",
+        }
+        notes.append(
+            f"iev population_id={population_id} "
+            f"selection_contract={IEV_SELECTION_CONTRACT} "
+            f"source_table={source_table}"
+        )
+        return rows, notes, identity

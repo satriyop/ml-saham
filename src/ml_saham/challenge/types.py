@@ -191,6 +191,11 @@ class ChallengeResult:
     production_semantic_engine_contract_id: str = ""
     challenge_adapter_id: str = ""
     challenge_adapter_version: str = ""
+    # Typed population identity (purpose-family): not interchangeable with
+    # production snapshot identity. kind examples: accum_compat | pre_open_compat | iev_batch
+    population_identity_kind: str = ""
+    population_identity_id: str = ""
+    population_identity_detail: dict[str, Any] = field(default_factory=dict)
 
     def exit_code(self) -> int:
         if self.status in (
@@ -199,6 +204,15 @@ class ChallengeResult:
         ):
             return 2
         return 0
+
+    def has_verified_production_identity(self) -> bool:
+        """True only when cohort-bound verified production snapshot + adapter present."""
+        return bool(
+            self.production_snapshot_id
+            and self.production_snapshot_digest
+            and self.production_policy_id
+            and self.challenge_adapter_id
+        )
 
 
 @dataclass
@@ -261,6 +275,9 @@ class EnginePolicyRow:
     production_semantic_engine_contract_id: str = ""
     challenge_adapter_id: str = ""
     challenge_adapter_version: str = ""
+    baseline_id: str = ""
+    population_identity_kind: str = ""
+    population_identity_id: str = ""
 
 
 @dataclass

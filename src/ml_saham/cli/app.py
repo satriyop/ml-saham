@@ -1209,7 +1209,10 @@ def challenge_champion_cmd(
     baseline: str = typer.Option(
         "production",
         "--baseline",
-        help="Baseline id (v1: production only)",
+        help=(
+            "Baseline: production (requires verified snapshot+adapter) or "
+            "static_reference (static fixture digs; not promote-eligible)"
+        ),
     ),
     compatibility_id: Optional[str] = typer.Option(
         None,
@@ -1304,7 +1307,10 @@ def challenge_run_cmd(
     baseline: str = typer.Option(
         "production",
         "--baseline",
-        help="Baseline id (v1: production only)",
+        help=(
+            "Baseline: production (requires verified snapshot+adapter) or "
+            "static_reference (static fixture digs; not promote-eligible)"
+        ),
     ),
     compatibility_id: Optional[str] = typer.Option(
         None,
@@ -1382,7 +1388,10 @@ def challenge_engine_cmd(
     baseline: str = typer.Option(
         "production",
         "--baseline",
-        help="Baseline id (v1: production only)",
+        help=(
+            "Baseline: production (requires verified snapshot+adapter) or "
+            "static_reference (static fixture digs; not promote-eligible)"
+        ),
     ),
     compatibility_id: Optional[str] = typer.Option(
         None,

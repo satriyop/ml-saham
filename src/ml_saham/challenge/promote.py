@@ -96,6 +96,15 @@ def validate_verified_production_identity(
         if schema_err is not None:
             return schema_err
 
+    baseline_id = str(data.get("baseline_id") or "").strip().lower().replace("-", "_")
+    if baseline_id and baseline_id != "production":
+        return (
+            "not eligible for verified production-policy promote: "
+            f"baseline_id={baseline_id!r} (only baseline=production with verified "
+            "snapshot/adapter identity is promote-eligible; static_reference digs "
+            "remain human review only)"
+        )
+
     policy_id = str(data.get("policy_id") or "").strip()
     prod_policy_id = str(data.get("production_policy_id") or "").strip()
     if not policy_id:

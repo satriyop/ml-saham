@@ -252,23 +252,27 @@ def test_accum_and_factor_block_without_or_with_unknown_cohort(tmp_path: Path):
 
 
 def test_iev_does_not_stamp_irrelevant_compatibility_id(tmp_path: Path):
-    """IEV binds iev snapshot batch identity — made-up observation id is not provenance."""
-    from ml_saham.challenge.runner import prepare_accum_panel, run_policy_challenge
+    """IEV binds typed batch identity; not observation cohort; not production baseline."""
+    from ml_saham.challenge.runner import (
+        BASELINE_STATIC_REFERENCE,
+        prepare_accum_panel,
+        run_policy_challenge,
+    )
     from ml_saham.challenge.types import ChallengeStatus
     from tests.fixtures.build_mvp_fixture import build_mvp_fixture
 
     db = build_mvp_fixture(tmp_path / "iev.db", min_bars=100)
 
-    # Without observation compatibility_id: IEV still runnable when panel dense.
     prep = prepare_accum_panel(
         db, "screener.pre_open.iev_rank", preferred_compatibility_id=None
     )
     assert prep.blocked is None or prep.blocked == ChallengeStatus.BLOCKED_DATA
     assert prep.selected_compatibility_id is None
-    assert not any("(explicit)" in n and "made-up" in n for n in prep.notes)
-    assert any("iev" in n.lower() for n in prep.notes)
+    if prep.blocked is None:
+        assert prep.population_identity_kind == "iev_batch"
+        assert prep.population_identity_id.startswith("sha256:")
+        assert (prep.population_identity_detail or {}).get("selection_contract")
 
-    # Made-up observation id must not become false explicit cohort provenance.
     result = run_policy_challenge(
         db,
         "screener.pre_open.iev_rank",
@@ -280,12 +284,17 @@ def test_iev_does_not_stamp_irrelevant_compatibility_id(tmp_path: Path):
     assert "compatibility_id=made-up-id (explicit)" not in joined
     assert "not applicable to iev_rank" in joined or "ignored" in joined.lower()
     assert result.observation_compatibility_id == ""
-    assert result.production_snapshot_id == ""  # static fixture, not verified snapshot
-    # Must not claim verified production-policy identity via fabricated cohort.
+    assert result.production_snapshot_id == ""
+    assert result.baseline_id == BASELINE_STATIC_REFERENCE
+    assert "Baseline: production" not in "\n".join(result.lines)
+    assert any("static_reference" in n for n in result.notes)
     if result.status not in (
         ChallengeStatus.BLOCKED_DATA,
         ChallengeStatus.BLOCKED_POLICY,
     ):
+        assert result.population_identity_kind == "iev_batch"
+        assert result.population_identity_id.startswith("sha256:")
+        assert result.population_identity_detail.get("source_table")
         assert result.status in {
             ChallengeStatus.WIN,
             ChallengeStatus.LOSE,
@@ -294,8 +303,12 @@ def test_iev_does_not_stamp_irrelevant_compatibility_id(tmp_path: Path):
 
 
 def test_pre_open_requires_real_pre_open_cohort(tmp_path: Path):
-    """PRE_OPEN observation policies verify PRE_OPEN family — not invent provenance."""
-    from ml_saham.challenge.runner import run_policy_challenge
+    """PRE_OPEN static fixtures bind PRE_OPEN cohort under static_reference baseline."""
+    from ml_saham.challenge.runner import (
+        BASELINE_PRODUCTION,
+        BASELINE_STATIC_REFERENCE,
+        run_policy_challenge,
+    )
     from ml_saham.challenge.types import ChallengeStatus
     from tests.fixtures.build_mvp_fixture import (
         FIXTURE_COMPATIBILITY_ID,
@@ -340,9 +353,15 @@ def test_pre_open_requires_real_pre_open_cohort(tmp_path: Path):
     }
     if ok.status not in (ChallengeStatus.BLOCKED_DATA, ChallengeStatus.BLOCKED_POLICY):
         assert ok.observation_compatibility_id == FIXTURE_COMPATIBILITY_ID
-        assert ok.production_snapshot_id == ""  # static fixture, not verified snapshot
+        assert ok.production_snapshot_id == ""
+        assert ok.baseline_id == BASELINE_STATIC_REFERENCE
+        assert ok.baseline_id != BASELINE_PRODUCTION
+        assert ok.population_identity_kind == "pre_open_compat"
+        assert ok.population_identity_id == FIXTURE_COMPATIBILITY_ID
         assert any("static pre-open policy fixture" in n for n in ok.notes)
         assert any("explicit PRE_OPEN" in n for n in ok.notes)
+        assert "Baseline: production" not in "\n".join(ok.lines)
+        assert not ok.has_verified_production_identity()
 
 
 def test_mixed_engine_purpose_specific_identity(tmp_path: Path):
@@ -423,3 +442,58 @@ def test_production_run_with_explicit_fixture_cohort_binds(tmp_path: Path):
     assert result.observation_compatibility_id == FIXTURE_COMPATIBILITY_ID
     assert any("explicit ACCUM" in n for n in result.notes)
     assert result.production_snapshot_id  # verified snapshot path
+    assert result.baseline_id == "production"
+    assert result.has_verified_production_identity()
+    assert result.population_identity_kind == "accum_compat"
+    assert result.population_identity_id == FIXTURE_COMPATIBILITY_ID
+
+
+def test_static_reference_not_promote_eligible(tmp_path: Path):
+    """baseline=static_reference is refused for verified production promote packets."""
+    import json
+
+    from ml_saham.challenge.promote import build_promote_packet
+    from ml_saham.challenge.runner import run_policy_challenge
+    from tests.fixtures.build_mvp_fixture import (
+        FIXTURE_COMPATIBILITY_ID,
+        build_mvp_fixture,
+    )
+
+    db = build_mvp_fixture(tmp_path / "prom.db", min_bars=100)
+    result = run_policy_challenge(
+        db,
+        "screener.accum.score_weights",
+        against="equal_sleeves",
+        write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
+    )
+    assert result.has_verified_production_identity()
+    export = tmp_path / "ref.json"
+    export.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "status": result.status.value,
+                "policy_id": result.policy_id,
+                "protocol_id": result.protocol_id,
+                "baseline_id": "static_reference",
+                "against_id": result.against_id,
+                "observation_compatibility_id": result.observation_compatibility_id,
+                "production_snapshot_id": result.production_snapshot_id,
+                "production_snapshot_digest": result.production_snapshot_digest,
+                "production_policy_id": result.production_policy_id,
+                "production_policy_version": result.production_policy_version,
+                "production_semantic_engine_contract_id": (
+                    result.production_semantic_engine_contract_id
+                ),
+                "challenge_adapter_id": result.challenge_adapter_id,
+                "challenge_adapter_version": result.challenge_adapter_version,
+            }
+        ),
+        encoding="utf-8",
+    )
+    pack = build_promote_packet(from_json=export, write_artifact=False)
+    assert pack.exit_code() == 2
+    assert pack.error
+    assert "static_reference" in pack.error
+    assert "not eligible" in pack.error

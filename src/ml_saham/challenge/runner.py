@@ -61,6 +61,11 @@ from ml_saham.data.observation_cohort import (
 from ml_saham.data.doctor_checks import run_doctor
 
 
+BASELINE_PRODUCTION = "production"
+BASELINE_STATIC_REFERENCE = "static_reference"
+ALLOWED_BASELINES = frozenset({BASELINE_PRODUCTION, BASELINE_STATIC_REFERENCE})
+
+
 @dataclass
 class AccumPanelPrep:
     """Shared prep for policy tournament and factor validity (any panel_kind)."""
@@ -72,6 +77,9 @@ class AccumPanelPrep:
     blocked: ChallengeStatus | None  # None if ready to score
     # Population identity actually bound for this panel (empty for IEV batch identity).
     selected_compatibility_id: str | None = None
+    population_identity_kind: str = ""
+    population_identity_id: str = ""
+    population_identity_detail: dict | None = None
 
 
 # Kept for callers/tests that only need a non-empty string check. Production
@@ -119,6 +127,57 @@ def panel_population_family(panel_kind: str, policy_id: str) -> str:
     if panel_kind == "iev_rank":
         return "iev"
     return "unknown"
+
+
+def resolve_challenge_baseline(
+    requested: str,
+    *,
+    has_verified_production_identity: bool,
+) -> tuple[str, list[str], ChallengeStatus | None]:
+    """Bind baseline honesty to verified production identity.
+
+    - ``production`` is allowed only with a verified production-policy snapshot
+      and supported challenge adapter on the composed policy.
+    - Policies without that identity (static pre-open / IEV fixtures today) run
+      under ``static_reference`` and are not production promote-eligible.
+    - Requested ``production`` without verified identity is remapped to
+      ``static_reference`` (never labeled as production).
+    """
+    notes: list[str] = []
+    raw = (requested or "").strip().lower().replace("-", "_")
+    if not raw:
+        raw = BASELINE_PRODUCTION
+    if raw not in ALLOWED_BASELINES:
+        return (
+            raw,
+            [
+                f"unknown baseline={raw!r}; supported: "
+                f"{BASELINE_PRODUCTION} | {BASELINE_STATIC_REFERENCE}"
+            ],
+            ChallengeStatus.BLOCKED_POLICY,
+        )
+
+    if has_verified_production_identity:
+        if raw == BASELINE_STATIC_REFERENCE:
+            notes.append(
+                "baseline=static_reference on a verified production policy "
+                "(reference dig only; not the production promote path)"
+            )
+        return raw, notes, None
+
+    # No verified production-policy snapshot/adapter identity.
+    if raw == BASELINE_PRODUCTION:
+        notes.append(
+            "baseline remapped production→static_reference: policy has no "
+            "verified production-policy snapshot + challenge adapter identity; "
+            "static_reference dig is not promote-eligible as production"
+        )
+    else:
+        notes.append(
+            "baseline=static_reference (static policy fixture / reference dig; "
+            "not verified production-policy)"
+        )
+    return BASELINE_STATIC_REFERENCE, notes, None
 
 
 def list_policies() -> list[dict[str, str]]:
@@ -407,6 +466,10 @@ def prepare_accum_panel(
             selected_compatibility_id=selected_compatibility_id,
         )
 
+    pop_kind = ""
+    pop_id = ""
+    pop_detail: dict | None = None
+
     if policy.panel_kind == "iev_rank":
         ok, vet_notes = _vet_for_pre_open_iev(path, protocol)
         if not ok:
@@ -418,11 +481,14 @@ def prepare_accum_panel(
                 blocked=ChallengeStatus.BLOCKED_DATA,
                 selected_compatibility_id=None,
             )
-        rows, panel_notes = build_iev_panel(
+        rows, panel_notes, iev_identity = build_iev_panel(
             path,
             policy,
             primary_horizon=protocol.primary_horizon,
         )
+        pop_kind = str(iev_identity.get("kind") or "iev_batch")
+        pop_id = str(iev_identity.get("population_id") or "")
+        pop_detail = dict(iev_identity)
     elif policy.panel_kind == "pre_open_observations":
         ok, vet_notes = _vet_for_pre_open_obs(
             path,
@@ -437,6 +503,8 @@ def prepare_accum_panel(
                 notes=list(cohort_notes) + list(vet_notes),
                 blocked=ChallengeStatus.BLOCKED_DATA,
                 selected_compatibility_id=selected_compatibility_id,
+                population_identity_kind="pre_open_compat",
+                population_identity_id=selected_compatibility_id or "",
             )
         rows, panel_notes = build_pre_open_obs_panel(
             path,
@@ -444,6 +512,13 @@ def prepare_accum_panel(
             primary_horizon=protocol.primary_horizon,
             compatibility_id=selected_compatibility_id,
         )
+        pop_kind = "pre_open_compat"
+        pop_id = selected_compatibility_id or ""
+        pop_detail = {
+            "kind": pop_kind,
+            "compatibility_id": pop_id,
+            "family": "PRE_OPEN",
+        }
     elif policy.panel_kind == "accum_components":
         ok, vet_notes = _vet_for_accum(path, protocol)
         if not ok:
@@ -454,6 +529,8 @@ def prepare_accum_panel(
                 notes=list(cohort_notes) + list(vet_notes),
                 blocked=ChallengeStatus.BLOCKED_DATA,
                 selected_compatibility_id=selected_compatibility_id,
+                population_identity_kind="accum_compat",
+                population_identity_id=selected_compatibility_id or "",
             )
         rows, panel_notes = build_panel(
             path,
@@ -462,6 +539,13 @@ def prepare_accum_panel(
             primary_horizon=protocol.primary_horizon,
             compatibility_id=selected_compatibility_id,
         )
+        pop_kind = "accum_compat"
+        pop_id = selected_compatibility_id or ""
+        pop_detail = {
+            "kind": pop_kind,
+            "compatibility_id": pop_id,
+            "family": "ACCUM",
+        }
     elif policy.panel_kind in ("accum_signal", "accum_signal_flags"):
         ok, vet_notes = _vet_for_accum(path, protocol)
         if not ok:
@@ -472,6 +556,8 @@ def prepare_accum_panel(
                 notes=list(cohort_notes) + list(vet_notes),
                 blocked=ChallengeStatus.BLOCKED_DATA,
                 selected_compatibility_id=selected_compatibility_id,
+                population_identity_kind="accum_compat",
+                population_identity_id=selected_compatibility_id or "",
             )
         rows, panel_notes = build_signal_panel(
             path,
@@ -480,6 +566,13 @@ def prepare_accum_panel(
             primary_horizon=protocol.primary_horizon,
             compatibility_id=selected_compatibility_id,
         )
+        pop_kind = "accum_compat"
+        pop_id = selected_compatibility_id or ""
+        pop_detail = {
+            "kind": pop_kind,
+            "compatibility_id": pop_id,
+            "family": "ACCUM",
+        }
     elif policy.panel_kind == "accum_gates":
         ok, vet_notes = _vet_for_accum(path, protocol)
         if not ok:
@@ -490,6 +583,8 @@ def prepare_accum_panel(
                 notes=list(cohort_notes) + list(vet_notes),
                 blocked=ChallengeStatus.BLOCKED_DATA,
                 selected_compatibility_id=selected_compatibility_id,
+                population_identity_kind="accum_compat",
+                population_identity_id=selected_compatibility_id or "",
             )
         rows, panel_notes = build_gate_panel(
             path,
@@ -498,6 +593,13 @@ def prepare_accum_panel(
             primary_horizon=protocol.primary_horizon,
             compatibility_id=selected_compatibility_id,
         )
+        pop_kind = "accum_compat"
+        pop_id = selected_compatibility_id or ""
+        pop_detail = {
+            "kind": pop_kind,
+            "compatibility_id": pop_id,
+            "family": "ACCUM",
+        }
     else:
         return AccumPanelPrep(
             policy=policy,
@@ -520,6 +622,9 @@ def prepare_accum_panel(
             notes=notes,
             blocked=ChallengeStatus.BLOCKED_DATA,
             selected_compatibility_id=selected_compatibility_id,
+            population_identity_kind=pop_kind,
+            population_identity_id=pop_id,
+            population_identity_detail=pop_detail,
         )
     return AccumPanelPrep(
         policy=policy,
@@ -528,6 +633,9 @@ def prepare_accum_panel(
         notes=notes,
         blocked=None,
         selected_compatibility_id=selected_compatibility_id,
+        population_identity_kind=pop_kind,
+        population_identity_id=pop_id,
+        population_identity_detail=pop_detail,
     )
 
 
@@ -646,9 +754,7 @@ def run_policy_challenge(
     against = against.strip().lower().replace("-", "_")
     if is_champion_against(against):
         against = normalize_champion_id(against)
-    baseline = baseline.strip().lower().replace("-", "_")
-    if baseline not in ("production",):
-        baseline = "production"
+    requested_baseline = baseline
     champion_mode = is_champion_against(against)
 
     prep = prepare_for_policy(
@@ -660,31 +766,45 @@ def run_policy_challenge(
 
     def make_result(**kwargs: object) -> ChallengeResult:
         policy = prep.policy
-        identity: dict[str, str] = {}
+        identity: dict[str, object] = {
+            "population_identity_kind": prep.population_identity_kind,
+            "population_identity_id": prep.population_identity_id,
+            "population_identity_detail": dict(prep.population_identity_detail or {}),
+        }
         if policy is not None and policy.production_snapshot_id:
             # Verified production-policy path (cohort-bound snapshots + adapter).
-            identity = {
-                "observation_compatibility_id": policy.observation_compatibility_id,
-                "production_snapshot_id": policy.production_snapshot_id,
-                "production_snapshot_digest": policy.production_snapshot_digest,
-                "production_policy_id": policy.policy_id,
-                "production_policy_version": policy.version,
-                "production_semantic_engine_contract_id": (
-                    policy.production_semantic_engine_contract_id
-                ),
-                "challenge_adapter_id": policy.challenge_adapter_id,
-                "challenge_adapter_version": policy.challenge_adapter_version,
-            }
+            identity.update(
+                {
+                    "observation_compatibility_id": policy.observation_compatibility_id,
+                    "production_snapshot_id": policy.production_snapshot_id,
+                    "production_snapshot_digest": policy.production_snapshot_digest,
+                    "production_policy_id": policy.policy_id,
+                    "production_policy_version": policy.version,
+                    "production_semantic_engine_contract_id": (
+                        policy.production_semantic_engine_contract_id
+                    ),
+                    "challenge_adapter_id": policy.challenge_adapter_id,
+                    "challenge_adapter_version": policy.challenge_adapter_version,
+                }
+            )
         elif prep.selected_compatibility_id:
             # Bound observation cohort without verified production snapshot
             # (e.g. static PRE_OPEN fixtures). Do not invent snapshot/adapter ids.
-            identity = {
-                "observation_compatibility_id": prep.selected_compatibility_id,
-            }
+            identity["observation_compatibility_id"] = prep.selected_compatibility_id
         return ChallengeResult(**kwargs, **identity)  # type: ignore[arg-type]
 
     if prep.blocked is not None or prep.policy is None or prep.protocol is None:
         st = prep.blocked or ChallengeStatus.BLOCKED_DATA
+        # Even on early block, do not claim production without verified identity.
+        has_verified = bool(
+            prep.policy is not None and prep.policy.production_snapshot_id
+        )
+        baseline_id, base_notes, base_block = resolve_challenge_baseline(
+            requested_baseline, has_verified_production_identity=has_verified
+        )
+        if base_block is not None:
+            st = base_block
+        early_notes = list(prep.notes) + list(base_notes)
         return make_result(
             status=st,
             policy_id=policy_id if prep.policy is None else prep.policy.policy_id,
@@ -693,7 +813,7 @@ def run_policy_challenge(
                 if prep.protocol is None
                 else prep.protocol.protocol_id
             ),
-            baseline_id=baseline,
+            baseline_id=baseline_id,
             against_id=against,
             policy_hash="" if prep.policy is None else prep.policy.hash,
             n_rows=len(prep.rows),
@@ -702,22 +822,50 @@ def run_policy_challenge(
                 if prep.protocol is None
                 else prep.protocol.primary_horizon
             ),
-            lines=[f"{st.value}:"] + [f"  - {n}" for n in prep.notes],
+            lines=[f"{st.value}:"] + [f"  - {n}" for n in early_notes],
             summary_md=f"# Challenge {st.value}\n\n"
-            + "\n".join(f"- {n}" for n in prep.notes)
+            + "\n".join(f"- {n}" for n in early_notes)
             + "\n",
-            notes=prep.notes,
+            notes=early_notes,
         )
 
     policy = prep.policy
     protocol = prep.protocol
     rows = prep.rows
     notes = list(prep.notes)
+
+    has_verified = bool(policy.production_snapshot_id and policy.challenge_adapter_id)
+    baseline, base_notes, base_block = resolve_challenge_baseline(
+        requested_baseline, has_verified_production_identity=has_verified
+    )
+    notes.extend(base_notes)
+    if base_block is not None:
+        return make_result(
+            status=base_block,
+            policy_id=policy.policy_id,
+            protocol_id=protocol.protocol_id,
+            baseline_id=baseline,
+            against_id=against,
+            policy_hash=policy.hash,
+            n_rows=len(rows),
+            primary_horizon=protocol.primary_horizon,
+            lines=[f"{base_block.value}:"] + [f"  - {n}" for n in notes],
+            summary_md=f"# Challenge {base_block.value}\n\n"
+            + "\n".join(f"- {n}" for n in notes)
+            + "\n",
+            notes=notes,
+        )
+
     gate_mode = policy.score_kind == "gate_block"
     if champion_mode:
         notes.append(
-            "mode=champion: learned score rule vs production "
+            f"mode=champion: learned score rule vs baseline={baseline} "
             "(not factor/weight tune); no auto-promote"
+        )
+    if baseline == BASELINE_STATIC_REFERENCE:
+        notes.append(
+            "static_reference baseline is not eligible for verified "
+            "production-policy promote packets"
         )
     if gate_mode:
         notes.append(
@@ -1188,9 +1336,11 @@ def run_policy_challenge(
     else:
         against_w = prod_w
     weights = {
-        "production": prod_w,
+        "baseline": prod_w,
+        "production": prod_w,  # alias for older consumers
         "against": against_w,
         "against_id": against,
+        "baseline_id": baseline,
         "decision_type": "gate" if gate_mode else "score",
     }
 
@@ -1198,6 +1348,7 @@ def run_policy_challenge(
         policy=policy,
         protocol=protocol,
         status=status,
+        baseline=baseline,
         against=against,
         n_rows=len(rows),
         mean_b=mean_b,
@@ -1211,6 +1362,7 @@ def run_policy_challenge(
         policy=policy,
         protocol=protocol,
         status=status,
+        baseline=baseline,
         against=against,
         mean_b=mean_b,
         mean_a=mean_a,
@@ -1249,6 +1401,7 @@ def _format_lines(
     policy: ChallengeExecutionPolicy,
     protocol: Protocol,
     status: ChallengeStatus,
+    baseline: str,
     against: str,
     n_rows: int,
     mean_b: float | None,
@@ -1267,6 +1420,7 @@ def _format_lines(
     else:
         h_primary_txt = f"H={protocol.primary_horizon}"
 
+    base_lab = baseline
     if gate_mode:
         mode_banner = (
             "Mode:     GATE (open vs block · mean excess among allowed — "
@@ -1278,7 +1432,10 @@ def _format_lines(
         horizon_title = "Horizon table (pooled mean excess among allowed):"
         fold_lab = "mean_open"
     elif is_champion_against(against):
-        mode_banner = "Mode:     CHAMPION (learned score rule vs production; not factor/weight tune)"
+        mode_banner = (
+            f"Mode:     CHAMPION (learned score rule vs {base_lab}; "
+            "not factor/weight tune)"
+        )
         metric_title = f"Primary rank IC @ {h_primary_txt} (mean OOS folds):"
         horizon_title = "Horizon table (pooled OOS rank IC):"
         fold_lab = "ic"
@@ -1296,12 +1453,12 @@ def _format_lines(
         f"Label:    {label_blurb}",
         f"score_kind={policy.score_kind}  panel_kind={policy.panel_kind}",
         mode_banner,
-        f"Baseline: production   Against: {against}",
+        f"Baseline: {base_lab}   Against: {against}",
         f"Panel n:  {n_rows}   Folds: {len(fold_metrics)}",
         f"Status:   {status.value}",
         "",
         metric_title,
-        f"  production: {fmt(mean_b)}",
+        f"  {base_lab}: {fmt(mean_b)}",
         f"  {against}:  {fmt(mean_a)}",
         "",
         horizon_title,
@@ -1312,7 +1469,7 @@ def _format_lines(
         mark = "  <- primary" if h == protocol.primary_horizon else ""
         hlab = "open→close" if h == 0 else str(h)
         lines.append(
-            f"  H={hlab:>10}:  production={fmt(base_h.get(str(h)))}  "
+            f"  H={hlab:>10}:  {base_lab}={fmt(base_h.get(str(h)))}  "
             f"{against}={fmt(ag_h.get(str(h)))}{mark}"
         )
     lines.append("")
@@ -1321,12 +1478,12 @@ def _format_lines(
         extra = ""
         if gate_mode and f.get("block_rate_baseline") is not None:
             extra = (
-                f"  block_rate_prod={float(f['block_rate_baseline']):.0%}"
+                f"  block_rate_base={float(f['block_rate_baseline']):.0%}"
                 f"  block_rate_ag={float(f.get('block_rate_against') or 0):.0%}"
             )
         lines.append(
             f"  fold {f['fold']}: n_test={f['n_test']}  "
-            f"{fold_lab}_prod={fmt(f.get('ic_baseline'))}  "
+            f"{fold_lab}_base={fmt(f.get('ic_baseline'))}  "
             f"{fold_lab}_ag={fmt(f.get('ic_against'))}  "
             f"dates={f.get('date_min')}..{f.get('date_max')}{extra}"
         )
@@ -1346,6 +1503,7 @@ def _format_summary(
     policy: ChallengeExecutionPolicy,
     protocol: Protocol,
     status: ChallengeStatus,
+    baseline: str,
     against: str,
     mean_b: float | None,
     mean_a: float | None,
@@ -1369,9 +1527,9 @@ def _format_summary(
         f"- **Protocol:** {protocol.protocol_id} (primary {htxt})",
         f"- **Label:** {protocol.label}",
         f"- **score_kind:** `{policy.score_kind}` · **panel_kind:** `{policy.panel_kind}`",
-        f"- **Baseline:** production (`{policy.hash}`)",
+        f"- **Baseline:** {baseline} (`{policy.hash}`)",
         f"- **Against:** {against}",
-        f"- **{primary_lab}:** production={fmt(mean_b)} · {against}={fmt(mean_a)}",
+        f"- **{primary_lab}:** {baseline}={fmt(mean_b)} · {against}={fmt(mean_a)}",
         "",
         "## Horizons",
         "",
@@ -1381,7 +1539,7 @@ def _format_summary(
     for h in protocol.horizons_report:
         hlab = "open→close" if h == 0 else str(h)
         lines.append(
-            f"- H={hlab}: production={fmt(base_h.get(str(h)))}, "
+            f"- H={hlab}: {baseline}={fmt(base_h.get(str(h)))}, "
             f"{against}={fmt(ag_h.get(str(h)))}"
         )
     lines.extend(["", "## Notes", ""])

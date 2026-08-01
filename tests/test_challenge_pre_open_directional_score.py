@@ -148,6 +148,9 @@ def test_panel_and_tournament(fixture_db: Path, tmp_path: Path):
             assert result.primary_horizon == 0
             assert result.protocol_id == "pre_open_session_v1"
             assert result.exit_code() == 0
+            assert result.baseline_id == "static_reference"
+            assert result.population_identity_kind == "pre_open_compat"
+            assert not result.has_verified_production_identity()
 
 
 def test_factor_blocked(fixture_db: Path):

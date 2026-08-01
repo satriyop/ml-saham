@@ -124,7 +124,7 @@ def test_live_mce_prefers_bound_context(live_db: Path):
 
 def test_live_iev_no_post_open_primary_batch(live_db: Path):
     with connect(live_db) as conn:
-        rows, notes = load_iev_raw_rows(conn)
+        rows, notes, _source = load_iev_raw_rows(conn)
     if not rows:
         pytest.skip("no IEV history/snapshots")
     post = sum(1 for r in rows if "T09:" in str(r.get("collected_at") or ""))

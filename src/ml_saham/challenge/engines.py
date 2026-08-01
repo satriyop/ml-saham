@@ -198,6 +198,9 @@ def run_engine_portfolio(
                     ),
                     challenge_adapter_id=result.challenge_adapter_id,
                     challenge_adapter_version=result.challenge_adapter_version,
+                    baseline_id=result.baseline_id,
+                    population_identity_kind=result.population_identity_kind,
+                    population_identity_id=result.population_identity_id,
                 )
             )
         except Exception as exc:  # noqa: BLE001 — portfolio continues
