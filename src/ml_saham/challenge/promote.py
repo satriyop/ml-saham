@@ -87,6 +87,29 @@ def validate_artifact_schema_version(data: dict[str, Any]) -> str | None:
     return None
 
 
+def _exact_identity_str(data: dict[str, Any], key: str) -> tuple[str | None, str | None]:
+    """Return (value, error). Requires exact non-empty str — no strip/lower/coerce."""
+    if key not in data or data[key] is None:
+        return None, f"production identity invalid: {key} is missing"
+    value = data[key]
+    if type(value) is not str:
+        return (
+            None,
+            f"production identity invalid: {key} must be exact str, "
+            f"got {type(value).__name__}={value!r}",
+        )
+    if not value:
+        return None, f"production identity invalid: {key} is empty"
+    # Reject surrounding whitespace without rewriting the value.
+    if value != value.strip():
+        return (
+            None,
+            f"production identity invalid: {key} has surrounding whitespace "
+            f"(got {value!r})",
+        )
+    return value, None
+
+
 def validate_production_identity_format(
     data: dict[str, Any],
     *,
@@ -97,17 +120,19 @@ def validate_production_identity_format(
     Does **not** prove the export digest exists in ``learning_policy_snapshots``.
     Callers that need verified authority must use
     :func:`validate_verified_production_identity` with a live DB connection.
+
+    Identity fields are exact-string authority: no strip/lower/replace/coerce.
     """
     if require_schema_version:
         schema_err = validate_artifact_schema_version(data)
         if schema_err is not None:
             return schema_err
 
-    baseline_id = str(data.get("baseline_id") or "").strip().lower().replace("-", "_")
-    if not baseline_id:
+    baseline_id, err = _exact_identity_str(data, "baseline_id")
+    if err is not None:
         return (
             "not eligible for verified production-policy promote: "
-            "baseline_id is missing (required: production)"
+            + err.removeprefix("production identity invalid: ")
         )
     if baseline_id != "production":
         return (
@@ -117,10 +142,12 @@ def validate_production_identity_format(
             "remain human review only)"
         )
 
-    policy_id = str(data.get("policy_id") or "").strip()
-    prod_policy_id = str(data.get("production_policy_id") or "").strip()
-    if not policy_id:
-        return "production identity invalid: policy_id is empty"
+    policy_id, err = _exact_identity_str(data, "policy_id")
+    if err is not None:
+        return err
+    prod_policy_id, err = _exact_identity_str(data, "production_policy_id")
+    if err is not None:
+        return err
     if prod_policy_id != policy_id:
         return (
             "production identity invalid: production_policy_id="
@@ -133,7 +160,9 @@ def validate_production_identity_format(
             f"{policy_id!r} is not a verified production policy eligible for promote"
         )
 
-    compat = str(data.get("observation_compatibility_id") or "").strip()
+    compat, err = _exact_identity_str(data, "observation_compatibility_id")
+    if err is not None:
+        return err
     if len(compat) < _MIN_COMPAT_LEN:
         return (
             "production identity invalid: observation_compatibility_id format "
@@ -141,16 +170,18 @@ def validate_production_identity_format(
         )
 
     # Schema v3: population identity is material provenance for ACCUM promote.
-    missing_pop = [
-        k for k in _POPULATION_IDENTITY_V3 if k not in data or data[k] in (None, "")
-    ]
-    if missing_pop:
-        return (
-            "invalid challenge artifact schema v3: missing required population "
-            f"identity fields: {', '.join(missing_pop)}"
-        )
-    pop_kind = str(data.get("population_identity_kind") or "").strip()
-    pop_id = str(data.get("population_identity_id") or "").strip()
+    for pop_key in _POPULATION_IDENTITY_V3:
+        if pop_key not in data or data[pop_key] is None:
+            return (
+                "invalid challenge artifact schema v3: missing required population "
+                f"identity fields: {pop_key}"
+            )
+    pop_kind, err = _exact_identity_str(data, "population_identity_kind")
+    if err is not None:
+        return err
+    pop_id, err = _exact_identity_str(data, "population_identity_id")
+    if err is not None:
+        return err
     pop_detail = data.get("population_identity_detail")
     if pop_kind != _ACCUM_POPULATION_KIND:
         return (
@@ -168,23 +199,29 @@ def validate_production_identity_format(
             "production identity invalid: population_identity_detail must be a "
             "non-empty object (schema v3 material population identity)"
         )
-    detail_kind = str(pop_detail.get("kind") or "").strip()
-    if detail_kind and detail_kind != _ACCUM_POPULATION_KIND:
-        return (
-            "production identity invalid: population_identity_detail.kind="
-            f"{detail_kind!r} must be {_ACCUM_POPULATION_KIND!r}"
-        )
-    detail_cid = str(
-        pop_detail.get("compatibility_id") or pop_detail.get("population_id") or ""
-    ).strip()
-    if detail_cid and detail_cid != compat:
-        return (
-            "production identity invalid: population_identity_detail cohort "
-            f"id={detail_cid!r} does not match observation_compatibility_id={compat!r}"
-        )
+    if "kind" in pop_detail and pop_detail.get("kind") is not None:
+        detail_kind = pop_detail.get("kind")
+        if type(detail_kind) is not str or detail_kind != _ACCUM_POPULATION_KIND:
+            return (
+                "production identity invalid: population_identity_detail.kind="
+                f"{detail_kind!r} must be exact {_ACCUM_POPULATION_KIND!r}"
+            )
+    detail_cid_raw = pop_detail.get("compatibility_id")
+    if detail_cid_raw is None:
+        detail_cid_raw = pop_detail.get("population_id")
+    if detail_cid_raw is not None:
+        if type(detail_cid_raw) is not str or detail_cid_raw != compat:
+            return (
+                "production identity invalid: population_identity_detail cohort "
+                f"id={detail_cid_raw!r} does not match observation_compatibility_id={compat!r}"
+            )
 
-    snap_id = str(data.get("production_snapshot_id") or "").strip().lower()
-    digest = str(data.get("production_snapshot_digest") or "").strip().lower()
+    snap_id, err = _exact_identity_str(data, "production_snapshot_id")
+    if err is not None:
+        return err
+    digest, err = _exact_identity_str(data, "production_snapshot_digest")
+    if err is not None:
+        return err
     if not _HEX64_RE.fullmatch(snap_id):
         return (
             "production identity invalid: production_snapshot_id format "
@@ -196,7 +233,9 @@ def validate_production_identity_format(
             f"(need 64 lowercase hex chars, got {digest!r})"
         )
 
-    prod_version = str(data.get("production_policy_version") or "").strip()
+    prod_version, err = _exact_identity_str(data, "production_policy_version")
+    if err is not None:
+        return err
     if prod_version != POLICY_VERSION:
         return (
             "production identity invalid: production_policy_version="
@@ -204,7 +243,9 @@ def validate_production_identity_format(
         )
 
     _decision_type, expected_semantic = REQUIRED_POLICIES[policy_id]
-    semantic = str(data.get("production_semantic_engine_contract_id") or "").strip()
+    semantic, err = _exact_identity_str(data, "production_semantic_engine_contract_id")
+    if err is not None:
+        return err
     if semantic != expected_semantic:
         return (
             "production identity invalid: production_semantic_engine_contract_id="
@@ -212,9 +253,19 @@ def validate_production_identity_format(
             f"for policy {policy_id}"
         )
 
-    protocol_id = str(data.get("protocol_id") or "").strip()
-    adapter_id = str(data.get("challenge_adapter_id") or "").strip()
-    adapter_version = str(data.get("challenge_adapter_version") or "").strip()
+    protocol_id, err = _exact_identity_str(data, "protocol_id")
+    if err is not None:
+        return err
+    adapter_id, err = _exact_identity_str(data, "challenge_adapter_id")
+    if err is not None:
+        return err
+    adapter_version, err = _exact_identity_str(data, "challenge_adapter_version")
+    if err is not None:
+        return err
+    against_id, err = _exact_identity_str(data, "against_id")
+    if err is not None:
+        return err
+    del against_id  # presence/type validated; semantic challenger checks elsewhere
 
     try:
         adapter = load_policy_adapter(policy_id)

@@ -625,3 +625,68 @@ def test_promote_rejects_missing_or_empty_baseline_id(
         assert pack.exit_code() == 2, (name, pack.error)
         assert pack.error is not None
         assert "baseline" in pack.error.lower()
+
+
+def test_promote_rejects_noncanonical_identity_whitespace_and_case(
+    verified_export: dict, tmp_path: Path, fixture_db: Path
+):
+    """Exact identity: whitespace/case aliases must not promote (exit 2)."""
+    mutations = {
+        "baseline_pad": ("baseline_id", " Production "),
+        "policy_pad": ("policy_id", " screener.accum.score_weights "),
+        "compat_pad": (
+            "observation_compatibility_id",
+            f" {verified_export['observation_compatibility_id']} ",
+        ),
+        "snap_upper": (
+            "production_snapshot_id",
+            str(verified_export["production_snapshot_id"]).upper(),
+        ),
+        "digest_upper": (
+            "production_snapshot_digest",
+            str(verified_export["production_snapshot_digest"]).upper(),
+        ),
+        "prod_policy_pad": (
+            "production_policy_id",
+            f" {verified_export['production_policy_id']} ",
+        ),
+        "semantic_pad": (
+            "production_semantic_engine_contract_id",
+            f" {verified_export['production_semantic_engine_contract_id']} ",
+        ),
+        "protocol_pad": ("protocol_id", f" {verified_export['protocol_id']} "),
+        "adapter_pad": (
+            "challenge_adapter_id",
+            f" {verified_export['challenge_adapter_id']} ",
+        ),
+        "adapter_ver_pad": (
+            "challenge_adapter_version",
+            f" {verified_export['challenge_adapter_version']} ",
+        ),
+        "against_pad": ("against_id", f" {verified_export['against_id']} "),
+        "pop_kind_pad": (
+            "population_identity_kind",
+            f" {verified_export['population_identity_kind']} ",
+        ),
+        "pop_id_pad": (
+            "population_identity_id",
+            f" {verified_export['population_identity_id']} ",
+        ),
+        "policy_version_pad": (
+            "production_policy_version",
+            f" {verified_export['production_policy_version']} ",
+        ),
+    }
+    for name, (field, value) in mutations.items():
+        payload = dict(verified_export)
+        payload[field] = value
+        # Keep linked equals consistent only when we are not testing that field.
+        if field == "policy_id":
+            pass  # production_policy_id mismatch is also a valid failure
+        export = tmp_path / f"id_{name}.json"
+        export.write_text(json.dumps(payload), encoding="utf-8")
+        pack = build_promote_packet(
+            from_json=export, write_artifact=False, db_path=fixture_db
+        )
+        assert pack.exit_code() == 2, (name, field, pack.error)
+        assert pack.error is not None
