@@ -84,17 +84,23 @@ def canonical_challenge_json(payload: Mapping[str, Any]) -> str:
 def challenge_content_digest(payload: Mapping[str, Any]) -> str:
     """sha256 hex of closed challenge evidence fields (no self-reference)."""
     material = {k: payload.get(k) for k in _CONTENT_DIGEST_KEYS}
-    return hashlib.sha256(canonical_challenge_json(material).encode("utf-8")).hexdigest()
+    return hashlib.sha256(
+        canonical_challenge_json(material).encode("utf-8")
+    ).hexdigest()
 
 
-def challenge_artifact_id(*, content_digest: str, policy_id: str, against_id: str) -> str:
+def challenge_artifact_id(
+    *, content_digest: str, policy_id: str, against_id: str
+) -> str:
     """Stable identity for one sealed challenge evidence payload."""
     material = {
         "content_digest": content_digest,
         "policy_id": policy_id,
         "against_id": against_id,
     }
-    return hashlib.sha256(canonical_challenge_json(material).encode("utf-8")).hexdigest()
+    return hashlib.sha256(
+        canonical_challenge_json(material).encode("utf-8")
+    ).hexdigest()
 
 
 def stamp_challenge_evidence_digests(payload: dict[str, Any]) -> dict[str, Any]:
@@ -130,9 +136,7 @@ def challenge_result_export_payload(
     """
     resolved_mode = mode
     if resolved_mode is None:
-        resolved_mode = (
-            "champion" if is_champion_against(result.against_id) else "tune"
-        )
+        resolved_mode = "champion" if is_champion_against(result.against_id) else "tune"
     art = artifact_dir
     if art is None and result.artifact_dir is not None:
         art = result.artifact_dir
@@ -181,6 +185,7 @@ def write_challenge_artifact(
     extra: dict[str, Any] | None = None,
 ) -> Path:
     """Write a sealed v4 promote-evidence pack via owned temp dir + atomic rename."""
+    import errno
     import os
     import shutil
     import tempfile
@@ -195,12 +200,10 @@ def write_challenge_artifact(
         result, mode="challenge_run", artifact_dir=None, extra=extra
     )
     artifact_id = str(sealed_seed["artifact_id"])
+    # Unique final name from the start (no check-then-rename race window).
+    publish_token = uuid.uuid4().hex
     ts = datetime.now(tz=JAKARTA).strftime("%Y%m%d_%H%M%S_%f")
-    final_name = f"{ts}_{artifact_id[:12]}"
-    final = parent / final_name
-    # Collision-resistant final name if same-microsecond race still collides.
-    while final.exists():
-        final = parent / f"{final_name}_{uuid.uuid4().hex[:8]}"
+    final = parent / f"{ts}_{artifact_id[:12]}_{publish_token[:12]}"
 
     # Owned temporary directory only (never delete another writer's path).
     tmp_path = Path(
@@ -285,8 +288,31 @@ def write_challenge_artifact(
             fh.flush()
             os.fsync(fh.fileno())
         (tmp_path / "summary.md").write_text(result.summary_md or "", encoding="utf-8")
-        os.replace(str(tmp_path), str(final))
-        owned_tmp = None  # published; do not delete
+        # Atomic publish with rename retry if destination somehow collides.
+        published = False
+        for attempt in range(8):
+            dest = (
+                final
+                if attempt == 0
+                else (parent / f"{ts}_{artifact_id[:12]}_{uuid.uuid4().hex[:12]}")
+            )
+            try:
+                os.replace(str(tmp_path), str(dest))
+                final = dest
+                published = True
+                owned_tmp = None
+                break
+            except OSError as exc:
+                # EEXIST/ENOTEMPTY (macOS Directory not empty is errno 66).
+                if exc.errno not in {
+                    errno.EEXIST,
+                    getattr(errno, "ENOTEMPTY", 66),
+                    66,
+                }:
+                    raise
+                continue
+        if not published:
+            raise OSError(f"could not atomically publish challenge pack under {parent}")
     except Exception:
         if owned_tmp is not None and owned_tmp.exists():
             # Only remove the temp directory we created in this call.

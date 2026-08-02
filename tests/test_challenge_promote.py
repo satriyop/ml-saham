@@ -692,7 +692,10 @@ def test_historical_schema_v3_not_promote_eligible(
         from_json=export, write_artifact=False, db_path=fixture_db
     )
     assert pack.exit_code() == 2
-    assert "historical" in (pack.error or "").lower() or "schema" in (pack.error or "").lower()
+    assert (
+        "historical" in (pack.error or "").lower()
+        or "schema" in (pack.error or "").lower()
+    )
 
 
 def test_pack_binding_required_and_identity_bound(
@@ -711,19 +714,26 @@ def test_pack_binding_required_and_identity_bound(
         compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.production_snapshot_id
-    out = write_challenge_artifact(result, db_path=fixture_db, artifacts_root=tmp_path / "arts")
+    out = write_challenge_artifact(
+        result, db_path=fixture_db, artifacts_root=tmp_path / "arts"
+    )
     assert (out / "pack_binding.json").is_file()
 
     # Happy path reopen.
-    pack = build_promote_packet(from_artifact=out, write_artifact=False, db_path=fixture_db)
+    pack = build_promote_packet(
+        from_artifact=out, write_artifact=False, db_path=fixture_db
+    )
     assert pack.exit_code() == 0, pack.error
 
     # Missing binding.
     missing = tmp_path / "missing_bind"
     import shutil
+
     shutil.copytree(out, missing)
     (missing / "pack_binding.json").unlink()
-    pack_m = build_promote_packet(from_artifact=missing, write_artifact=False, db_path=fixture_db)
+    pack_m = build_promote_packet(
+        from_artifact=missing, write_artifact=False, db_path=fixture_db
+    )
     assert pack_m.exit_code() == 2
     assert "pack_binding" in (pack_m.error or "").lower()
 
@@ -734,7 +744,9 @@ def test_pack_binding_required_and_identity_bound(
     binding["artifact_id"] = "0" * 64
     binding["content_digest"] = "f" * 64
     (bad / "pack_binding.json").write_text(json.dumps(binding), encoding="utf-8")
-    pack_b = build_promote_packet(from_artifact=bad, write_artifact=False, db_path=fixture_db)
+    pack_b = build_promote_packet(
+        from_artifact=bad, write_artifact=False, db_path=fixture_db
+    )
     assert pack_b.exit_code() == 2
 
     # Cross-file status disagreement.
@@ -742,16 +754,26 @@ def test_pack_binding_required_and_identity_bound(
     shutil.copytree(out, disagree)
     metrics = json.loads((disagree / "metrics.json").read_text(encoding="utf-8"))
     metrics["status"] = "WIN" if metrics.get("status") != "WIN" else "LOSE"
-    (disagree / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
+    (disagree / "metrics.json").write_text(
+        json.dumps(metrics, indent=2) + "\n", encoding="utf-8"
+    )
     # Recompute file digests so digests pass but status equality fails... actually
     # file digests will mismatch first. Update pack_binding digests after rewrite.
     from ml_saham.challenge.artifacts import file_sha256_hex
+
     binding = json.loads((disagree / "pack_binding.json").read_text(encoding="utf-8"))
     binding["file_digests"]["metrics.json"] = file_sha256_hex(disagree / "metrics.json")
-    (disagree / "pack_binding.json").write_text(json.dumps(binding, indent=2) + "\n", encoding="utf-8")
-    pack_d = build_promote_packet(from_artifact=disagree, write_artifact=False, db_path=fixture_db)
+    (disagree / "pack_binding.json").write_text(
+        json.dumps(binding, indent=2) + "\n", encoding="utf-8"
+    )
+    pack_d = build_promote_packet(
+        from_artifact=disagree, write_artifact=False, db_path=fixture_db
+    )
     assert pack_d.exit_code() == 2
-    assert "disagreement" in (pack_d.error or "").lower() or "status" in (pack_d.error or "").lower()
+    assert (
+        "disagreement" in (pack_d.error or "").lower()
+        or "status" in (pack_d.error or "").lower()
+    )
 
 
 def test_against_id_gate_off_unknown_key_rejected(
@@ -786,15 +808,25 @@ def test_against_id_gate_off_unknown_key_rejected(
     payload = stamp_challenge_evidence_digests(payload)
     path = tmp_path / "bad_gate.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
-    pack = build_promote_packet(from_json=path, write_artifact=False, db_path=fixture_db)
+    pack = build_promote_packet(
+        from_json=path, write_artifact=False, db_path=fixture_db
+    )
     assert pack.exit_code() == 2
-    assert "gate" in (pack.error or "").lower() or "against" in (pack.error or "").lower()
+    assert (
+        "gate" in (pack.error or "").lower() or "against" in (pack.error or "").lower()
+    )
 
 
-def test_write_challenge_artifact_same_second_and_concurrent(tmp_path: Path, fixture_db: Path):
-    """Sequential same-second and concurrent publications must not collide."""
+def test_write_challenge_artifact_same_second_and_concurrent(
+    tmp_path: Path, fixture_db: Path, monkeypatch
+):
+    """Sequential same-second and concurrent same-parent publications must not collide."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    from copy import deepcopy
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
 
+    from ml_saham.challenge import artifacts as artifacts_mod
     from ml_saham.challenge.artifacts import write_challenge_artifact
     from ml_saham.challenge.runner import run_policy_challenge
     from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID
@@ -808,26 +840,45 @@ def test_write_challenge_artifact_same_second_and_concurrent(tmp_path: Path, fix
     )
     assert result.production_snapshot_id
     root = tmp_path / "arts"
+
+    # Freeze wall clock so all writers share the same timestamp prefix.
+    frozen = datetime(2026, 8, 2, 12, 0, 0, 123456, tzinfo=ZoneInfo("Asia/Jakarta"))
+
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return frozen.replace(tzinfo=None)
+            return frozen.astimezone(tz)
+
+    monkeypatch.setattr(artifacts_mod, "datetime", _FrozenDateTime)
+
     paths = []
     for _ in range(5):
+        # Distinct result objects avoid shared mutation of artifact_dir.
         paths.append(
-            write_challenge_artifact(result, db_path=fixture_db, artifacts_root=root)
+            write_challenge_artifact(
+                deepcopy(result), db_path=fixture_db, artifacts_root=root
+            )
         )
     assert len({p.resolve() for p in paths}) == 5
     for p in paths:
         assert (p / "pack_binding.json").is_file()
 
-    def _publish(i: int):
+    def _publish(_i: int):
         return write_challenge_artifact(
-            result, db_path=fixture_db, artifacts_root=root / f"c{i}"
+            deepcopy(result), db_path=fixture_db, artifacts_root=root
         )
 
     concurrent: list = []
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        futs = [pool.submit(_publish, i) for i in range(4)]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futs = [pool.submit(_publish, i) for i in range(16)]
         for fut in as_completed(futs):
             concurrent.append(fut.result())
-    assert len({p.resolve() for p in concurrent}) == 4
+    assert len(concurrent) == 16
+    assert len({p.resolve() for p in concurrent}) == 16
+    for p in concurrent:
+        assert (p / "pack_binding.json").is_file()
 
 
 def test_pack_binding_rejects_extra_file_digest_keys(
@@ -845,12 +896,18 @@ def test_pack_binding_rejects_extra_file_digest_keys(
         write_artifact=False,
         compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
-    out = write_challenge_artifact(result, db_path=fixture_db, artifacts_root=tmp_path / "arts")
+    out = write_challenge_artifact(
+        result, db_path=fixture_db, artifacts_root=tmp_path / "arts"
+    )
     bad = tmp_path / "extra_digest"
     shutil.copytree(out, bad)
     binding = json.loads((bad / "pack_binding.json").read_text(encoding="utf-8"))
     binding["file_digests"]["summary.md"] = file_sha256_hex(bad / "summary.md")
-    (bad / "pack_binding.json").write_text(json.dumps(binding, indent=2) + "\n", encoding="utf-8")
-    pack = build_promote_packet(from_artifact=bad, write_artifact=False, db_path=fixture_db)
+    (bad / "pack_binding.json").write_text(
+        json.dumps(binding, indent=2) + "\n", encoding="utf-8"
+    )
+    pack = build_promote_packet(
+        from_artifact=bad, write_artifact=False, db_path=fixture_db
+    )
     assert pack.exit_code() == 2
     assert "file_digests" in (pack.error or "") or "extra" in (pack.error or "").lower()
