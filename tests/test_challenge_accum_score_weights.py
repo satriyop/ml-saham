@@ -71,14 +71,16 @@ def test_extract_components_from_flow_signals():
             }
         },
         "sub_signal_fingerprint": {
+            # ADR-062: retired Accum group-breadth keys must not become a sleeve
             "sector_breadth": 0.7,
+            "sector_breadth_bonus": 10.0,
         },
     }
     comps = extract_components(payload, pol)
     assert comps is not None
     assert comps["consistency"] == 10.0
     assert comps["bci"] == 4.0
-    assert comps["sector_breadth"] == pytest.approx(0.7 * 10.0)
+    assert "sector_breadth" not in comps
     assert (
         "bb_squeeze" not in comps
     )  # disabled not required in output keys of enabled only
@@ -103,11 +105,6 @@ def test_extract_components_from_adr056_features_by_window():
                             {"key": "flow", "score_points": 2.0, "max_points": 12.5},
                             {"key": "rsi", "score_points": 1.7, "max_points": 12.5},
                             {"key": "inst", "score_points": 5.0, "max_points": 8.3},
-                            {
-                                "key": "sector_breadth",
-                                "score_points": 10.0,
-                                "max_points": 10.0,
-                            },
                         ],
                         "breakdown": {
                             "cons": 9.5,
@@ -116,7 +113,6 @@ def test_extract_components_from_adr056_features_by_window():
                             "flow": 2.0,
                             "rsi": 1.7,
                             "inst": 5.0,
-                            "sector_breadth": 10.0,
                             "bb": None,
                         },
                     }
@@ -133,7 +129,7 @@ def test_extract_components_from_adr056_features_by_window():
     assert comps["foreign_flow_ratio"] == 2.0
     assert comps["rsi_headroom"] == 1.7
     assert comps["bci"] == 5.0
-    assert comps["sector_breadth"] == 10.0
+    assert "sector_breadth" not in comps
     assert "bb_squeeze" not in comps
 
 

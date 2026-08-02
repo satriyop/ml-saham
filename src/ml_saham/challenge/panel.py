@@ -224,15 +224,13 @@ def extract_components(
             "bb_width_pctile_at_signal": "bb_squeeze",
             "ia_foreign_participation": "foreign_flow_ratio",
             "foreign_concentration_at_signal": "consistency",
-            # P0 BCI / sector breadth when not in flow_signals breakdown
+            # P0 BCI when not in flow_signals breakdown.
+            # ADR-062: do not map retired Accum group-breadth / sector_breadth_bonus
+            # payload keys into a production score sleeve.
             "bci_score": "bci",
             "bci_points": "bci",
             "inst_score": "bci",
             "tier1_concentration": "bci",
-            "sector_breadth": "sector_breadth",
-            "peer_breadth": "sector_breadth",
-            "sector_breadth_bonus": "sector_breadth",
-            "breadth_at_signal": "sector_breadth",
         }
         for src, dest in fp_map.items():
             if dest in found:
@@ -246,9 +244,6 @@ def extract_components(
                     score = max(0.0, min(1.0, abs(val) * 10)) * w
                 elif dest == "bb_squeeze":
                     score = max(0.0, min(1.0, 1.0 - val)) * w
-                elif dest == "sector_breadth":
-                    # production: often fraction 0–1 or already points 0–10
-                    score = val * w if val <= 1.0 else min(w, val)
                 elif dest == "bci":
                     score = val * w if val <= 1.0 else min(w, max(0.0, val))
                 else:
@@ -268,9 +263,6 @@ def extract_components(
         ):
             found["production_observed_score"] = float(observed_score)
     for src, dest in (
-        ("sector_breadth", "sector_breadth"),
-        ("peer_breadth", "sector_breadth"),
-        ("sector_breadth_bonus", "sector_breadth"),
         ("bci", "bci"),
         ("bci_points", "bci"),
     ):

@@ -232,7 +232,8 @@ def run_factor_challenge(
     if verified_canon is None:
         msg = (
             f"factor {factor_raw!r} is not enabled by the verified production "
-            "snapshot (sector breadth is outside accumulation snapshot v1)"
+            "snapshot (outside accumulation production closed set; "
+            "group-breadth bonus retired by ADR-062)"
         )
         return FactorChallengeResult(
             verdict=FactorVerdict.BLOCKED_POLICY,

@@ -6,7 +6,7 @@
   "panel_kind": "accum_components",
   "score_kind": "weighted_sleeves",
   "source": "ai-saham ScoreAccumUseCase.AccumScorePolicy (live mirror 2026-07-30 polish)",
-  "source_ref": "ai-saham src/application/use_case/score_accum_use_case.py AccumScorePolicy + BciEvidencePolicy; sector breadth soft +10 when present on payload",
+  "source_ref": "ai-saham AccumScorePolicy + BciEvidencePolicy; ADR-062 retired group-breadth +10 bonus (never production baseline)",
   "max_score": 100.0,
   "components": [
     {
@@ -47,13 +47,6 @@
       "note": "Production BciEvidencePolicy: cluster_points=12.5, stable_points=4.2 (points-based additive); sleeve weight = cluster max"
     },
     {
-      "key": "sector_breadth",
-      "aliases": ["breadth", "sector_breadth_bonus", "peer_breadth"],
-      "weight": 10.0,
-      "enabled": true,
-      "note": "Production soft add-on (+10 when peer breadth high); not a core AccumScorePolicy field but challenged when extractable"
-    },
-    {
       "key": "bb_squeeze",
       "aliases": ["bb"],
       "weight": 8.3,
@@ -61,5 +54,5 @@
       "note": "BollingerSqueezePolicy.enabled=False in production"
     }
   ],
-  "hash": "acp0pol7a2b9c4d1"
+  "hash": "acp0pol7a2b9c4d2"
 }

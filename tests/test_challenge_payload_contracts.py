@@ -139,7 +139,7 @@ def test_diagnostics_from_window_not_root_level():
     sector = extract_diagnostic_features(payload, load_diagnostic("sector.peer_context"))
     assert sector is not None
     assert sector["sector_context_score"] == pytest.approx(12.0)
-    # candidate.sector_breadth preferred over fingerprint peer_breadth when both exist
+    # sector-context DIAG peer breadth (not retired Accum group-breadth bonus)
     assert sector["peer_breadth"] == pytest.approx(0.35)
 
 

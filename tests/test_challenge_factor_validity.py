@@ -35,7 +35,9 @@ def test_resolve_aliases():
     assert resolve_factor_key(pol, "streak") == "streak"
     assert resolve_factor_key(pol, "inst") == "bci"  # P0 enabled
     assert resolve_factor_key(pol, "bci") == "bci"
-    assert resolve_factor_key(pol, "breadth") == "sector_breadth"
+    # ADR-062: retired Accum group-breadth bonus is not a static-reference sleeve
+    assert resolve_factor_key(pol, "breadth") is None
+    assert resolve_factor_key(pol, "sector_breadth") is None
     assert resolve_factor_key(pol, "bb_squeeze") is None  # still production-off
     assert resolve_factor_key(pol, "nope") is None
 
@@ -80,7 +82,8 @@ def test_bci_is_enabled_but_sector_breadth_is_blocked_by_snapshot_v1(
     for key in ("sector_breadth", "breadth"):
         r = run_factor_challenge(fixture_db, factor=key, write_artifact=False, compatibility_id=FIXTURE_COMPATIBILITY_ID)
         assert r.verdict == FactorVerdict.BLOCKED_POLICY
-        assert "outside accumulation snapshot v1" in " ".join(r.notes)
+        notes = " ".join(r.notes).lower()
+        assert "outside accumulation" in notes or "adr-062" in notes or "not enabled" in notes
 
 
 def test_blocked_unknown_factor(fixture_db: Path):
