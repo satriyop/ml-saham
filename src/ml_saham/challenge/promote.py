@@ -379,7 +379,7 @@ def load_evidence_artifact(
             "policy_id": manifest.get("policy_id"),
             "protocol_id": manifest.get("protocol_id"),
             "policy_hash": manifest.get("policy_hash"),
-            "baseline_id": manifest.get("baseline_id") or "production",
+            "baseline_id": manifest.get("baseline_id"),
             "against_id": manifest.get("against_id"),
             "primary_horizon": manifest.get("primary_horizon"),
             "primary_ic_baseline": metrics.get("primary_ic_baseline"),

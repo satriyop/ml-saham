@@ -602,3 +602,26 @@ def test_fabricated_zero_digest_rejected_against_db(
     assert pack.error
     assert "production_snapshot_digest" in pack.error or "payload_digest" in pack.error
     assert "authoritative" in pack.error or "does not match" in pack.error
+
+
+def test_promote_rejects_missing_or_empty_baseline_id(
+    verified_export: dict, tmp_path: Path, fixture_db: Path
+):
+    """Missing/null/empty baseline_id must not default to production eligibility."""
+    cases = {
+        "missing": lambda p: p.pop("baseline_id", None),
+        "null": lambda p: p.__setitem__("baseline_id", None),
+        "empty": lambda p: p.__setitem__("baseline_id", ""),
+        "whitespace": lambda p: p.__setitem__("baseline_id", "   "),
+    }
+    for name, mut in cases.items():
+        payload = dict(verified_export)
+        mut(payload)
+        export = tmp_path / f"export_{name}.json"
+        export.write_text(json.dumps(payload), encoding="utf-8")
+        pack = build_promote_packet(
+            from_json=export, write_artifact=False, db_path=fixture_db
+        )
+        assert pack.exit_code() == 2, (name, pack.error)
+        assert pack.error is not None
+        assert "baseline" in pack.error.lower()
