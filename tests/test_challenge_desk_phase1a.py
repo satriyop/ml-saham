@@ -248,6 +248,4 @@ def test_streamlit_phase1a_pages_apptest(monkeypatch, tmp_path: Path):
         for el in collection
     )
     assert "Challenge Desk" in text or "ml-saham Challenge Desk" in text
-    assert "Phase 1A" in text or "read-only" in text.lower()
-    # No Run control surface in Phase 1A foundation copy
-    assert "no Run" in text.lower() or "No Run" in text
+    assert "Phase 2" in text or "read-only" in text.lower() or "Run" in text

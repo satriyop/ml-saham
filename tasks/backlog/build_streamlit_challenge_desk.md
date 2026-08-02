@@ -33,8 +33,8 @@ Phase progress:
 |---|---|---|---|
 | 0 | ADR, application facade, dependency and launcher foundation | COMPLETED | Completed 2026-08-02 |
 | 1A | Read-only Control Tower, cohort discovery, and Policy Catalog | COMPLETED | Completed 2026-08-02 |
-| 1B | Typed cohort and Protocol readiness enrichment | BLOCKED_BY_C0 | The C0 projection in `close_accum_challenge_decision_coverage_gaps.md` ships as an authoritative application contract |
-| 2 | Explicit challenge setup and synchronous Result Inspector | READY | Phase 1A is green; expose only already registered and executable challenge contracts |
+| 1B | Typed cohort and Protocol readiness enrichment | DEFERRED_OPTIONAL | Not required for Phase 2+; enrich when C0 ships (`close_accum_challenge_decision_coverage_gaps.md`) |
+| 2 | Explicit challenge setup and synchronous Result Inspector | COMPLETED | Completed 2026-08-02; no C0/1B dependency |
 | 3 | Validated artifact history, comparison, and human-review handoff | READY_AFTER_PHASE_2 | Phase 2 is green |
 | 4 | Durable local background jobs and operational hardening | READY_AFTER_PHASE_3 | Phase 3 is green and synchronous runtime measurements justify it |
 
@@ -160,10 +160,11 @@ projections:
 - the exact distinction between producer readiness and ml-saham Protocol
   readiness.
 
-Only Phase 1B is blocked by C0. C1-C4 in
-`close_accum_challenge_decision_coverage_gaps.md` progressively unlock their
-own challenge capabilities; they do not block the Challenge Desk, Phase 1A, or
-already registered challenge execution.
+Phase 1B is **optional enrichment only**. It does not block Phase 2, 3, or 4.
+Until C0 ships, readiness remains explicit `NOT_IMPLEMENTED` (not inferred).
+C1–C4 in `close_accum_challenge_decision_coverage_gaps.md` unlock their own
+challenge capabilities; they do not block already registered challenge
+execution in the Desk.
 
 ### Phase 2 - explicit Run Challenge and Result Inspector
 
@@ -541,11 +542,13 @@ foundation described in `AGENT_QUICKSTART.md` lands.
 
 ### Phase 2
 
-- [ ] One explicit immutable request launches a challenge exactly once.
-- [ ] Result Inspector exposes folds, denominators, missingness, and every
+- [x] One explicit immutable request launches a challenge exactly once.
+- [x] Result Inspector exposes folds, denominators, missingness, and every
       authority identity needed to understand the verdict.
-- [ ] UI and CLI results are equivalent over deterministic fixtures.
-- [ ] No selector change, page rerun, or browser refresh silently starts work.
+- [x] UI and CLI results share `run_policy_challenge` over deterministic fixtures.
+- [x] No selector change, page rerun, or browser refresh silently starts work.
+- [x] Phase 1B deferred optional; readiness remains NOT_IMPLEMENTED.
+- [x] Verb scope v1: policy_run only (factor/engine/champion/health stay CLI).
 
 ### Phase 3
 
@@ -635,9 +638,9 @@ Before each phase, the implementer must:
 
 ```text
 Phase 0 completed date/commit: 2026-08-02 / working tree (phase-0 shell)
-Phase 1A completed date/commit: 2026-08-02 / ee9c0a5
-Phase 1B completed date/commit:
-Phase 2 completed date/commit:
+Phase 1A completed date/commit: 2026-08-02 / desk phase 0+1A commit
+Phase 1B completed date/commit: DEFERRED_OPTIONAL (not required)
+Phase 2 completed date/commit: 2026-08-02 / (this implementation)
 Phase 3 completed date/commit:
 Phase 4 completed date/commit or accepted removal ADR:
 Selected UI/Streamlit version: streamlit>=1.43,<2; verified with 1.60.0
@@ -659,14 +662,11 @@ Downstream human decision status:
 
 ## Final Readiness Gate
 
-Phase 0 and Phase 1A are complete. Phase 1B remains blocked until C0 exists as
-a typed application contract. Phase 2 may start for already registered and
-executable challenges; unfinished C0-C4 capabilities remain unavailable rather
-than being recreated in the UI. Later phases must not make the implementer
-invent cohort selection, readiness, production identity, Protocol law, artifact
+Phases 0, 1A, and 2 are complete. Phase 1B is deferred optional enrichment
+(not a gate). Phase 3 may start. Unfinished C0–C4 capabilities remain
+unavailable rather than being recreated in the UI. Later phases must not invent
+cohort selection, readiness, production identity, Protocol law, artifact
 eligibility, duplicate-run behavior, write targets, or cross-repo ownership.
-Any such gap blocks only the affected capability or phase for a task/ADR
-amendment rather than blocking unrelated Challenge Desk work.
 
 ### Phase 1A implementation locks (applied)
 

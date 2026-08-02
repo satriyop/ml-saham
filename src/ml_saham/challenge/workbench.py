@@ -1,14 +1,18 @@
 """Typed application boundary shared by challenge presentation adapters.
 
 Phase 0: configuration and product-boundary context only.
-Phase 1A: read-only Control Tower (historical packs), factual cohort inventory,
-and canonical Policy Catalog. No live challenge execution, no C0 readiness
-inference, and no Run surface.
+Phase 1A: read-only Control Tower, cohort inventory, Policy Catalog.
+Phase 1B: deferred optional C0 readiness enrichment (not required for Phase 2).
+Phase 2: explicit immutable policy-run requests + synchronous Result Inspector
+DTO (session-scoped attempt idempotency owned by the presentation adapter).
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
+import time
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -18,7 +22,9 @@ from ml_saham.artifacts import resolve_artifacts_root
 from ml_saham.challenge.diagnostics.registry import list_diagnostics
 from ml_saham.challenge.policies.registry import load_policy, load_policy_adapter
 from ml_saham.challenge.production_policy_snapshots import REQUIRED_POLICIES
-from ml_saham.challenge.runner import list_policies
+from ml_saham.challenge.protocols import get_protocol
+from ml_saham.challenge.runner import list_policies, run_policy_challenge
+from ml_saham.challenge.types import ChallengeResult, ChallengeStatus
 from ml_saham.data.aisaham_read import connect
 from ml_saham.data.connection import resolve_db_path
 from ml_saham.data.observation_cohort import (
@@ -188,6 +194,83 @@ class DiagnosticCatalogRow:
     scenario: str
     n_features: int
     authority_note: str
+
+
+@dataclass(frozen=True)
+class ProtocolSummary:
+    """Read-only Protocol identity for the Run form (no law changes)."""
+
+    protocol_id: str
+    primary_horizon: int
+    horizons_report: tuple[int, ...]
+    min_n_total: int
+    min_n_test: int
+    n_folds: int
+    embargo_sessions: int
+    min_folds_for_win: int
+    win_margin: float
+    min_fold_agree: float
+    label: str
+    costs: str
+
+
+@dataclass(frozen=True)
+class ChallengeRunRequest:
+    """Immutable submitted run request. request_id covers all material fields."""
+
+    request_id: str
+    verb: str
+    policy_id: str
+    baseline_id: str
+    against_id: str
+    compatibility_id: str
+    purpose_family: str
+    protocol_id: str
+    write_artifact: bool
+    db_path: str
+    artifacts_root: str
+
+
+@dataclass(frozen=True)
+class ChallengeRunView:
+    """Presentation DTO for one completed attempt (product state or error)."""
+
+    request_id: str
+    attempt_id: str
+    kind: str  # product_result | application_error
+    status: str
+    policy_id: str
+    protocol_id: str
+    baseline_id: str
+    against_id: str
+    policy_hash: str
+    n_rows: int
+    primary_horizon: int
+    primary_ic_baseline: float | None
+    primary_ic_against: float | None
+    horizon_metrics: dict[str, Any]
+    fold_metrics: tuple[dict[str, Any], ...]
+    min_folds_for_win: int | None
+    n_folds_reported: int
+    weights: dict[str, Any]
+    lines: tuple[str, ...]
+    notes: tuple[str, ...]
+    summary_md: str
+    observation_compatibility_id: str
+    production_snapshot_id: str
+    production_snapshot_digest: str
+    production_policy_id: str
+    production_policy_version: str
+    production_semantic_engine_contract_id: str
+    challenge_adapter_id: str
+    challenge_adapter_version: str
+    population_identity_kind: str
+    population_identity_id: str
+    population_identity_detail: dict[str, Any]
+    artifact_dir: str | None
+    elapsed_seconds: float
+    human_next_step: str
+    error_reference: str | None = None
 
 
 class ChallengeWorkbenchService:
@@ -476,6 +559,243 @@ class ChallengeWorkbenchService:
             notes=tuple(notes),
         )
 
+    # --- Phase 2: explicit policy run + result projection -----------------
+
+    def describe_protocol(self, protocol_id: str) -> ProtocolSummary | None:
+        """Return a read-only Protocol summary, or None if unknown."""
+        try:
+            p = get_protocol(protocol_id)
+        except KeyError:
+            return None
+        return ProtocolSummary(
+            protocol_id=p.protocol_id,
+            primary_horizon=p.primary_horizon,
+            horizons_report=tuple(p.horizons_report),
+            min_n_total=p.min_n_total,
+            min_n_test=p.min_n_test,
+            n_folds=p.n_folds,
+            embargo_sessions=p.embargo_sessions,
+            min_folds_for_win=p.min_folds_for_win,
+            win_margin=p.win_margin,
+            min_fold_agree=p.min_fold_agree,
+            label=p.label,
+            costs=p.costs,
+        )
+
+    def build_policy_run_request(
+        self,
+        *,
+        policy_id: str,
+        baseline_id: str,
+        against_id: str,
+        compatibility_id: str,
+        purpose_family: str = "",
+        write_artifact: bool = True,
+    ) -> ChallengeRunRequest:
+        """Build an immutable request; stamps request_id over material fields.
+
+        Does not execute. Callers must not treat this as an eligibility grant.
+        """
+        pid = str(policy_id).strip()
+        baseline = str(baseline_id).strip()
+        against = str(against_id).strip()
+        cid = str(compatibility_id).strip()
+        family = str(purpose_family).strip()
+        if not pid:
+            raise ValueError("policy_id is required")
+        if baseline not in {"production", "static_reference"}:
+            raise ValueError(
+                "baseline_id must be explicit 'production' or 'static_reference'"
+            )
+        if not against:
+            raise ValueError("against_id is required")
+        if not cid or cid.startswith("—"):
+            raise ValueError(
+                "compatibility_id must be an exact explicit selection "
+                "(no largest/latest/only default)"
+            )
+        # Display label for null/blank cohort ids from inventory.
+        if cid == "(untagged)":
+            cid = ""
+
+        catalog = {r.policy_id: r for r in self.list_policy_catalog()}
+        row = catalog.get(pid)
+        if row is None:
+            raise ValueError(f"policy_id {pid!r} is not in the registry catalog")
+        protocol_id = row.protocol_id
+        if row.supported_challengers and against not in row.supported_challengers:
+            raise ValueError(
+                f"against_id {against!r} is not in supported_challengers "
+                f"for {pid}: {list(row.supported_challengers)}"
+            )
+
+        material = {
+            "verb": "policy_run",
+            "policy_id": pid,
+            "baseline_id": baseline,
+            "against_id": against,
+            "compatibility_id": cid,
+            "purpose_family": family,
+            "protocol_id": protocol_id,
+            "write_artifact": bool(write_artifact),
+            "db_path": str(self._config.upstream_db_path),
+            "artifacts_root": str(self._config.artifacts_root),
+        }
+        request_id = hashlib.sha256(
+            json.dumps(material, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()[:20]
+        return ChallengeRunRequest(
+            request_id=request_id,
+            verb="policy_run",
+            policy_id=pid,
+            baseline_id=baseline,
+            against_id=against,
+            compatibility_id=cid,
+            purpose_family=family,
+            protocol_id=protocol_id,
+            write_artifact=bool(write_artifact),
+            db_path=str(self._config.upstream_db_path),
+            artifacts_root=str(self._config.artifacts_root),
+        )
+
+    @staticmethod
+    def new_attempt_id() -> str:
+        """Opaque attempt id for one deliberate execution (Run / Run again)."""
+        return uuid.uuid4().hex[:16]
+
+    def execute_policy_run(
+        self,
+        request: ChallengeRunRequest,
+        *,
+        attempt_id: str,
+        executed_keys: set[str] | None = None,
+    ) -> ChallengeRunView:
+        """Run one policy tournament synchronously via existing orchestration.
+
+        Idempotency: if ``executed_keys`` contains ``request_id:attempt_id``,
+        returns a non-executing application_error view without calling the
+        runner again. Session-scoped only until Phase 4 durable jobs.
+        """
+        if not attempt_id or not str(attempt_id).strip():
+            raise ValueError("attempt_id is required")
+        key = f"{request.request_id}:{attempt_id}"
+        if executed_keys is not None and key in executed_keys:
+            return ChallengeRunView(
+                request_id=request.request_id,
+                attempt_id=attempt_id,
+                kind="application_error",
+                status="DUPLICATE_ATTEMPT",
+                policy_id=request.policy_id,
+                protocol_id=request.protocol_id,
+                baseline_id=request.baseline_id,
+                against_id=request.against_id,
+                policy_hash="",
+                n_rows=0,
+                primary_horizon=0,
+                primary_ic_baseline=None,
+                primary_ic_against=None,
+                horizon_metrics={},
+                fold_metrics=(),
+                min_folds_for_win=None,
+                n_folds_reported=0,
+                weights={},
+                lines=(
+                    "DUPLICATE_ATTEMPT:",
+                    "  - This request_id+attempt_id was already executed; "
+                    "use Run again for a new attempt_id.",
+                ),
+                notes=("duplicate Streamlit/session attempt suppressed",),
+                summary_md="# DUPLICATE_ATTEMPT\n\nNo re-execution.\n",
+                observation_compatibility_id=request.compatibility_id,
+                production_snapshot_id="",
+                production_snapshot_digest="",
+                production_policy_id="",
+                production_policy_version="",
+                production_semantic_engine_contract_id="",
+                challenge_adapter_id="",
+                challenge_adapter_version="",
+                population_identity_kind="",
+                population_identity_id="",
+                population_identity_detail={},
+                artifact_dir=None,
+                elapsed_seconds=0.0,
+                human_next_step="Click Run again to mint a new attempt_id.",
+                error_reference=f"dup:{key}",
+            )
+
+        t0 = time.perf_counter()
+        try:
+            result = run_policy_challenge(
+                Path(request.db_path),
+                request.policy_id,
+                against=request.against_id,
+                baseline=request.baseline_id,
+                protocol_id=request.protocol_id or None,
+                write_artifact=request.write_artifact,
+                artifacts_dir=Path(request.artifacts_root),
+                compatibility_id=request.compatibility_id,
+            )
+            view = _view_from_challenge_result(
+                result,
+                request_id=request.request_id,
+                attempt_id=attempt_id,
+                elapsed_seconds=time.perf_counter() - t0,
+            )
+        except Exception as exc:  # noqa: BLE001 — preserve category; not a verdict
+            elapsed = time.perf_counter() - t0
+            ref = f"err:{uuid.uuid4().hex[:12]}"
+            view = ChallengeRunView(
+                request_id=request.request_id,
+                attempt_id=attempt_id,
+                kind="application_error",
+                status="APPLICATION_ERROR",
+                policy_id=request.policy_id,
+                protocol_id=request.protocol_id,
+                baseline_id=request.baseline_id,
+                against_id=request.against_id,
+                policy_hash="",
+                n_rows=0,
+                primary_horizon=0,
+                primary_ic_baseline=None,
+                primary_ic_against=None,
+                horizon_metrics={},
+                fold_metrics=(),
+                min_folds_for_win=None,
+                n_folds_reported=0,
+                weights={},
+                lines=(
+                    "APPLICATION_ERROR:",
+                    f"  - {type(exc).__name__}: {exc}",
+                    f"  - reference={ref}",
+                ),
+                notes=(f"{type(exc).__name__}: {exc}",),
+                summary_md=(
+                    f"# APPLICATION_ERROR\n\nReference `{ref}`\n\n"
+                    f"{type(exc).__name__}: {exc}\n"
+                ),
+                observation_compatibility_id=request.compatibility_id,
+                production_snapshot_id="",
+                production_snapshot_digest="",
+                production_policy_id="",
+                production_policy_version="",
+                production_semantic_engine_contract_id="",
+                challenge_adapter_id="",
+                challenge_adapter_version="",
+                population_identity_kind="",
+                population_identity_id="",
+                population_identity_detail={},
+                artifact_dir=None,
+                elapsed_seconds=elapsed,
+                human_next_step=(
+                    "Inspect server logs with the error reference; fix the "
+                    "contract/environment; do not treat this as BLOCKED_DATA."
+                ),
+                error_reference=ref,
+            )
+        if executed_keys is not None:
+            executed_keys.add(key)
+        return view
+
 
 def build_challenge_workbench(
     *,
@@ -600,3 +920,85 @@ def _opt_str(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _view_from_challenge_result(
+    result: ChallengeResult,
+    *,
+    request_id: str,
+    attempt_id: str,
+    elapsed_seconds: float,
+) -> ChallengeRunView:
+    status = (
+        result.status.value
+        if isinstance(result.status, ChallengeStatus)
+        else str(result.status)
+    )
+    folds = tuple(dict(f) for f in (result.fold_metrics or []))
+    protocol_summary_min_folds: int | None = None
+    try:
+        protocol_summary_min_folds = get_protocol(result.protocol_id).min_folds_for_win
+    except KeyError:
+        protocol_summary_min_folds = None
+
+    if status in {ChallengeStatus.WIN.value, ChallengeStatus.LOSE.value}:
+        next_step = (
+            "Human review only. A WIN does not auto-promote ai-saham; "
+            "use promote-packet / memo workflows outside auto-apply."
+        )
+    elif status in {
+        ChallengeStatus.BLOCKED_DATA.value,
+        ChallengeStatus.BLOCKED_POLICY.value,
+    }:
+        next_step = (
+            "Product completed in a blocked state. Fix the stated identity/data "
+            "block; do not soft-succeed or auto-select a replacement cohort."
+        )
+    elif status == ChallengeStatus.INCONCLUSIVE.value:
+        next_step = (
+            "Inconclusive under protocol (e.g. fold depth / margin). Not a WIN; "
+            "not promotion-eligible as confirmatory."
+        )
+    else:
+        next_step = "Review notes and identities; no automatic production change."
+
+    return ChallengeRunView(
+        request_id=request_id,
+        attempt_id=attempt_id,
+        kind="product_result",
+        status=status,
+        policy_id=result.policy_id,
+        protocol_id=result.protocol_id,
+        baseline_id=result.baseline_id,
+        against_id=result.against_id,
+        policy_hash=result.policy_hash,
+        n_rows=result.n_rows,
+        primary_horizon=result.primary_horizon,
+        primary_ic_baseline=result.primary_ic_baseline,
+        primary_ic_against=result.primary_ic_against,
+        horizon_metrics=dict(result.horizon_metrics or {}),
+        fold_metrics=folds,
+        min_folds_for_win=protocol_summary_min_folds,
+        n_folds_reported=len(folds),
+        weights=dict(result.weights or {}),
+        lines=tuple(result.lines or []),
+        notes=tuple(result.notes or []),
+        summary_md=result.summary_md or "",
+        observation_compatibility_id=result.observation_compatibility_id or "",
+        production_snapshot_id=result.production_snapshot_id or "",
+        production_snapshot_digest=result.production_snapshot_digest or "",
+        production_policy_id=result.production_policy_id or "",
+        production_policy_version=result.production_policy_version or "",
+        production_semantic_engine_contract_id=(
+            result.production_semantic_engine_contract_id or ""
+        ),
+        challenge_adapter_id=result.challenge_adapter_id or "",
+        challenge_adapter_version=result.challenge_adapter_version or "",
+        population_identity_kind=result.population_identity_kind or "",
+        population_identity_id=result.population_identity_id or "",
+        population_identity_detail=dict(result.population_identity_detail or {}),
+        artifact_dir=str(result.artifact_dir) if result.artifact_dir else None,
+        elapsed_seconds=elapsed_seconds,
+        human_next_step=next_step,
+        error_reference=None,
+    )

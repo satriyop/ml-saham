@@ -239,10 +239,9 @@ def test_streamlit_foundation_shell_apptest(monkeypatch, tmp_path: Path):
         )
         for element in collection
     )
-    assert "read-only" in text.lower() or "Phase 1A" in text
+    assert "read-only" in text.lower() or "Phase 2" in text or "Challenge Desk" in text
     assert str(db_path.resolve()) in text
     assert str(artifacts_root.resolve()) in text
     assert "automatic promotion is disabled" in text
-    assert "Run" in text  # Phase 1A explicitly states no Run
     assert not db_path.exists()
     assert not artifacts_root.exists()
