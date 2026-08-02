@@ -54,6 +54,74 @@ def _format_status(status: str) -> str:
     return f"{icon} {status}"
 
 
+def cohort_label_index(
+    options: list[str],
+    *,
+    selected_label: str | None,
+    purpose_family: str | None,
+    compatibility_id: str | None,
+    none_token: str = "— no selection —",
+) -> int:
+    """Index into cohort options. Never invents a cohort; 0 stays none/default.
+
+    Prefill only when the operator already chose an identity on Cohort Discovery
+    (or an equivalent explicit session selection).
+    """
+    if not options:
+        return 0
+    if selected_label and selected_label in options:
+        return options.index(selected_label)
+    if purpose_family and compatibility_id:
+        prefix = f"{purpose_family} | {compatibility_id}"
+        for i, opt in enumerate(options):
+            if opt == prefix or opt.startswith(prefix + " |"):
+                return i
+    if none_token in options:
+        return options.index(none_token)
+    return 0
+
+
+def _session_cohort_index(options: list[str]) -> int:
+    return cohort_label_index(
+        options,
+        selected_label=st.session_state.get("selected_cohort_label"),
+        purpose_family=st.session_state.get("selected_purpose_family"),
+        compatibility_id=st.session_state.get("selected_compatibility_id"),
+    )
+
+
+def render_path_status(service: ChallengeWorkbenchService) -> None:
+    """Clear empty/misconfig states for DB and artifacts root."""
+    db = service.config.upstream_db_path
+    art = service.config.artifacts_root
+    if not db.is_file():
+        st.error(
+            f"**Upstream SQLite not found** (read-only path):\n\n`{db}`\n\n"
+            "Fix launch config, then restart the desk:\n"
+            "- `ml-saham --db /path/to/ai-saham/data.db challenge desk`\n"
+            "- or set env `ML_SAHAM_DB`\n\n"
+            "Do not invent a cohort or fall back to another database."
+        )
+    else:
+        st.caption(f"Upstream DB present (read-only): `{db}`")
+    if not art.exists():
+        st.warning(
+            f"**Artifacts root does not exist yet:** `{art}`\n\n"
+            "It will be created when a health/policy run writes a pack, or set "
+            "`--artifacts-dir` / `ML_SAHAM_ARTIFACTS`."
+        )
+    elif not art.is_dir():
+        st.error(f"Artifacts path exists but is not a directory: `{art}`")
+    else:
+        challenge_root = art / "challenge"
+        if not challenge_root.is_dir():
+            st.info(
+                f"Artifacts root exists, but no `challenge/` packs yet under "
+                f"`{art}`. Run **Control Tower → Run health** or CLI "
+                "`challenge health --with-diagnostics --compatibility-id …`."
+            )
+
+
 def render_sidebar(overview: ChallengeWorkbenchOverview) -> None:
     st.sidebar.title("Challenge Desk")
     st.sidebar.caption("Local single-user · English challenge surface")
@@ -62,23 +130,41 @@ def render_sidebar(overview: ChallengeWorkbenchOverview) -> None:
     st.sidebar.text(str(overview.upstream_db_path))
     st.sidebar.markdown("**Artifacts**")
     st.sidebar.text(str(overview.artifacts_root))
-    st.sidebar.caption(
-        "Phase 2: Run Challenge for explicit policy tournaments. "
-        "CLI remains automation/recovery."
+    sel = st.session_state.get("selected_compatibility_id")
+    fam = st.session_state.get("selected_purpose_family")
+    if sel:
+        st.sidebar.success(f"Session cohort: `{fam}` / `{sel}`")
+        st.sidebar.caption("Prefills Run + health forms only (not eligibility).")
+    else:
+        st.sidebar.caption("No session cohort — pick one under Cohort Discovery.")
+    st.sidebar.markdown("**Ritual**")
+    st.sidebar.markdown(
+        "1. Catalog  \n"
+        "2. Cohort Discovery (exact id)  \n"
+        "3. Control Tower health  \n"
+        "4. Run Challenge dig  \n"
+        "5. History / Compare / promote"
     )
+    st.sidebar.caption("CLI remains automation, cron, and recovery.")
     st.sidebar.info(overview.production_changes)
     st.sidebar.caption(overview.curriculum_authority)
 
 
-def render_foundation(overview: ChallengeWorkbenchOverview) -> None:
+def render_foundation(
+    overview: ChallengeWorkbenchOverview,
+    service: ChallengeWorkbenchService,
+) -> None:
     st.title(overview.product_name)
     st.caption(
-        "Phase 2 desk — Control Tower, cohorts, catalog, and explicit Run."
+        "Offline challenge lab desk — catalog, health ritual, policy run, "
+        "history, compare, human promote handoff."
     )
     st.info(
         "This is an offline challenge lab for deterministic human decision "
         "support. It is not a trading cockpit."
     )
+    render_path_status(service)
+
     product_col, authority_col = st.columns(2)
     with product_col:
         st.subheader("Product boundary")
@@ -92,9 +178,32 @@ def render_foundation(overview: ChallengeWorkbenchOverview) -> None:
     st.subheader("Configured paths")
     st.text(f"Upstream SQLite (read-only): {overview.upstream_db_path}")
     st.text(f"ml-saham artifacts: {overview.artifacts_root}")
+
+    st.subheader("Operator cheatsheet")
+    st.markdown(
+        """
+| Step | Desk page | CLI equivalent |
+|------|-----------|----------------|
+| Catalog | **Policy Catalog** | `ml-saham challenge list` |
+| Exact cohort | **Cohort Discovery** | `--compatibility-id …` |
+| Weekly tower | **Control Tower** | `challenge health --with-diagnostics` |
+| Dig tournament | **Run Challenge** | `challenge run …` |
+| Reopen / download | **Artifact History** | open `artifacts/challenge/…` |
+| Side-by-side | **Compare** | manual |
+| Human handoff | History → promote packet | `challenge promote-packet` |
+
+**Rules**
+
+- Selector changes never start work — only **Run** / **Run health** submits.
+- Nothing auto-selects largest/latest/only cohort.
+- `BLOCKED_*` / `INCONCLUSIVE` are product states, not soft success.
+- Diagnostics never authorize Action / ENTER.
+- Never auto-promotes into ai-saham.
+"""
+    )
     st.info(
-        "Run Challenge requires an explicit form submit. Selector changes never "
-        "start work. BLOCKED_* and INCONCLUSIVE are product states."
+        "Session cohort from Discovery prefills health + policy forms as an "
+        "explicit carry-forward, not eligibility or production authority."
     )
 
 
@@ -111,6 +220,7 @@ def render_control_tower(service: ChallengeWorkbenchService) -> None:
 
     # --- Weekly ritual: last health + optional run -------------------------
     st.subheader("Weekly ritual")
+    render_path_status(service)
     latest = service.latest_health_pack()
     if latest.found and latest.artifact_path:
         st.markdown(
@@ -128,11 +238,13 @@ def render_control_tower(service: ChallengeWorkbenchService) -> None:
                 opened = service.open_challenge_artifact(latest.artifact_path)
                 st.session_state.opened_artifact = opened
                 st.session_state.tower_opened_health = opened
+                st.session_state.hist_focus_path = latest.artifact_path
         with c2:
             st.caption(
                 "CLI refresh: "
                 "`ml-saham challenge health --with-diagnostics "
-                "--compatibility-id <exact>`"
+                "--compatibility-id <exact>` · "
+                "or open **Artifact History** after focusing the pack."
             )
         opened_health = st.session_state.get("tower_opened_health")
         if opened_health is not None and opened_health.ok:
@@ -153,16 +265,25 @@ def render_control_tower(service: ChallengeWorkbenchService) -> None:
 
     st.markdown("**Run weekly health** (explicit submit only)")
     inv = service.list_cohort_inventory()
+    if inv.status == "UNAVAILABLE" and not inv.rows:
+        st.warning(
+            "Cohort inventory unavailable — usually missing/unreadable upstream DB. "
+            "Fix path on Foundation, then return here."
+        )
+        for note in inv.notes:
+            st.caption(note)
     cohort_labels = [
         f"{r.purpose_family} | {r.compatibility_id} | n={r.observation_count}"
         for r in inv.rows
     ]
+    health_options = ["— no selection —", *cohort_labels]
     with st.form("health_run_form"):
         if cohort_labels:
             cohort_choice = st.selectbox(
                 "Compatibility ID (exact; required)",
-                options=["— no selection —", *cohort_labels],
-                index=0,
+                options=health_options,
+                index=_session_cohort_index(health_options),
+                help="Prefills from Cohort Discovery only after an explicit pick.",
             )
         else:
             cohort_choice = "— no selection —"
@@ -224,6 +345,18 @@ def render_control_tower(service: ChallengeWorkbenchService) -> None:
             st.error(f"Application error (not a market verdict): {hview.error_reference}")
         if hview.artifact_dir:
             st.success(f"Health pack: {hview.artifact_dir}")
+            if st.button(
+                "Open this pack in Artifact History",
+                key="tower_jump_health_pack",
+            ):
+                opened = service.open_challenge_artifact(hview.artifact_dir)
+                st.session_state.opened_artifact = opened
+                st.session_state.hist_focus_path = hview.artifact_dir
+                st.session_state.tower_opened_health = opened
+                st.info(
+                    "Pack opened below session state — open the "
+                    "**Artifact History** page to download / promote."
+                )
         if hview.index:
             st.dataframe(list(hview.index), use_container_width=True)
         for line in hview.lines[:40]:
@@ -317,11 +450,17 @@ def render_cohort_discovery(service: ChallengeWorkbenchService) -> None:
 
     if not inv.rows:
         st.warning(
-            "No cohorts available. Check the read-only upstream DB path and "
-            "observation purpose families ACCUM / PRE_OPEN."
+            "No cohorts available. Typical causes:\n"
+            "- upstream SQLite missing or wrong path (see Foundation)\n"
+            "- no ACCUM / PRE_OPEN rows in `learning_observations`\n"
+            "- missing `compatibility_id` column on older DBs\n\n"
+            "Nothing is auto-selected. Fix data/path, then re-open this page."
         )
+        for note in inv.notes:
+            st.caption(note)
         st.session_state.pop("selected_compatibility_id", None)
         st.session_state.pop("selected_purpose_family", None)
+        st.session_state.pop("selected_cohort_label", None)
         return
 
     records = [
@@ -346,19 +485,22 @@ def render_cohort_discovery(service: ChallengeWorkbenchService) -> None:
         f"{r.purpose_family} | {r.compatibility_id} | n={r.observation_count}"
         for r in inv.rows
     ]
-    # Explicit empty default — never preselect, including single-cohort case.
+    select_options = ["— no selection —", *options]
+    # Explicit empty default when nothing was chosen earlier — never invent
+    # largest/latest/only. Prefill only from a prior explicit session pick.
     choice = st.selectbox(
         "Explicit compatibility identity (optional display selection)",
-        options=["— no selection —", *options],
-        index=0,
+        options=select_options,
+        index=_session_cohort_index(select_options),
         key="cohort_selectbox",
     )
     if choice == "— no selection —":
         st.session_state.pop("selected_compatibility_id", None)
         st.session_state.pop("selected_purpose_family", None)
+        st.session_state.pop("selected_cohort_label", None)
         st.info(
-            "No compatibility ID selected. Phase 2 Run will require an exact "
-            "explicit selection; nothing is preselected."
+            "No compatibility ID selected. Run / health forms will not invent "
+            "one. Pick explicitly here to prefill those forms."
         )
     else:
         # Parse "FAMILY | cid | n=..."
@@ -367,13 +509,15 @@ def render_cohort_discovery(service: ChallengeWorkbenchService) -> None:
         cid = parts[1] if len(parts) > 1 else ""
         st.session_state.selected_purpose_family = family
         st.session_state.selected_compatibility_id = cid
+        st.session_state.selected_cohort_label = choice
         st.success(
-            f"Selected for display only: family=`{family}` "
+            f"Selected for session prefill: family=`{family}` "
             f"compatibility_id=`{cid}` (not production authority by itself)."
         )
 
-    st.warning(
-        "No Run control on this page. Selection does not start a challenge."
+    st.caption(
+        "Selection does not start a challenge. It only prefills Run Challenge "
+        "and Control Tower health forms."
     )
 
 
@@ -447,9 +591,10 @@ def render_run_challenge(service: ChallengeWorkbenchService) -> None:
     )
     st.info(
         "Verb scope: `policy_run` via existing `run_policy_challenge`. "
-        "Factor / engine / champion / diagnostic / health runs stay on CLI "
-        "until separately exposed."
+        "Weekly health is on Control Tower. Factor/engine/champion digs stay "
+        "on CLI unless exposed later."
     )
+    render_path_status(service)
 
     catalog = service.list_policy_catalog()
     policy_ids = [r.policy_id for r in catalog]
@@ -459,10 +604,16 @@ def render_run_challenge(service: ChallengeWorkbenchService) -> None:
     catalog_by_id = {r.policy_id: r for r in catalog}
 
     inv = service.list_cohort_inventory()
+    if inv.status == "UNAVAILABLE" and not inv.rows:
+        st.warning(
+            "Cohort inventory unavailable (often missing DB). Run will still "
+            "require an explicit cohort once inventory loads."
+        )
     cohort_labels = [
         f"{r.purpose_family} | {r.compatibility_id} | n={r.observation_count}"
         for r in inv.rows
     ]
+    run_options = ["— no selection —", *cohort_labels]
 
     with st.form("policy_run_form", clear_on_submit=False):
         policy_id = st.selectbox("Policy ID", options=policy_ids, index=0)
@@ -478,9 +629,10 @@ def render_run_challenge(service: ChallengeWorkbenchService) -> None:
         )
         if cohort_labels:
             cohort_choice = st.selectbox(
-                "Compatibility ID (exact; no default)",
-                options=["— no selection —", *cohort_labels],
-                index=0,
+                "Compatibility ID (exact; no auto default)",
+                options=run_options,
+                index=_session_cohort_index(run_options),
+                help="Prefills from Cohort Discovery after an explicit pick only.",
             )
         else:
             cohort_choice = "— no selection —"
@@ -672,9 +824,14 @@ def render_artifact_history(service: ChallengeWorkbenchService) -> None:
         "Phase 3: service-validated reopen only. Historical schemas are "
         "display-only and never gain promotion eligibility."
     )
+    render_path_status(service)
     items = service.list_challenge_artifacts(limit=100)
     if not items:
-        st.warning("No challenge packs under the configured artifacts root.")
+        st.warning(
+            "No challenge packs under the configured artifacts root.\n\n"
+            "Create packs via Control Tower health, Run Challenge, or CLI "
+            "`challenge health` / `challenge run`."
+        )
         return
 
     records = [
@@ -698,10 +855,29 @@ def render_artifact_history(service: ChallengeWorkbenchService) -> None:
     st.dataframe(records, use_container_width=True)
 
     paths = [i.artifact_path for i in items]
-    selected = st.selectbox("Open pack", options=paths, index=0, key="hist_open_path")
+    focus = st.session_state.get("hist_focus_path")
+    default_idx = paths.index(focus) if focus in paths else 0
+    if focus and focus in paths:
+        st.caption(f"Focused from Control Tower / health: `{focus}`")
+    selected = st.selectbox(
+        "Open pack",
+        options=paths,
+        index=default_idx,
+        key="hist_open_path",
+    )
     if st.button("Open selected pack", key="hist_open_btn"):
         opened = service.open_challenge_artifact(selected)
         st.session_state.opened_artifact = opened
+        st.session_state.hist_focus_path = selected
+
+    # Auto-surface pack opened from health jump without requiring a second click
+    # when focus path is set and nothing opened yet this session.
+    if (
+        st.session_state.get("opened_artifact") is None
+        and focus
+        and focus in paths
+    ):
+        st.session_state.opened_artifact = service.open_challenge_artifact(focus)
 
     opened: ArtifactOpenView | None = st.session_state.get("opened_artifact")
     if opened is None:
@@ -867,7 +1043,7 @@ def page_foundation() -> None:
     service = _service()
     overview = service.describe()
     render_sidebar(overview)
-    render_foundation(overview)
+    render_foundation(overview, service)
 
 
 def page_control_tower() -> None:
