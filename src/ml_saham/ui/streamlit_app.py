@@ -1,7 +1,7 @@
-"""Streamlit Challenge Desk — Phase 1A read-only workspaces.
+"""Streamlit Challenge Desk — thin adapter over ChallengeWorkbenchService.
 
-Thin presentation adapter over ChallengeWorkbenchService. No SQLite, no CLI
-scraping, no scoring, no Run action, no C0 readiness inference.
+Phases: foundation, Control Tower, cohorts, catalog, Run, Artifact History
+(compare + promote handoff). No SQLite/CLI scrape/scoring in the UI layer.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import streamlit as st
 
 from ml_saham.challenge.workbench import (
     CAPABILITY_NOT_IMPLEMENTED,
+    ArtifactOpenView,
     ChallengeRunRequest,
     ChallengeRunView,
     ChallengeWorkbenchOverview,
@@ -536,6 +537,203 @@ def _fmt_ic(value: float | None) -> str:
     return f"{value:+.4f}"
 
 
+def render_artifact_history(service: ChallengeWorkbenchService) -> None:
+    st.title("Artifact History")
+    st.caption(
+        "Phase 3: service-validated reopen only. Historical schemas are "
+        "display-only and never gain promotion eligibility."
+    )
+    items = service.list_challenge_artifacts(limit=100)
+    if not items:
+        st.warning("No challenge packs under the configured artifacts root.")
+        return
+
+    records = [
+        {
+            "path": i.artifact_path,
+            "status": _format_status(i.status),
+            "status_raw": i.status,
+            "mode": i.mode,
+            "track": i.track,
+            "policy_id": i.policy_id or "",
+            "protocol_id": i.protocol_id or "",
+            "baseline_id": i.baseline_id or "",
+            "against_id": i.against_id or "",
+            "schema": i.schema_version,
+            "created_at": i.created_at or "",
+            "promo_hint": i.promotion_eligible_hint,
+            "promo_block": i.promotion_block_reason or "",
+        }
+        for i in items
+    ]
+    st.dataframe(records, use_container_width=True)
+
+    paths = [i.artifact_path for i in items]
+    selected = st.selectbox("Open pack", options=paths, index=0, key="hist_open_path")
+    if st.button("Open selected pack", key="hist_open_btn"):
+        opened = service.open_challenge_artifact(selected)
+        st.session_state.opened_artifact = opened
+
+    opened: ArtifactOpenView | None = st.session_state.get("opened_artifact")
+    if opened is None:
+        return
+
+    st.divider()
+    st.subheader("Opened pack")
+    if not opened.ok:
+        st.error(opened.error or "open failed")
+        return
+
+    st.markdown(
+        f"**Status:** {_format_status(opened.status)} · "
+        f"**schema:** `{opened.schema_version}` · "
+        f"**historical_display_only:** `{opened.historical_display_only}`"
+    )
+    if opened.promotion_eligible:
+        st.success("Promote-reopen gate currently passes (still human-only).")
+    else:
+        st.warning(
+            f"Not promotion-eligible: {opened.promotion_block_reason}"
+        )
+    for note in opened.notes:
+        st.caption(note)
+
+    st.json(
+        {
+            "path": opened.artifact_path,
+            "mode": opened.mode,
+            "track": opened.track,
+            "policy_id": opened.policy_id,
+            "protocol_id": opened.protocol_id,
+            "baseline_id": opened.baseline_id,
+            "against_id": opened.against_id,
+            "primary_horizon": opened.primary_horizon,
+            "n_rows": opened.n_rows,
+            "primary_ic_baseline": opened.primary_ic_baseline,
+            "primary_ic_against": opened.primary_ic_against,
+            "observation_compatibility_id": opened.observation_compatibility_id,
+            "population_identity_kind": opened.population_identity_kind,
+            "population_identity_id": opened.population_identity_id,
+            "production_snapshot_id": opened.production_snapshot_id,
+            "challenge_adapter_id": opened.challenge_adapter_id,
+        }
+    )
+    if opened.fold_metrics:
+        st.markdown("**Fold metrics**")
+        st.dataframe(list(opened.fold_metrics), use_container_width=True)
+    if opened.summary_md:
+        with st.expander("summary.md"):
+            st.markdown(opened.summary_md)
+
+    st.markdown("**Validated files (exact-byte download)**")
+    for f in opened.files:
+        data, err = service.read_artifact_file_bytes(opened.artifact_path, f.name)
+        if err or data is None:
+            st.caption(f"{f.name}: {err}")
+            continue
+        st.download_button(
+            label=f"Download {f.name} ({f.size_bytes} B)",
+            data=data,
+            file_name=f.name,
+            mime="application/json"
+            if f.media_hint == "json"
+            else "text/markdown"
+            if f.media_hint == "markdown"
+            else "application/octet-stream",
+            key=f"dl_{opened.artifact_path}_{f.name}",
+        )
+
+    st.divider()
+    st.subheader("Create human review packet")
+    st.caption(
+        "Uses existing promote-packet path. Never auto-applies to ai-saham."
+    )
+    if st.button("Create promote packet", key="promo_btn"):
+        packet = service.create_promote_packet(
+            opened.artifact_path, write_artifact=True
+        )
+        st.session_state.last_promote = packet
+
+    packet = st.session_state.get("last_promote")
+    if packet is not None:
+        if packet.ok:
+            st.success(
+                f"Promote pack written (auto_applied={packet.auto_applied}): "
+                f"{packet.artifact_dir}"
+            )
+        else:
+            st.error(packet.error or "promote packet failed")
+        for line in packet.lines:
+            st.text(line)
+        if packet.summary_md:
+            with st.expander("PROMOTE checklist"):
+                st.markdown(packet.summary_md)
+
+
+def render_artifact_compare(service: ChallengeWorkbenchService) -> None:
+    st.title("Compare Artifacts")
+    st.caption(
+        "Computed deltas and winner banners only when the service proves "
+        "compatible policy, protocol, population, horizons, mode/track."
+    )
+    items = service.list_challenge_artifacts(limit=100)
+    paths = [i.artifact_path for i in items]
+    if len(paths) < 2:
+        st.warning("Need at least two packs under the artifacts root to compare.")
+        return
+    left = st.selectbox("Left pack", options=paths, index=0, key="cmp_left")
+    right = st.selectbox(
+        "Right pack",
+        options=paths,
+        index=min(1, len(paths) - 1),
+        key="cmp_right",
+    )
+    if st.button("Compare", key="cmp_btn"):
+        view = service.compare_challenge_artifacts(left, right)
+        st.session_state.compare_view = view
+
+    view = st.session_state.get("compare_view")
+    if view is None:
+        return
+    st.markdown(
+        f"**Compatible axes:** `{view.compatible}` · "
+        f"Left `{view.left_status}` vs Right `{view.right_status}`"
+    )
+    st.dataframe(
+        [
+            {
+                "axis": a.name,
+                "left": a.left,
+                "right": a.right,
+                "compatible": a.compatible,
+            }
+            for a in view.axes
+        ],
+        use_container_width=True,
+    )
+    if not view.compatible:
+        st.warning(
+            "Incompatible — inspect packs separately. No delta, no winner banner."
+        )
+    else:
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("Left IC(against)", _fmt_ic(view.left_ic_against))
+            st.metric("Left IC(baseline)", _fmt_ic(view.left_ic_baseline))
+        with c2:
+            st.metric("Right IC(against)", _fmt_ic(view.right_ic_against))
+            st.metric("Right IC(baseline)", _fmt_ic(view.right_ic_baseline))
+        with c3:
+            st.metric(
+                "Δ IC(against) right−left",
+                _fmt_ic(view.delta_ic_against),
+            )
+        if view.winner_banner:
+            st.info(f"**Descriptive banner (not promotion):** {view.winner_banner}")
+    for note in view.notes:
+        st.caption(note)
+
+
 def page_foundation() -> None:
     service = _service()
     overview = service.describe()
@@ -571,6 +769,20 @@ def page_run_challenge() -> None:
     render_run_challenge(service)
 
 
+def page_artifact_history() -> None:
+    service = _service()
+    overview = service.describe()
+    render_sidebar(overview)
+    render_artifact_history(service)
+
+
+def page_artifact_compare() -> None:
+    service = _service()
+    overview = service.describe()
+    render_sidebar(overview)
+    render_artifact_compare(service)
+
+
 def main() -> None:
     st.set_page_config(
         page_title="ml-saham Challenge Desk",
@@ -584,6 +796,8 @@ def main() -> None:
         st.Page(page_cohort_discovery, title="Cohort Discovery", icon="🧭"),
         st.Page(page_policy_catalog, title="Policy Catalog", icon="📚"),
         st.Page(page_run_challenge, title="Run Challenge", icon="▶️"),
+        st.Page(page_artifact_history, title="Artifact History", icon="📦"),
+        st.Page(page_artifact_compare, title="Compare", icon="⚖️"),
     ]
     page = st.navigation(pages)
     page.run()

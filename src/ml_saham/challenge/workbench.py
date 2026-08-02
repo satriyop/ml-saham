@@ -19,9 +19,14 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from ml_saham.artifacts import resolve_artifacts_root
+from ml_saham.challenge.artifacts import (
+    CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION,
+    HISTORICAL_CHALLENGE_ARTIFACT_SCHEMA_VERSIONS,
+)
 from ml_saham.challenge.diagnostics.registry import list_diagnostics
 from ml_saham.challenge.policies.registry import load_policy, load_policy_adapter
 from ml_saham.challenge.production_policy_snapshots import REQUIRED_POLICIES
+from ml_saham.challenge.promote import build_promote_packet
 from ml_saham.challenge.protocols import get_protocol
 from ml_saham.challenge.runner import list_policies, run_policy_challenge
 from ml_saham.challenge.types import ChallengeResult, ChallengeStatus
@@ -271,6 +276,113 @@ class ChallengeRunView:
     elapsed_seconds: float
     human_next_step: str
     error_reference: str | None = None
+
+
+@dataclass(frozen=True)
+class ArtifactListItem:
+    """One pack under the challenge artifact tree (list only; open validates)."""
+
+    artifact_path: str
+    mode: str
+    track: str
+    status: str
+    policy_id: str | None
+    protocol_id: str | None
+    baseline_id: str | None
+    against_id: str | None
+    schema_version: int | None
+    created_at: str | None
+    openable: bool
+    open_block_reason: str | None
+    promotion_eligible_hint: bool
+    promotion_block_reason: str | None
+
+
+@dataclass(frozen=True)
+class ArtifactFileEntry:
+    """Existing on-disk file in a validated pack (exact bytes for download)."""
+
+    name: str
+    size_bytes: int
+    media_hint: str  # json | markdown | other
+
+
+@dataclass(frozen=True)
+class ArtifactOpenView:
+    """Validated reopen result for display (not necessarily promote-eligible)."""
+
+    ok: bool
+    artifact_path: str
+    mode: str
+    track: str
+    status: str
+    schema_version: int | None
+    policy_id: str | None
+    protocol_id: str | None
+    baseline_id: str | None
+    against_id: str | None
+    primary_horizon: int | None
+    n_rows: int | None
+    primary_ic_baseline: float | None
+    primary_ic_against: float | None
+    horizon_metrics: dict[str, Any]
+    fold_metrics: tuple[dict[str, Any], ...]
+    observation_compatibility_id: str | None
+    population_identity_kind: str | None
+    population_identity_id: str | None
+    production_snapshot_id: str | None
+    challenge_adapter_id: str | None
+    files: tuple[ArtifactFileEntry, ...]
+    summary_md: str
+    manifest: dict[str, Any]
+    metrics: dict[str, Any]
+    historical_display_only: bool
+    promotion_eligible: bool
+    promotion_block_reason: str | None
+    notes: tuple[str, ...]
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class ArtifactCompareAxis:
+    name: str
+    left: str
+    right: str
+    compatible: bool
+
+
+@dataclass(frozen=True)
+class ArtifactCompareView:
+    """Side-by-side compare; deltas only when all required axes match."""
+
+    left_path: str
+    right_path: str
+    compatible: bool
+    axes: tuple[ArtifactCompareAxis, ...]
+    left_status: str
+    right_status: str
+    left_ic_baseline: float | None
+    right_ic_baseline: float | None
+    left_ic_against: float | None
+    right_ic_against: float | None
+    delta_ic_against: float | None
+    winner_banner: str | None  # only when compatible and statuses comparable
+    notes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class PromotePacketView:
+    """Human review packet result (never applies to ai-saham)."""
+
+    ok: bool
+    policy_id: str
+    mode: str
+    lines: tuple[str, ...]
+    summary_md: str
+    evidence: dict[str, Any]
+    artifact_dir: str | None
+    error: str | None
+    auto_applied: bool = False
 
 
 class ChallengeWorkbenchService:
@@ -796,6 +908,359 @@ class ChallengeWorkbenchService:
             executed_keys.add(key)
         return view
 
+    # --- Phase 3: artifact history, compare, promote handoff -------------
+
+    def list_challenge_artifacts(
+        self,
+        *,
+        limit: int = 100,
+    ) -> tuple[ArtifactListItem, ...]:
+        """Service-owned inventory of challenge packs (not UI glob authority)."""
+        root = self._config.artifacts_root / "challenge"
+        if not root.is_dir():
+            return ()
+        items: list[ArtifactListItem] = []
+        for manifest_path in sorted(
+            root.rglob("manifest.json"),
+            key=lambda p: p.stat().st_mtime if p.is_file() else 0.0,
+            reverse=True,
+        ):
+            if len(items) >= limit:
+                break
+            pack = manifest_path.parent
+            # Skip nested non-pack noise under health expansions if needed
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                items.append(
+                    ArtifactListItem(
+                        artifact_path=str(pack),
+                        mode="unknown",
+                        track="other",
+                        status="UNREADABLE",
+                        policy_id=None,
+                        protocol_id=None,
+                        baseline_id=None,
+                        against_id=None,
+                        schema_version=None,
+                        created_at=None,
+                        openable=False,
+                        open_block_reason="manifest unreadable",
+                        promotion_eligible_hint=False,
+                        promotion_block_reason="manifest unreadable",
+                    )
+                )
+                continue
+            if not isinstance(manifest, dict):
+                continue
+            item = _list_item_from_manifest(pack, manifest)
+            items.append(item)
+        return tuple(items)
+
+    def open_challenge_artifact(self, artifact_path: str | Path) -> ArtifactOpenView:
+        """Validate and open a pack for display; never upgrades historical schemas."""
+        pack = Path(artifact_path)
+        if not pack.is_dir():
+            return _open_error(str(pack), f"not a directory: {pack}")
+        manifest_p = pack / "manifest.json"
+        if not manifest_p.is_file():
+            return _open_error(str(pack), "manifest.json missing")
+        try:
+            manifest = json.loads(manifest_p.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return _open_error(str(pack), f"cannot read manifest: {exc}")
+        if not isinstance(manifest, dict):
+            return _open_error(str(pack), "manifest root must be object")
+
+        metrics: dict[str, Any] = {}
+        metrics_p = pack / "metrics.json"
+        if metrics_p.is_file():
+            try:
+                raw_m = json.loads(metrics_p.read_text(encoding="utf-8"))
+                if isinstance(raw_m, dict):
+                    metrics = raw_m
+            except (OSError, json.JSONDecodeError):
+                metrics = {}
+
+        summary_md = ""
+        summary_p = pack / "summary.md"
+        if summary_p.is_file():
+            try:
+                summary_md = summary_p.read_text(encoding="utf-8")
+            except OSError:
+                summary_md = ""
+
+        schema_raw = manifest.get("schema_version")
+        schema_version: int | None
+        try:
+            schema_version = int(schema_raw) if schema_raw is not None else None
+        except (TypeError, ValueError):
+            schema_version = None
+
+        notes: list[str] = []
+        historical = (
+            schema_version in HISTORICAL_CHALLENGE_ARTIFACT_SCHEMA_VERSIONS
+            if schema_version is not None
+            else True
+        )
+        if historical:
+            notes.append(
+                f"schema_version={schema_version} is historical/display-only "
+                f"(promote requires {CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION})"
+            )
+
+        promotion_eligible = False
+        promotion_block: str | None = None
+        if historical:
+            promotion_block = "historical schema — not promote-reopen eligible"
+        elif schema_version != CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION:
+            promotion_block = (
+                f"schema_version={schema_version} not promote-eligible "
+                f"(need {CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION})"
+            )
+        elif not manifest.get("baseline_id"):
+            promotion_block = "missing baseline_id"
+        elif str(manifest.get("baseline_id")) != "production":
+            promotion_block = (
+                f"baseline_id={manifest.get('baseline_id')!r} is not production"
+            )
+        else:
+            # Live verify via promote loader (read-only DB).
+            try:
+                with connect(self._config.upstream_db_path) as conn:
+                    from ml_saham.challenge.promote import load_evidence_artifact
+
+                    _ev, err = load_evidence_artifact(pack, conn=conn)
+                    if err is not None:
+                        promotion_block = err
+                    else:
+                        promotion_eligible = True
+                        notes.append("promote-reopen gate passed (read-only verify)")
+            except FileNotFoundError as exc:
+                promotion_block = f"cannot verify against upstream DB: {exc}"
+            except Exception as exc:  # noqa: BLE001
+                promotion_block = f"promote verify error: {type(exc).__name__}: {exc}"
+
+        mode = str(manifest.get("mode") or "")
+        track_hint = str(manifest.get("track") or "")
+        track = (
+            _TRACK_BY_MANIFEST_TRACK.get(track_hint)
+            or _TRACK_BY_MODE.get(mode)
+            or "other"
+        )
+        status = str(
+            manifest.get("status")
+            or metrics.get("status")
+            or manifest.get("verdict")
+            or "UNKNOWN"
+        )
+        files = _pack_files(pack)
+        folds = metrics.get("fold_metrics") or []
+        if not isinstance(folds, list):
+            folds = []
+
+        return ArtifactOpenView(
+            ok=True,
+            artifact_path=str(pack),
+            mode=mode or track_hint or "unknown",
+            track=track,
+            status=status,
+            schema_version=schema_version,
+            policy_id=_opt_str(manifest.get("policy_id")),
+            protocol_id=_opt_str(manifest.get("protocol_id")),
+            baseline_id=_opt_str(manifest.get("baseline_id")),
+            against_id=_opt_str(manifest.get("against_id")),
+            primary_horizon=_opt_int(manifest.get("primary_horizon")),
+            n_rows=_opt_int(manifest.get("n_rows")),
+            primary_ic_baseline=_opt_float(metrics.get("primary_ic_baseline")),
+            primary_ic_against=_opt_float(metrics.get("primary_ic_against")),
+            horizon_metrics=dict(metrics.get("horizon_metrics") or {})
+            if isinstance(metrics.get("horizon_metrics"), dict)
+            else {},
+            fold_metrics=tuple(dict(f) for f in folds if isinstance(f, dict)),
+            observation_compatibility_id=_opt_str(
+                manifest.get("observation_compatibility_id")
+            ),
+            population_identity_kind=_opt_str(manifest.get("population_identity_kind")),
+            population_identity_id=_opt_str(manifest.get("population_identity_id")),
+            production_snapshot_id=_opt_str(manifest.get("production_snapshot_id")),
+            challenge_adapter_id=_opt_str(manifest.get("challenge_adapter_id")),
+            files=files,
+            summary_md=summary_md,
+            manifest=dict(manifest),
+            metrics=dict(metrics),
+            historical_display_only=historical,
+            promotion_eligible=promotion_eligible,
+            promotion_block_reason=promotion_block,
+            notes=tuple(notes),
+            error=None,
+        )
+
+    def read_artifact_file_bytes(
+        self,
+        artifact_path: str | Path,
+        filename: str,
+    ) -> tuple[bytes | None, str | None]:
+        """Return exact bytes of an existing pack file after open validation."""
+        opened = self.open_challenge_artifact(artifact_path)
+        if not opened.ok:
+            return None, opened.error or "open failed"
+        allowed = {f.name for f in opened.files}
+        name = Path(filename).name  # no path traversal
+        if name not in allowed:
+            return None, f"file not in validated pack members: {name}"
+        path = Path(opened.artifact_path) / name
+        try:
+            return path.read_bytes(), None
+        except OSError as exc:
+            return None, f"cannot read {name}: {exc}"
+
+    def compare_challenge_artifacts(
+        self,
+        left_path: str | Path,
+        right_path: str | Path,
+    ) -> ArtifactCompareView:
+        """Compare two packs; computed deltas only when compatibility axes match."""
+        left = self.open_challenge_artifact(left_path)
+        right = self.open_challenge_artifact(right_path)
+        notes: list[str] = []
+        if not left.ok or not right.ok:
+            return ArtifactCompareView(
+                left_path=str(left_path),
+                right_path=str(right_path),
+                compatible=False,
+                axes=(),
+                left_status=left.status if left.ok else "OPEN_FAILED",
+                right_status=right.status if right.ok else "OPEN_FAILED",
+                left_ic_baseline=None,
+                right_ic_baseline=None,
+                left_ic_against=None,
+                right_ic_against=None,
+                delta_ic_against=None,
+                winner_banner=None,
+                notes=(
+                    left.error or "",
+                    right.error or "",
+                    "Both packs must open successfully before compare.",
+                ),
+            )
+
+        axes = (
+            _axis("policy_id", left.policy_id, right.policy_id),
+            _axis("protocol_id", left.protocol_id, right.protocol_id),
+            _axis(
+                "primary_horizon",
+                str(left.primary_horizon),
+                str(right.primary_horizon),
+            ),
+            _axis(
+                "population_identity_kind",
+                left.population_identity_kind,
+                right.population_identity_kind,
+            ),
+            _axis(
+                "population_or_compat_id",
+                left.population_identity_id or left.observation_compatibility_id,
+                right.population_identity_id or right.observation_compatibility_id,
+            ),
+            _axis("mode", left.mode, right.mode),
+            _axis("track", left.track, right.track),
+        )
+        compatible = all(a.compatible for a in axes)
+        if not compatible:
+            notes.append(
+                "Incompatible axes — inspect separately; no delta or winner banner."
+            )
+            return ArtifactCompareView(
+                left_path=left.artifact_path,
+                right_path=right.artifact_path,
+                compatible=False,
+                axes=axes,
+                left_status=left.status,
+                right_status=right.status,
+                left_ic_baseline=left.primary_ic_baseline,
+                right_ic_baseline=right.primary_ic_baseline,
+                left_ic_against=left.primary_ic_against,
+                right_ic_against=right.primary_ic_against,
+                delta_ic_against=None,
+                winner_banner=None,
+                notes=tuple(notes),
+            )
+
+        delta: float | None = None
+        if (
+            left.primary_ic_against is not None
+            and right.primary_ic_against is not None
+        ):
+            delta = right.primary_ic_against - left.primary_ic_against
+
+        winner: str | None = None
+        # Status ranking only when both are win/lose/inconclusive product states.
+        rank = {"WIN": 3, "LOSE": 1, "INCONCLUSIVE": 2}
+        if left.status in rank and right.status in rank:
+            if rank[right.status] > rank[left.status]:
+                winner = f"Right status rank higher: {right.status} vs {left.status}"
+            elif rank[left.status] > rank[right.status]:
+                winner = f"Left status rank higher: {left.status} vs {right.status}"
+            elif (
+                left.primary_ic_against is not None
+                and right.primary_ic_against is not None
+            ):
+                if right.primary_ic_against > left.primary_ic_against:
+                    winner = "Right higher primary IC(against) under compatible axes"
+                elif left.primary_ic_against > right.primary_ic_against:
+                    winner = "Left higher primary IC(against) under compatible axes"
+                else:
+                    winner = "Tied primary IC(against)"
+            notes.append(
+                "Winner banner is descriptive only — not promotion authority."
+            )
+        else:
+            notes.append(
+                "Statuses not in WIN/LOSE/INCONCLUSIVE set — no winner banner."
+            )
+
+        return ArtifactCompareView(
+            left_path=left.artifact_path,
+            right_path=right.artifact_path,
+            compatible=True,
+            axes=axes,
+            left_status=left.status,
+            right_status=right.status,
+            left_ic_baseline=left.primary_ic_baseline,
+            right_ic_baseline=right.primary_ic_baseline,
+            left_ic_against=left.primary_ic_against,
+            right_ic_against=right.primary_ic_against,
+            delta_ic_against=delta,
+            winner_banner=winner,
+            notes=tuple(notes),
+        )
+
+    def create_promote_packet(
+        self,
+        artifact_path: str | Path,
+        *,
+        write_artifact: bool = True,
+    ) -> PromotePacketView:
+        """Invoke existing promote-packet path; never edits ai-saham."""
+        result = build_promote_packet(
+            from_artifact=Path(artifact_path),
+            write_artifact=write_artifact,
+            artifacts_dir=self._config.artifacts_root,
+            db_path=self._config.upstream_db_path,
+        )
+        return PromotePacketView(
+            ok=result.error is None,
+            policy_id=result.policy_id or "",
+            mode=result.mode or "",
+            lines=tuple(result.lines or []),
+            summary_md=result.summary_md or "",
+            evidence=dict(result.evidence or {}),
+            artifact_dir=str(result.artifact_dir) if result.artifact_dir else None,
+            error=result.error,
+            auto_applied=False,
+        )
+
 
 def build_challenge_workbench(
     *,
@@ -920,6 +1385,161 @@ def _opt_str(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _opt_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _opt_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _list_item_from_manifest(pack: Path, manifest: dict[str, Any]) -> ArtifactListItem:
+    mode = str(manifest.get("mode") or "")
+    track_hint = str(manifest.get("track") or "")
+    track = (
+        _TRACK_BY_MANIFEST_TRACK.get(track_hint)
+        or _TRACK_BY_MODE.get(mode)
+        or "other"
+    )
+    schema_raw = manifest.get("schema_version")
+    try:
+        schema_version = int(schema_raw) if schema_raw is not None else None
+    except (TypeError, ValueError):
+        schema_version = None
+    status = str(manifest.get("status") or manifest.get("verdict") or "UNKNOWN")
+    historical = (
+        schema_version in HISTORICAL_CHALLENGE_ARTIFACT_SCHEMA_VERSIONS
+        if schema_version is not None
+        else True
+    )
+    promo_ok = False
+    promo_block: str | None
+    if historical:
+        promo_block = "historical/display-only schema"
+    elif schema_version != CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION:
+        promo_block = "schema not promote-evidence v4"
+    elif not manifest.get("baseline_id"):
+        promo_block = "missing baseline_id"
+    elif str(manifest.get("baseline_id")) != "production":
+        promo_block = "baseline is not production"
+    elif not (pack / "pack_binding.json").is_file():
+        promo_block = "missing pack_binding.json (not sealed v4 pack)"
+    elif not manifest.get("production_snapshot_id"):
+        promo_block = "missing production snapshot identity fields"
+    else:
+        # Hint only — full promote-reopen verify still runs on open/promote.
+        promo_ok = True
+        promo_block = "hint: sealed shape present; re-verify on promote"
+
+    return ArtifactListItem(
+        artifact_path=str(pack),
+        mode=mode or track_hint or "unknown",
+        track=track,
+        status=status,
+        policy_id=_opt_str(manifest.get("policy_id")),
+        protocol_id=_opt_str(manifest.get("protocol_id")),
+        baseline_id=_opt_str(manifest.get("baseline_id")),
+        against_id=_opt_str(manifest.get("against_id")),
+        schema_version=schema_version,
+        created_at=_opt_str(manifest.get("created_at")),
+        openable=True,
+        open_block_reason=None,
+        promotion_eligible_hint=bool(promo_ok),
+        promotion_block_reason=promo_block,
+    )
+
+
+def _pack_files(pack: Path) -> tuple[ArtifactFileEntry, ...]:
+    names = (
+        "manifest.json",
+        "metrics.json",
+        "weights.json",
+        "summary.md",
+        "pack_binding.json",
+        "PROMOTE.md",
+        "evidence.json",
+        "index.json",
+        "engine.json",
+        "champion.json",
+        "factors.json",
+        "diagnostics.json",
+    )
+    out: list[ArtifactFileEntry] = []
+    for name in names:
+        path = pack / name
+        if not path.is_file():
+            continue
+        if name.endswith(".md"):
+            hint = "markdown"
+        elif name.endswith(".json"):
+            hint = "json"
+        else:
+            hint = "other"
+        try:
+            size = path.stat().st_size
+        except OSError:
+            size = 0
+        out.append(ArtifactFileEntry(name=name, size_bytes=size, media_hint=hint))
+    return tuple(out)
+
+
+def _open_error(path: str, error: str) -> ArtifactOpenView:
+    return ArtifactOpenView(
+        ok=False,
+        artifact_path=path,
+        mode="",
+        track="other",
+        status="OPEN_FAILED",
+        schema_version=None,
+        policy_id=None,
+        protocol_id=None,
+        baseline_id=None,
+        against_id=None,
+        primary_horizon=None,
+        n_rows=None,
+        primary_ic_baseline=None,
+        primary_ic_against=None,
+        horizon_metrics={},
+        fold_metrics=(),
+        observation_compatibility_id=None,
+        population_identity_kind=None,
+        population_identity_id=None,
+        production_snapshot_id=None,
+        challenge_adapter_id=None,
+        files=(),
+        summary_md="",
+        manifest={},
+        metrics={},
+        historical_display_only=True,
+        promotion_eligible=False,
+        promotion_block_reason=error,
+        notes=(error,),
+        error=error,
+    )
+
+
+def _axis(name: str, left: Any, right: Any) -> ArtifactCompareAxis:
+    ls = "" if left is None else str(left)
+    rs = "" if right is None else str(right)
+    # Empty vs empty is compatible (both missing).
+    return ArtifactCompareAxis(
+        name=name,
+        left=ls,
+        right=rs,
+        compatible=ls == rs,
+    )
 
 
 def _view_from_challenge_result(

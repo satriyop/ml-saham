@@ -35,8 +35,8 @@ Phase progress:
 | 1A | Read-only Control Tower, cohort discovery, and Policy Catalog | COMPLETED | Completed 2026-08-02 |
 | 1B | Typed cohort and Protocol readiness enrichment | DEFERRED_OPTIONAL | Not required for Phase 2+; enrich when C0 ships (`close_accum_challenge_decision_coverage_gaps.md`) |
 | 2 | Explicit challenge setup and synchronous Result Inspector | COMPLETED | Completed 2026-08-02; no C0/1B dependency |
-| 3 | Validated artifact history, comparison, and human-review handoff | READY_AFTER_PHASE_2 | Phase 2 is green |
-| 4 | Durable local background jobs and operational hardening | READY_AFTER_PHASE_3 | Phase 3 is green and synchronous runtime measurements justify it |
+| 3 | Validated artifact history, comparison, and human-review handoff | COMPLETED | Completed 2026-08-02 |
+| 4 | Durable local background jobs and operational hardening | READY_AFTER_MEASUREMENT | After Phase 3; only if measured runtimes justify jobs |
 
 The task may be merged phase by phase. Each merge must update this table. The
 task moves to `tasks/done/` only after Phase 4 is complete or an accepted ADR
@@ -552,11 +552,12 @@ foundation described in `AGENT_QUICKSTART.md` lands.
 
 ### Phase 3
 
-- [ ] Artifact history reopens only through authoritative validation.
-- [ ] Historical/incompatible artifacts never gain current eligibility or a
+- [x] Artifact history reopens only through authoritative validation.
+- [x] Historical/incompatible artifacts never gain current eligibility or a
       computed cross-contract winner.
-- [ ] Human review packet reuses the existing promote path and never writes
+- [x] Human review packet reuses the existing promote path and never writes
       ai-saham.
+- [x] Exact-byte downloads of validated pack files only.
 
 ### Phase 4
 
@@ -640,8 +641,8 @@ Before each phase, the implementer must:
 Phase 0 completed date/commit: 2026-08-02 / working tree (phase-0 shell)
 Phase 1A completed date/commit: 2026-08-02 / desk phase 0+1A commit
 Phase 1B completed date/commit: DEFERRED_OPTIONAL (not required)
-Phase 2 completed date/commit: 2026-08-02 / (this implementation)
-Phase 3 completed date/commit:
+Phase 2 completed date/commit: 2026-08-02 / 6b81e97
+Phase 3 completed date/commit: 2026-08-02 / (this implementation)
 Phase 4 completed date/commit or accepted removal ADR:
 Selected UI/Streamlit version: streamlit>=1.43,<2; verified with 1.60.0
 Application facade and DTO contracts: ChallengeWorkbenchService + Phase-1A
@@ -662,11 +663,9 @@ Downstream human decision status:
 
 ## Final Readiness Gate
 
-Phases 0, 1A, and 2 are complete. Phase 1B is deferred optional enrichment
-(not a gate). Phase 3 may start. Unfinished C0–C4 capabilities remain
-unavailable rather than being recreated in the UI. Later phases must not invent
-cohort selection, readiness, production identity, Protocol law, artifact
-eligibility, duplicate-run behavior, write targets, or cross-repo ownership.
+Phases 0, 1A, 2, and 3 are complete. Phase 1B remains deferred optional. Phase
+4 starts only after measured runtimes justify durable jobs. Unfinished C0–C4
+capabilities remain unavailable rather than being recreated in the UI.
 
 ### Phase 1A implementation locks (applied)
 
