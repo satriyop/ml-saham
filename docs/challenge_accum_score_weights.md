@@ -25,7 +25,7 @@ Mirrored from ai-saham `ScoreAccumUseCase.AccumScorePolicy` defaults, with **P0 
 |--------|---------|--------|
 | consistency, streak, vwap_discount, rsi_headroom, foreign_flow_ratio | yes | Original weighted book |
 | **bci** (`inst`) | **yes (P0 polish)** | Production `BciEvidencePolicy` cluster=**12.5** / stable=4.2; sleeve weight = **12.5** |
-| **group breadth bonus** | **no** | Retired from production policy by ai-saham ADR-062; residual config/applier fields are not baseline authority |
+| **group breadth bonus** | **no** | Retired by ai-saham ADR-062; producer clean-removal landed — no config/applier/payload keys on new observations |
 | bb_squeeze | **no** | Production `BollingerSqueezePolicy.enabled=False` |
 
 `max_score` mirror: **100** (production AccumScorePolicy). Hash bumped on P0 polish.
@@ -50,7 +50,7 @@ Mirrored from ai-saham `ScoreAccumUseCase.AccumScorePolicy` defaults, with **P0 
 
 - Auto-promote weights into ai-saham  
 - Treat curriculum `learn compare accum-policy` as product authority (synthetic demo)
-- Reconstruct the retired group-breadth bonus from residual upstream fields
+- Reconstruct the retired group-breadth bonus from residual historical payload keys
 
 ## Artifacts
 

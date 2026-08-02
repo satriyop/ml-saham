@@ -1,12 +1,45 @@
 # Close Accum Challenge Decision-Coverage Gaps (G0-G4)
 
-Status: `READY_AFTER_IN_FLIGHT_HARDENING`
+Status: `READY_FOR_PHASED_EXECUTION`
 
-Source: code-first product-gap audit and roadmap revision on 2026-07-31.
+Source: code-first product-gap audit on 2026-07-31, rebased against current
+executable code, focused tests, and read-only maintainer-DB evidence on
+2026-08-02.
 
 Companion producer task:
 
 - `~/dev/ai-saham/tasks/backlog/grow_snapshot_bound_accum_challenge_corpus.md`
+
+External C3 authority task:
+
+- `~/dev/ai-saham/tasks/backlog/decide_accum_group_breadth_production_authority.md`
+
+## 0. Rebase Lock And Checkpoint Availability (2026-08-02)
+
+This program remains directionally correct, but checkpoints do not share one
+blanket readiness state:
+
+| Checkpoint | Current availability |
+|---|---|
+| C0 | Contract locked below. Implementation waits for the companion producer task to refresh and close its current code-hardening gate; do not bind to stale producer output. |
+| C1 | Ready for protocol/metric implementation and deterministic fixtures. A confirmatory live result still requires multi-session depth. |
+| C2 | Replay extraction and live-shaped goldens are shipped. Production adapter conformance identity and the registered tournament remain open and may build on C1. |
+| C3 | Resolved externally by ai-saham ADR-062: the dormant score bonus is retired. No production PolicySpec or challenge implementation is authorized. |
+| C4 | Data-blocked. Do not implement the Action verdict while per-fold ENTER/readiness support remains insufficient. |
+
+The C0 projection has two independent axes and must never collapse them into
+one inferred status:
+
+1. **Producer handoff status** reports ai-saham observation, population,
+   snapshot, and corpus-label authority using the producer vocabulary.
+2. **Protocol readiness status** reports ml-saham's named Protocol inputs,
+   candle/benchmark outcome coverage, folds, and decision-specific support.
+
+`CHALLENGE_INPUT_READY` is not `READY_FOR_PROTOCOL`, and malformed or missing
+ai-saham corpus labels do not become the outcome gate for `accum_path_v1`, whose
+target is independently built from candles plus IHSG. A future Protocol that
+explicitly names `label_source=corpus` may make those labels authoritative for
+that Protocol only.
 
 ## 1. Task Metadata
 
@@ -21,19 +54,24 @@ Companion producer task:
     `ARTIFACT_SCHEMA`
   - C2 hard-filter tournament: `POLICY_CONTRACT`, `PROTOCOL_CONTRACT`,
     `VERDICT_SEMANTICS`, `ARTIFACT_SCHEMA`
-  - C3 configured group breadth: blocked architecture dependency; no challenge
-    classification until ai-saham establishes a real production PolicySpec
+  - C3 configured group breadth: resolved as retired production policy
+    (ADR-062) with ai-saham clean-removal of residual config/applier/transport;
+    documentation-only close, with no challenge PolicySpec or baseline
   - C4 Action/readiness: `DATA_CONTRACT`, `PROTOCOL_CONTRACT`,
     `VERDICT_SEMANTICS`, `ARTIFACT_SCHEMA`
-- This task-file creation is documentation-only and `NON_SEMANTIC`.
+- This task-file revision is documentation-only and `NON_SEMANTIC`.
 - Chosen decision: implement the checkpoints in order and stop at each explicit
   gate. Extend the existing `challenge health`, `challenge run`, `challenge
   engine`, and `vet` product surfaces; do not create a disconnected evaluator.
   Implement this option only.
 
-Sequencing guard: current uncommitted snapshot/cohort/promotion hardening in the
-shared worktree must be reviewed, owned, and landed or deliberately superseded
-before C0 implementation starts. Do not edit over that work.
+Sequencing guard: snapshot/cohort/promotion hardening has continued in both
+repositories. The current companion task still records an in-progress code
+gate; C0 implementation must recheck that completion record and current
+producer DTO before coding. C1 and C2 contract/conformance work may proceed in
+parallel, but confirmatory verdicts remain data-dependent. Preserve the
+unrelated Streamlit/Challenge Desk work in this repository and all unrelated
+ai-saham worktree changes.
 
 ## 2. Problem Statement
 
@@ -41,23 +79,34 @@ The challenge lab has useful sleeve, signal, risk, factor, diagnostic, and
 promotion-support paths, but it does not yet cover every material production
 decision influence.
 
-Current executable/data evidence:
+Current executable/data evidence, refreshed 2026-08-02:
 
-- cohort `sha256:005363...` has 1,890 observations over 42 sessions but no
-  required v2 policy snapshots, so production comparison correctly returns
-  `BLOCKED_POLICY`;
+- cohort `sha256:005363...` has 1,890 observations over 42 sessions and no
+  required v2 policy snapshots. It remains ineligible for an active production
+  comparison. Current strict producer readiness also reports historical corpus
+  labels that fail the new calendar-bound label contract; never retrofit either
+  snapshots or labels;
+- cohort `sha256:58988d...` has 349 observations from one session and only a
+  historical v1 snapshot set, so it remains `LEGACY_RAW_ONLY` producer history
+  and ineligible for current production comparison;
 - cohort `sha256:8ba8fc...` has 304 observations, one session, and all seven v2
-  snapshots, but yields only one valid post-embargo OOS fold, so production
-  verdicts remain `INCONCLUSIVE`;
-- on that slice, risk gates block about 83% OOS and the allowed book is better
-  than `gate_off`, while raw signal H10 IC is inconclusive;
+  snapshots. Current ml-saham candle-based execution yields only one OOS fold:
+  `screener.accum.score_weights` is `INCONCLUSIVE`; the `gate_off` risk
+  challenger is `LOSE` because its allowed-book mean is worse than production;
+  the hard-filter policy is `BLOCKED_POLICY` because its adapter lacks
+  production conformance authority. Do not summarize these distinct states as
+  "production verdicts remain INCONCLUSIVE";
+- on that slice, risk gates block about 83% OOS and the production allowed book
+  is better than `gate_off`, while the score tournament remains inconclusive;
 - risk output does not quantify false-block cost, harmful allows, gate-family
   contribution, or multi-regime stability;
-- screen hard-filter extraction/replay and v2 identity exist, but the challenge
-  adapter lacks golden conformance and a registered tournament;
-- sector/group breadth is configured and its pure applier can change Accum
-  score, but current ai-saham production factories do not inject `idx_groups`;
-  the executable path skips it, so no production challenge baseline exists;
+- screen hard-filter extraction, pure first-match replay, live-shaped goldens,
+  and v2 identity exist. The challenge adapter still has an empty production
+  `conformance_id`, supports no counterfactual challenger, and is not registered
+  in the screener engine portfolio;
+- sector/group breadth remains as dormant ai-saham removal debt, but ADR-062
+  retires the score bonus from production policy. No production challenge
+  baseline exists, and ml-saham must not reconstruct one from residual fields;
 - the active v2 cohort has no ENTER rows and only 11/304 rows with non-null
   readiness, so an Action verdict would currently be statistically dishonest.
 
@@ -92,16 +141,15 @@ Human decision supported: retain or nominate one filter configuration for review
 What the result cannot authorize: changing ai-saham YAML or live filtering.
 ```
 
-### C3 configured group breadth (blocked)
+### C3 configured group breadth (closed: retired upstream)
 
 ```text
-Product question: none yet; current production composition skips the configured
-  applier because no group mapping is injected.
-H0 / comparison claim: undefined until ai-saham establishes production behavior.
-Decision type: blocked architecture dependency
+Product question: none; ai-saham ADR-062 retires the configured score bonus.
+H0 / comparison claim: none; there is no production behavior to challenge.
+Decision type: no production policy
 Human decision supported: none.
 What the result cannot authorize: treating configured or isolated-test behavior
-  as a production baseline.
+  as a production baseline, or reconstructing a challenger from residual fields.
 ```
 
 ### C4 Action/readiness
@@ -122,19 +170,48 @@ C0 is readiness infrastructure, not a policy challenge and has no WIN/LOSE.
 
 ### C0 - challenge readiness visibility
 
-Extend existing `vet` and/or `challenge health` composition so a selected
-ACCUM cohort reports, in table and JSON/artifact form:
+Extend the typed challenge/workbench application boundary used by `vet`,
+`challenge health`, and the optional Challenge Desk so a selected ACCUM cohort
+reports, in table and JSON/artifact form. UI/CLI adapters must not query SQLite,
+scrape another command, or compute readiness.
+
+### C0A - producer handoff projection
+
+Report the upstream producer facts without recreating ai-saham policy:
+
+The projection independently validates authoritative SQLite rows through the
+existing read-only data boundary under the locked cross-repo contract. It must
+not import ai-saham Python, invoke/scrape the ai-saham CLI, trust a persisted
+status string, or make ai-saham write a second handoff artifact merely for this
+UI/report.
 
 - exact `compatibility_id`; never implicit largest/latest selection;
 - observation count, distinct session count, min/max economic date;
 - required snapshot contract, verified policy IDs, and `7/7` completeness;
-- label/outcome availability by H3/H10/H20;
-- protocol-estimated post-embargo valid fold count;
+- corpus-label availability/integrity by H3/H10/H20, explicitly labeled as
+  ai-saham producer labels rather than `accum_path_v1` targets;
 - Action distribution and readiness present/missing counts;
+- upstream producer status: `LEGACY_RAW_ONLY`, `BLOCKED_POLICY`, `COLLECTING`,
+  or `CHALLENGE_INPUT_READY`, plus exact machine-readable reasons;
+- ml interpretation mapping, without converting producer readiness into a
+  verdict or fold claim.
+
+### C0B - ml-saham Protocol readiness projection
+
+For one explicitly selected PolicySpec/Protocol combination, report:
+
+- verified production snapshot and supported adapter identity;
+- Protocol ID, target source, benchmark, primary/secondary horizons, embargo,
+  minimum N, and minimum folds for WIN;
+- candle/IHSG target availability and exclusions under that Protocol;
+- protocol-estimated post-embargo valid fold count;
 - explicit status: `BLOCKED_POLICY`, `BLOCKED_DATA`, `READY_FOR_PROTOCOL`, or
   `INCONCLUSIVE_DEPTH` with machine-readable reasons.
 
-This report is read-only and does not itself produce a challenge verdict.
+The C0A and C0B statuses must be separate fields in JSON/artifacts. The report
+is read-only and does not itself produce a challenge verdict. Producer corpus
+label availability may gate C0B only when the selected Protocol explicitly
+declares the corpus label source.
 
 ### C1 - deepen risk-gate decision quality (first scoring deliverable)
 
@@ -159,11 +236,18 @@ material regression in the safety metric. Otherwise return `LOSE` or
 ### C2 - complete the screen hard-filter tournament
 
 Use only verified `screener.accum.hard_filters` v2 cohort snapshots and the
-shipped first-match replay. Before engine registration:
+shipped first-match replay. Existing foundation, already complete:
 
-- add live-shaped golden vectors for market-cap, Piotroski, Accum-score, and
-  Signal-score filters, including missing/provider error actions and order;
-- prove the adapter reproduces the frozen production result for every vector;
+- live-shaped extraction/replay golden vectors cover market-cap, Piotroski,
+  Accum-score, and Signal-score filters, missing states, and first-match order;
+- shipped pure replay and cohort reconciliation fail closed on unsupported
+  payloads and do not multiply sample N by feature window.
+
+Remaining before engine registration:
+
+- establish a non-empty versioned production adapter `conformance_id` by
+  proving the adapter/replay reproduces the frozen production result for every
+  accepted vector; extraction goldens alone are not production conformance;
 - predeclare the off/threshold grid, population denominator, H10 target,
   multiplicity law, minimum per-side support, and verdict rule;
 - emit the C1 decision-quality metrics, including rejected/control populations;
@@ -172,19 +256,17 @@ shipped first-match replay. Before engine registration:
 Snapshot absence/mismatch, unsupported semantics, missing control population,
 or inadequate folds returns `BLOCKED_POLICY`/`BLOCKED_DATA`; never approximate.
 
-### C3 - challenge group/sector breadth only after production authority exists
+### C3 - closed without a challenge
 
-Remain `BLOCKED_POLICY`. The companion `ai-saham` corpus task explicitly does
-not publish v3 because current production factories leave `_ticker_to_group`
-empty and skip the applier. A snapshot of configuration intent would be false
-production authority.
+ai-saham ADR-062 retires the dormant group-breadth score bonus. C3 therefore
+ships no PolicySpec, adapter, challenger, snapshot expectation, or verdict.
+Residual configuration, observation fields, and isolated applier behavior are
+not a production baseline and must never be reconstructed here.
 
-Only after a separate ai-saham architecture task decides and implements the
-actual production concept (conglomerate-group versus sector breadth), PIT
-membership identity, overlap rule, scoring order, and Action interaction may a
-producer snapshot follow. Then ship a separate adapter, golden conformance
-vectors, and locked challengers. Never reconstruct the rule from observations
-or current YAML.
+A future PIT-governed group/sector diagnostic would be a new producer contract,
+not a continuation of C3. ml-saham may challenge that diagnostic only after
+ai-saham publishes its exact provenance contract; it remains non-authoritative
+unless a later explicit production-promotion decision exists.
 
 ### C4 - Action/readiness only after a hard data gate
 
@@ -245,7 +327,7 @@ Source owner/table/export: ai-saham learning_observations,
   learning_policy_snapshots, learning_outcome_labels, candles
 Required payload: features_by_window.7/30/90, shared.current_price,
   risk gate outcomes, screen hard-filter inputs/results, production Action,
-  typed setup_readiness fields; sector breadth only under its new snapshot
+  typed setup_readiness fields; no retired group-breadth reconstruction
 Purpose and compatibility_id: ACCUMULATION_DISCOVERY, explicitly selected
 Sample unit/grain: one ticker-session observation
 Population/denominator: the complete selected compatible cohort after only
@@ -258,6 +340,16 @@ Units: returns/excess are fractions; preserve source units for all inputs
 Cardinality/dedupe: one row per observation identity/ticker/session
 Legacy fallback: none
 ```
+
+Label-source separation is normative:
+
+| Readiness fact | Authority | May gate |
+|---|---|---|
+| Corpus label availability/integrity | ai-saham `learning_outcome_labels` producer contract | C0A producer handoff; C0B only for a Protocol that explicitly names `label_source=corpus` |
+| `accum_path_v1` H3/H10/H20 excess | ml-saham Protocol over read-only candles + IHSG | C0B and C1/C2 challenge folds |
+
+Do not infer one from the other or use a producer status as a substitute for
+Protocol extraction.
 
 ## 8. Policy, Protocol, Failure, And Artifact Contracts
 
@@ -307,13 +399,16 @@ do not claim the checkpoint complete.
 
 ## 11. Acceptance Criteria
 
-- [ ] C0 makes cohort/snapshot/session/fold/Action/readiness readiness explicit.
+- [ ] C0 reports producer handoff and Protocol readiness as two separate typed
+      axes with explicit label sources and no inferred status conversion.
 - [ ] C1 reports allowed and blocked books, false blocks, harmful allows,
       opportunity cost, attribution, and multi-fold stability.
-- [ ] C2 ships hard-filter conformance plus a registered locked tournament.
-- [ ] C3 remains blocked until ai-saham first establishes executable production
-      behavior and then publishes its verified snapshot; configured dead code
-      is never challenged as production.
+- [x] C2 foundation has live-shaped extract/replay goldens and shipped pure
+      first-match replay.
+- [ ] C2 establishes production adapter conformance authority and a registered
+      locked tournament.
+- [x] C3 is closed without a challenge under ai-saham ADR-062; configured dead
+      code is never challenged or reconstructed as production.
 - [ ] C4 cannot run before its Action/readiness data gate passes.
 - [ ] No upstream writes/imports/scrapers, leakage, identity inference,
       curriculum authority, or auto-promotion.
@@ -330,7 +425,8 @@ Update as each checkpoint lands:
   `data_contract.md`;
 - ADR-001/ADR-002 or a new ADR for new protocol/authority decisions;
 - CLI help and artifact/protocol/policy documentation;
-- the companion `ai-saham` task completion evidence for C0/C3/C4 gates.
+- the companion `ai-saham` task completion evidence for C0/C4 gates and the
+  accepted ADR-062 close for C3.
 
 ## 13. Agent Execution Instructions
 
