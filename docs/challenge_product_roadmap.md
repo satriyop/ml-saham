@@ -67,7 +67,7 @@ permanent acceptance constants.
 |----------|-----|------------------|------------------------|
 | **G0** | Snapshot-bound corpus depth | Historical cohort `sha256:005363…` has 1,890 rows / 42 sessions but 0/7 v2 snapshots, so production comparison correctly returns `BLOCKED_POLICY`. Active v2 cohort `sha256:8ba8fc…` has 304 rows / 1 session / 7 snapshots and yields only one valid OOS fold. | **ai-saham:** accumulate prospective v2-bound observations across enough independent sessions/regimes. **ml-saham:** keep explicit-cohort and snapshot gates. Exit only when the fixed protocol yields at least two valid post-embargo OOS folds; never retrofit snapshots onto the historical cohort. |
 | **G1** | Screen hard-filter tournament | Four-gate extract and pure replay are shipped; v2 policy identity is verified. The local adapter has no conformance evidence, is not in the screener engine portfolio, and execution returns `BLOCKED_POLICY`. | **ml-saham:** lock challenger/grid, population, outcome, false-block/opportunity-cost metrics, folds, and adapter golden conformance; then register the PolicySpec. Defaults being mostly off is not a reason to leave material eligibility logic permanently unvalidated. |
-| **G2** | Configured group-breadth authority | The pure applier can add a breadth bonus, but current production factories do not inject `idx_groups`; `_ticker_to_group` is empty and the executable path skips it. ADR-059 v2 therefore correctly excludes it. The configured mapping is conglomerate/group membership, not the sector-universe index. | **ai-saham architecture first:** decide whether this is a real production policy, define group-vs-sector meaning, PIT membership, overlap and scoring order, then activate it explicitly or retire the dead configuration. Only an activated policy may receive a new snapshot and ml-saham counterfactual. |
+| **G2 (closed)** | Configured group-breadth authority | ai-saham ADR-062 retires the dormant conglomerate-group score bonus from production policy. ADR-059 v2 correctly excludes it. Residual config/applier fields are removal debt, not baseline authority. | **No ml-saham PolicySpec:** do not reconstruct or challenge the retired rule. A future PIT-governed diagnostic would be a new producer contract and remain non-authoritative until separately promoted. |
 | **G3** | Risk gate decision quality | Current lane reports mean H10 excess among allowed rows. On the current v2 slice production blocks 83% OOS and outperforms `gate_off`, but the report does not establish false-block cost, harmful-allow rate, or regime stability. | **ml-saham:** add a versioned gate protocol/report for blocked-book outcomes, opportunity cost, gate-family attribution, and multi-fold stability without weakening safety constraints. |
 | **G4** | Setup readiness and final Action | These paths materially cap/override ENTER, but there is no Action Protocol. Corpus is not ready: historical cohort has only 8 ENTER and 86/1,890 non-null readiness rows; active v2 cohort has 0 ENTER and 11/304 non-null readiness rows. | **ai-saham:** produce dense PIT-bound readiness/Action observations and compatible outcomes. **ml-saham:** define a real Action H0, population, class handling, costs, and walk-forward protocol. Rank IC is not an acceptable substitute. |
 
@@ -87,7 +87,7 @@ Legend: **Product** = ADR-002 `challenge run` / `factor` / `engine` / `champion`
 | Accum sleeves (§4) | **Product, partial full-book coverage** | 6 verified components: cons/streak/vwap/rsi/flow/**bci**; **BB off**; sector breadth excluded (G2) |
 | BB (§4) | Disabled | Matches production BB-off — not inventing BB-on |
 | BCI (§4) | **Product (P0)** | Enabled verified component on `screener.accum.score_weights` |
-| Configured group breadth (§4) | **Authority gap (G2)** | Pure applier exists, but production composition supplies no mapping and skips it; no challenge baseline yet |
+| Configured group breadth (§4) | **Retired (G2 closed)** | ai-saham ADR-062: no production baseline and no ml-saham PolicySpec; residual fields are not authority |
 | Signal raw score / groups (§5) | **Product (P2 thin)** | `signal.accum.raw_score` — raw_score + group features vs excess@H |
 | Named setups / phase / readiness (§6–7) | **Product gap (G4)** | Material Action cap; sparse readiness corpus and no Action Protocol |
 | Risk hard gates (§8) | **Product, thin (G3)** | `gate_off` ablation shipped; blocked-book cost and stability incomplete |
@@ -115,14 +115,14 @@ Pre-open (not this inventory): `screener.pre_open.iev_rank`, `screener.pre_open.
 
 ## Phases
 
-### P0 — Close the AccumScore lab — **partial; G2 remains**
+### P0 — Close the AccumScore lab — **breadth authority resolved**
 
 **Goal:** PolicySpec mirrors production Accum book more honestly; docs stop over-claiming.
 
 | # | Work | Exit when |
 |---|------|-----------|
 | P0.1 | **BCI (`bci` / `inst`) as enabled sleeve** | **Done** — enabled weight 8.3; factor list + extract via `inst` |
-| P0.2 | **Configured group-breadth bonus** authority decision | **Open (G2)** — currently skipped by production composition; activate/retire through ai-saham architecture before any snapshot/challenge |
+| P0.2 | **Configured group-breadth bonus** authority decision | **Done (G2 closed)** — retired from production policy by ai-saham ADR-062; no snapshot row or ml-saham challenge |
 | P0.3 | **Coverage note in product docs** | **Done** — this file + product/engine map |
 | P0.4 | Optional: **BB sleeve** enable only if production re-enables BB | Still off (matches production) |
 
@@ -202,7 +202,8 @@ Explain-only bags are **not** P0–P4 PolicySpecs. They use a separate Challenge
 
 **Shipped bags:** `mce.screen_display`, `sector.peer_context`, `institutional.accumulation_bag`, `company_quality.bag` · CLI: `challenge diagnostic list|run|health` · `challenge health --with-diagnostics`.
 
-`PROMOTE_CANDIDATE` feeds this roadmap (e.g. sector bag residual strength → P0 breadth sleeve design).
+`PROMOTE_CANDIDATE` may nominate a separately governed future design. It cannot
+resurrect the retired breadth rule or supply missing PIT membership authority.
 
 ---
 
@@ -238,7 +239,7 @@ Copy into the PR / decision memo:
 
 ```text
 G0 v2 corpus time/fold depth      🚧 producer accumulation required
-P0 Accum sleeves honesty          🚧 configured group-breadth authority gap (G2)
+P0 Accum sleeves honesty          ✅ group-breadth bonus retired (G2 closed)
 P1 hard filters                   🚧 replay shipped; tournament blocked (G1)
 P2 signal policies                ✅ thin
 P3 risk hard gates                🚧 thin; decision-quality metrics open (G3)
