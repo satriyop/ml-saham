@@ -789,3 +789,68 @@ def test_against_id_gate_off_unknown_key_rejected(
     pack = build_promote_packet(from_json=path, write_artifact=False, db_path=fixture_db)
     assert pack.exit_code() == 2
     assert "gate" in (pack.error or "").lower() or "against" in (pack.error or "").lower()
+
+
+def test_write_challenge_artifact_same_second_and_concurrent(tmp_path: Path, fixture_db: Path):
+    """Sequential same-second and concurrent publications must not collide."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from ml_saham.challenge.artifacts import write_challenge_artifact
+    from ml_saham.challenge.runner import run_policy_challenge
+    from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID
+
+    result = run_policy_challenge(
+        fixture_db,
+        "screener.accum.score_weights",
+        against="equal_sleeves",
+        write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
+    )
+    assert result.production_snapshot_id
+    root = tmp_path / "arts"
+    paths = []
+    for _ in range(5):
+        paths.append(
+            write_challenge_artifact(result, db_path=fixture_db, artifacts_root=root)
+        )
+    assert len({p.resolve() for p in paths}) == 5
+    for p in paths:
+        assert (p / "pack_binding.json").is_file()
+
+    def _publish(i: int):
+        return write_challenge_artifact(
+            result, db_path=fixture_db, artifacts_root=root / f"c{i}"
+        )
+
+    concurrent: list = []
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futs = [pool.submit(_publish, i) for i in range(4)]
+        for fut in as_completed(futs):
+            concurrent.append(fut.result())
+    assert len({p.resolve() for p in concurrent}) == 4
+
+
+def test_pack_binding_rejects_extra_file_digest_keys(
+    verified_export: dict, tmp_path: Path, fixture_db: Path
+):
+    from ml_saham.challenge.artifacts import file_sha256_hex, write_challenge_artifact
+    from ml_saham.challenge.runner import run_policy_challenge
+    from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID
+    import shutil
+
+    result = run_policy_challenge(
+        fixture_db,
+        "screener.accum.score_weights",
+        against="equal_sleeves",
+        write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
+    )
+    out = write_challenge_artifact(result, db_path=fixture_db, artifacts_root=tmp_path / "arts")
+    bad = tmp_path / "extra_digest"
+    shutil.copytree(out, bad)
+    binding = json.loads((bad / "pack_binding.json").read_text(encoding="utf-8"))
+    binding["file_digests"]["summary.md"] = file_sha256_hex(bad / "summary.md")
+    (bad / "pack_binding.json").write_text(json.dumps(binding, indent=2) + "\n", encoding="utf-8")
+    pack = build_promote_packet(from_artifact=bad, write_artifact=False, db_path=fixture_db)
+    assert pack.exit_code() == 2
+    assert "file_digests" in (pack.error or "") or "extra" in (pack.error or "").lower()

@@ -180,21 +180,34 @@ def write_challenge_artifact(
     artifacts_root: Path | None = None,
     extra: dict[str, Any] | None = None,
 ) -> Path:
-    """Write a sealed v4 promote-evidence pack via temp dir + atomic rename."""
+    """Write a sealed v4 promote-evidence pack via owned temp dir + atomic rename."""
     import os
     import shutil
+    import tempfile
+    import uuid
 
     root = resolve_artifacts_root(artifacts_root)
-    ts = datetime.now(tz=JAKARTA).strftime("%Y%m%d_%H%M%S")
     parent = root / "challenge" / result.policy_id.replace("/", ".")
     parent.mkdir(parents=True, exist_ok=True)
-    final = parent / ts
-    tmp_path = parent / f".{ts}.tmp"
-    if tmp_path.exists():
-        shutil.rmtree(tmp_path)
-    tmp_path.mkdir(parents=True)
 
-    # Build sealed payload with final path for artifact_dir field.
+    # Pre-seal without final path so we can name the directory after artifact_id.
+    sealed_seed = challenge_result_export_payload(
+        result, mode="challenge_run", artifact_dir=None, extra=extra
+    )
+    artifact_id = str(sealed_seed["artifact_id"])
+    ts = datetime.now(tz=JAKARTA).strftime("%Y%m%d_%H%M%S_%f")
+    final_name = f"{ts}_{artifact_id[:12]}"
+    final = parent / final_name
+    # Collision-resistant final name if same-microsecond race still collides.
+    while final.exists():
+        final = parent / f"{final_name}_{uuid.uuid4().hex[:8]}"
+
+    # Owned temporary directory only (never delete another writer's path).
+    tmp_path = Path(
+        tempfile.mkdtemp(prefix=f".pack_{artifact_id[:12]}_", dir=str(parent))
+    )
+    owned_tmp = tmp_path
+
     sealed = challenge_result_export_payload(
         result, mode="challenge_run", artifact_dir=final, extra=extra
     )
@@ -273,9 +286,11 @@ def write_challenge_artifact(
             os.fsync(fh.fileno())
         (tmp_path / "summary.md").write_text(result.summary_md or "", encoding="utf-8")
         os.replace(str(tmp_path), str(final))
+        owned_tmp = None  # published; do not delete
     except Exception:
-        if tmp_path.exists():
-            shutil.rmtree(tmp_path, ignore_errors=True)
+        if owned_tmp is not None and owned_tmp.exists():
+            # Only remove the temp directory we created in this call.
+            shutil.rmtree(owned_tmp, ignore_errors=True)
         raise
 
     result.artifact_dir = final

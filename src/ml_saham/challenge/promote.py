@@ -586,6 +586,14 @@ def load_evidence_artifact(
         file_digests = pack_binding.get("file_digests")
         if not isinstance(file_digests, dict):
             return None, "pack_binding.json file_digests must be an object"
+        member_set = set(members)
+        digest_keys = set(file_digests)
+        if digest_keys != member_set:
+            return None, (
+                "pack_binding.file_digests keys must equal members exactly "
+                f"(missing={sorted(member_set - digest_keys)!r}, "
+                f"extra={sorted(digest_keys - member_set)!r})"
+            )
         for name in members:
             path = dir_path / name
             if not path.is_file():
