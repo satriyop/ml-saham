@@ -315,14 +315,9 @@ def validate_production_identity_format(
             f"{semantic!r} is not supported by adapter {adapter.adapter_id!r}"
         )
 
-    if not _against_id_supported(against_id, adapter.supported_challengers):
-        return (
-            "challenge evidence invalid: against_id="
-            f"{against_id!r} is not a supported challenger for adapter "
-            f"{adapter.adapter_id!r} "
-            f"(supported={list(adapter.supported_challengers)!r}; "
-            f"champion={sorted(CHAMPION_AGAINST_IDS)!r})"
-        )
+    against_err = validate_against_id_for_adapter(against_id, adapter)
+    if against_err is not None:
+        return against_err
 
     status = data.get("status")
     if type(status) is not str or status not in {s.value for s in ChallengeStatus}:
@@ -396,19 +391,59 @@ def validate_production_identity_format(
     return None
 
 
-def _against_id_supported(against_id: str, supported: tuple[str, ...]) -> bool:
-    """Exact challenger match; gate_off:<key> patterns allow parameterized form."""
+def validate_against_id_for_adapter(against_id: str, adapter: Any) -> str | None:
+    """Validate against_id using adapter-supported challengers and real gate keys.
+
+    Parameterized ``gate_off:<key>`` must resolve to an adapter component key or
+    alias exactly (no prefix-only acceptance). Champion IDs are only valid for
+    score-kind adapters, not gate adapters.
+    """
+    supported = tuple(adapter.supported_challengers)
     if against_id in supported:
-        return True
+        return None
+
+    # Exact champion IDs only when this adapter is a score challenger family.
     if against_id in CHAMPION_AGAINST_IDS:
-        return True
-    for pattern in supported:
-        # Adapter patterns like "gate_off:<gate_key>".
-        if ":<" in pattern and pattern.endswith(">"):
-            prefix = pattern.split(":<", 1)[0] + ":"
-            if against_id.startswith(prefix) and len(against_id) > len(prefix):
-                return True
-    return False
+        score_kinds = {"weighted_sleeves", "rank_primary", "raw_score_primary"}
+        if getattr(adapter, "score_kind", "") in score_kinds:
+            return None
+        return (
+            "challenge evidence invalid: against_id="
+            f"{against_id!r} is a champion scorer but adapter "
+            f"{adapter.adapter_id!r} score_kind="
+            f"{getattr(adapter, 'score_kind', None)!r} does not support champions"
+        )
+
+    # Parameterized gate ablation: must match a real component key/alias.
+    has_gate_pattern = any(
+        p == "gate_off:<gate_key>" or (p.startswith("gate_off:") and ":<" in p)
+        for p in supported
+    )
+    if against_id.startswith("gate_off:") and has_gate_pattern:
+        gate_key = against_id[len("gate_off:") :]
+        if not gate_key or gate_key != gate_key.strip():
+            return (
+                "challenge evidence invalid: against_id="
+                f"{against_id!r} has empty/padded gate key"
+            )
+        for component in adapter.components:
+            aliases = tuple(getattr(component, "aliases", ()) or ())
+            if component.key == gate_key or gate_key in aliases:
+                return None
+        known = ", ".join(
+            c.key for c in adapter.components
+        ) or "(no components)"
+        return (
+            "challenge evidence invalid: against_id="
+            f"{against_id!r} gate key is not an enabled adapter component "
+            f"(known keys: {known})"
+        )
+
+    return (
+        "challenge evidence invalid: against_id="
+        f"{against_id!r} is not a supported challenger for adapter "
+        f"{adapter.adapter_id!r} (supported={list(supported)!r})"
+    )
 
 
 def validate_verified_production_identity(
@@ -516,10 +551,84 @@ def load_evidence_artifact(
             return None, "manifest.json root must be a JSON object"
         if metrics and not isinstance(metrics, dict):
             return None, "metrics.json root must be a JSON object"
-        # Map challenge artifact layout; schema_version comes only from manifest.
+        # v4 directory packs require pack_binding.json and exact field equality.
+        pack_binding_p = dir_path / "pack_binding.json"
+        if not pack_binding_p.is_file():
+            return None, (
+                "v4 directory pack missing required pack_binding.json "
+                "(sealed promote-evidence packs must bind members)"
+            )
+        try:
+            pack_binding = json.loads(pack_binding_p.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return None, f"cannot read pack_binding.json: {exc}"
+        if not isinstance(pack_binding, dict):
+            return None, "pack_binding.json root must be a JSON object"
+        required_binding_keys = {
+            "schema_version",
+            "artifact_id",
+            "content_digest",
+            "members",
+            "file_digests",
+        }
+        if frozenset(pack_binding.keys()) != required_binding_keys:
+            return None, (
+                "pack_binding.json key set mismatch "
+                f"missing={sorted(required_binding_keys - set(pack_binding))!r} "
+                f"extra={sorted(set(pack_binding) - required_binding_keys)!r}"
+            )
+        if pack_binding.get("schema_version") != CHALLENGE_ARTIFACT_SCHEMA_VERSION:
+            return None, (
+                "pack_binding.json schema_version must be "
+                f"{CHALLENGE_ARTIFACT_SCHEMA_VERSION}"
+            )
+        members = pack_binding.get("members")
+        if members != ["manifest.json", "metrics.json", "weights.json"]:
+            return None, f"pack_binding.members must be closed list, got {members!r}"
+        file_digests = pack_binding.get("file_digests")
+        if not isinstance(file_digests, dict):
+            return None, "pack_binding.json file_digests must be an object"
+        for name in members:
+            path = dir_path / name
+            if not path.is_file():
+                return None, f"pack missing {name}"
+            expected = file_digests.get(name)
+            actual = file_sha256_hex(path)
+            if type(expected) is not str or expected != actual:
+                return None, (
+                    f"pack file digest mismatch for {name}: "
+                    f"stored={expected!r}, recomputed={actual!r}"
+                )
+
+        # Duplicated identity fields must agree exactly across files (no fallback).
+        def _require_equal(field: str, left: Any, right: Any) -> str | None:
+            if left != right:
+                return (
+                    f"pack field disagreement on {field}: "
+                    f"values disagree ({left!r} vs {right!r})"
+                )
+            return None
+
+        for field in ("status", "content_digest", "artifact_id"):
+            err = _require_equal(field, manifest.get(field), metrics.get(field))
+            if err is not None:
+                return None, err
+        for field in ("content_digest", "artifact_id"):
+            err = _require_equal(field, manifest.get(field), pack_binding.get(field))
+            if err is not None:
+                return None, err
+
+        weights_p = dir_path / "weights.json"
+        try:
+            weights = json.loads(weights_p.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return None, f"cannot read weights.json: {exc}"
+        if not isinstance(weights, dict):
+            return None, "weights.json root must be a JSON object"
+
         data = {
             "schema_version": manifest.get("schema_version"),
-            "status": metrics.get("status") or manifest.get("status"),
+            "status": manifest.get("status"),
             "policy_id": manifest.get("policy_id"),
             "protocol_id": manifest.get("protocol_id"),
             "policy_hash": manifest.get("policy_hash"),
@@ -530,44 +639,21 @@ def load_evidence_artifact(
             "primary_ic_against": metrics.get("primary_ic_against"),
             "horizon_metrics": metrics.get("horizon_metrics"),
             "n_rows": manifest.get("n_rows"),
-            "fold_metrics": metrics.get("fold_metrics") if metrics.get("fold_metrics") is not None else [],
-            "weights": {},
-            "notes": metrics.get("notes") if metrics.get("notes") is not None else [],
+            "fold_metrics": metrics.get("fold_metrics"),
+            "weights": weights,
+            "notes": metrics.get("notes"),
             "mode": manifest.get("mode"),
-            "content_digest": metrics.get("content_digest") or manifest.get("content_digest"),
-            "artifact_id": metrics.get("artifact_id") or manifest.get("artifact_id"),
+            "content_digest": manifest.get("content_digest"),
+            "artifact_id": manifest.get("artifact_id"),
         }
+        if data["fold_metrics"] is None:
+            data["fold_metrics"] = []
+        if data["notes"] is None:
+            data["notes"] = []
         for key in _VERIFIED_PRODUCTION_IDENTITY:
             data[key] = manifest.get(key)
         for key in _POPULATION_IDENTITY_V3:
             data[key] = manifest.get(key)
-        weights_p = dir_path / "weights.json"
-        if weights_p.is_file():
-            try:
-                data["weights"] = json.loads(weights_p.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                pass
-        # Directory pack binding: per-file digests must match written members.
-        pack_binding_p = dir_path / "pack_binding.json"
-        if pack_binding_p.is_file():
-            try:
-                pack_binding = json.loads(pack_binding_p.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as exc:
-                return None, f"cannot read pack_binding.json: {exc}"
-            file_digests = pack_binding.get("file_digests")
-            if not isinstance(file_digests, dict):
-                return None, "pack_binding.json missing file_digests object"
-            for name in ("manifest.json", "metrics.json", "weights.json"):
-                path = dir_path / name
-                if not path.is_file():
-                    return None, f"pack missing {name}"
-                expected = file_digests.get(name)
-                actual = file_sha256_hex(path)
-                if type(expected) is not str or expected != actual:
-                    return None, (
-                        f"pack file digest mismatch for {name}: "
-                        f"stored={expected!r}, recomputed={actual!r}"
-                    )
         return _after_presence_checks(data, conn=conn)
 
     # No manifest: standalone export-shaped files only (strict schema required).

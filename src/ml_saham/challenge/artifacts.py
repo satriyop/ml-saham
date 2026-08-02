@@ -27,12 +27,14 @@ JAKARTA = ZoneInfo("Asia/Jakarta")
 # Challenge product artifact / promote-reopen contract (integer, not coerced).
 # Distinct from curriculum pack SCHEMA_VERSION in ml_saham.artifacts.writer.
 #
-# v4: immutable artifact_id + content_digest over closed challenge evidence;
-#     directory packs bind per-file digests. v3 and earlier are historical /
-#     display-only and are not promote-reopen eligible.
-# v3: material population identity fields (kind/id/detail) and honest
-#     baseline_id (production | static_reference).
-CHALLENGE_ARTIFACT_SCHEMA_VERSION = 4
+# v4 (promote-evidence only): sealed artifact_id + content_digest + pack_binding.
+# v3 display artifacts: factor/diagnostic/batch/engine/health/promote-packet
+#     writers stamp this without seals. v2 and earlier remain historical.
+# Promote reopen accepts only schema v4 sealed evidence.
+CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION = 4
+CHALLENGE_DISPLAY_ARTIFACT_SCHEMA_VERSION = 3
+# Alias used by sealed promote-evidence writers/export path.
+CHALLENGE_ARTIFACT_SCHEMA_VERSION = CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION
 # Historical schemas still readable for display, never for promote reopen.
 HISTORICAL_CHALLENGE_ARTIFACT_SCHEMA_VERSIONS = frozenset({1, 2, 3})
 
@@ -178,13 +180,23 @@ def write_challenge_artifact(
     artifacts_root: Path | None = None,
     extra: dict[str, Any] | None = None,
 ) -> Path:
+    """Write a sealed v4 promote-evidence pack via temp dir + atomic rename."""
+    import os
+    import shutil
+
     root = resolve_artifacts_root(artifacts_root)
     ts = datetime.now(tz=JAKARTA).strftime("%Y%m%d_%H%M%S")
-    out = root / "challenge" / result.policy_id.replace("/", ".") / ts
-    out.mkdir(parents=True, exist_ok=True)
+    parent = root / "challenge" / result.policy_id.replace("/", ".")
+    parent.mkdir(parents=True, exist_ok=True)
+    final = parent / ts
+    tmp_path = parent / f".{ts}.tmp"
+    if tmp_path.exists():
+        shutil.rmtree(tmp_path)
+    tmp_path.mkdir(parents=True)
 
+    # Build sealed payload with final path for artifact_dir field.
     sealed = challenge_result_export_payload(
-        result, mode="challenge_run", artifact_dir=out, extra=extra
+        result, mode="challenge_run", artifact_dir=final, extra=extra
     )
     metrics = {
         "primary_ic_baseline": result.primary_ic_baseline,
@@ -197,14 +209,8 @@ def write_challenge_artifact(
         "artifact_id": sealed["artifact_id"],
     }
     weights = result.weights
-    (out / "metrics.json").write_text(
-        json.dumps(metrics, indent=2) + "\n", encoding="utf-8"
-    )
-    (out / "weights.json").write_text(
-        json.dumps(weights, indent=2) + "\n", encoding="utf-8"
-    )
     manifest = {
-        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+        "schema_version": CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION,
         "mode": "challenge_run",
         "track": "policy_tournament",
         "policy_id": result.policy_id,
@@ -235,27 +241,45 @@ def write_challenge_artifact(
     }
     if extra:
         manifest["extra"] = extra
-    (out / "manifest.json").write_text(
-        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
-    )
-    # Per-file digests bind the pack after files exist (manifest last without digests
-    # would recurse). Pack binding file lists digests of the three JSON members.
-    pack_binding = {
-        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
-        "artifact_id": sealed["artifact_id"],
-        "content_digest": sealed["content_digest"],
-        "file_digests": {
-            "manifest.json": file_sha256_hex(out / "manifest.json"),
-            "metrics.json": file_sha256_hex(out / "metrics.json"),
-            "weights.json": file_sha256_hex(out / "weights.json"),
-        },
-    }
-    (out / "pack_binding.json").write_text(
-        json.dumps(pack_binding, indent=2) + "\n", encoding="utf-8"
-    )
-    (out / "summary.md").write_text(result.summary_md or "", encoding="utf-8")
-    result.artifact_dir = out
-    return out
+
+    try:
+        for name, payload in (
+            ("metrics.json", metrics),
+            ("weights.json", weights),
+            ("manifest.json", manifest),
+        ):
+            path = tmp_path / name
+            path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            with path.open("rb") as fh:
+                fh.flush()
+                os.fsync(fh.fileno())
+        pack_binding = {
+            "schema_version": CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION,
+            "artifact_id": sealed["artifact_id"],
+            "content_digest": sealed["content_digest"],
+            "members": ["manifest.json", "metrics.json", "weights.json"],
+            "file_digests": {
+                "manifest.json": file_sha256_hex(tmp_path / "manifest.json"),
+                "metrics.json": file_sha256_hex(tmp_path / "metrics.json"),
+                "weights.json": file_sha256_hex(tmp_path / "weights.json"),
+            },
+        }
+        binding_path = tmp_path / "pack_binding.json"
+        binding_path.write_text(
+            json.dumps(pack_binding, indent=2) + "\n", encoding="utf-8"
+        )
+        with binding_path.open("rb") as fh:
+            fh.flush()
+            os.fsync(fh.fileno())
+        (tmp_path / "summary.md").write_text(result.summary_md or "", encoding="utf-8")
+        os.replace(str(tmp_path), str(final))
+    except Exception:
+        if tmp_path.exists():
+            shutil.rmtree(tmp_path, ignore_errors=True)
+        raise
+
+    result.artifact_dir = final
+    return final
 
 
 def write_factor_artifact(
@@ -276,7 +300,7 @@ def write_factor_artifact(
     )
     out.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+        "schema_version": CHALLENGE_DISPLAY_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_factor",
         "track": "factor_validity",
         "policy_id": result.policy_id,
@@ -342,7 +366,7 @@ def write_batch_factor_artifact(
         for r in result.results
     ]
     manifest = {
-        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+        "schema_version": CHALLENGE_DISPLAY_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_factor_batch",
         "track": "factor_validity_batch",
         "policy_id": result.policy_id,
@@ -397,7 +421,7 @@ def write_diagnostic_artifact(
     )
     out.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+        "schema_version": CHALLENGE_DISPLAY_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_diagnostic",
         "track": "diagnostic_validity",
         "diagnostic_id": result.diagnostic_id,
@@ -463,7 +487,7 @@ def write_batch_diagnostic_artifact(
         for r in result.results
     ]
     manifest = {
-        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+        "schema_version": CHALLENGE_DISPLAY_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_diagnostic_batch",
         "track": "diagnostic_validity_batch",
         "diagnostic_id": result.diagnostic_id,
@@ -528,7 +552,7 @@ def write_engine_artifact(
         for r in result.rows
     ]
     manifest = {
-        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+        "schema_version": CHALLENGE_DISPLAY_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_engine",
         "engine_id": result.engine_id,
         "scenario_filter": result.scenario_filter,
@@ -574,7 +598,7 @@ def write_health_artifact(
     out = root / "challenge" / "health" / ts
     out.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+        "schema_version": CHALLENGE_DISPLAY_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_health",
         "engine_id": result.engine_id,
         "scenario_filter": result.scenario_filter,
@@ -623,7 +647,7 @@ def write_promote_packet(
     out = root / "challenge" / "promote" / safe / ts
     out.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+        "schema_version": CHALLENGE_DISPLAY_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_promote_packet",
         "policy_id": result.policy_id,
         **{
