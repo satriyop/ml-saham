@@ -499,6 +499,10 @@ def test_static_reference_not_promote_eligible(tmp_path: Path):
     """baseline=static_reference is refused for verified production promote packets."""
     import json
 
+    from ml_saham.challenge.artifacts import (
+        challenge_result_export_payload,
+        stamp_challenge_evidence_digests,
+    )
     from ml_saham.challenge.promote import build_promote_packet
     from ml_saham.challenge.runner import run_policy_challenge
     from tests.fixtures.build_mvp_fixture import (
@@ -515,31 +519,13 @@ def test_static_reference_not_promote_eligible(tmp_path: Path):
         compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
     assert result.has_verified_production_identity()
+    # Schema v4 sealed payload with only baseline rewritten, then resealed.
+    payload = challenge_result_export_payload(result)
+    payload["baseline_id"] = "static_reference"
+    payload = stamp_challenge_evidence_digests(payload)
     export = tmp_path / "ref.json"
-    export.write_text(
-        json.dumps(
-            {
-                "schema_version": 3,
-                "status": result.status.value,
-                "policy_id": result.policy_id,
-                "protocol_id": result.protocol_id,
-                "baseline_id": "static_reference",
-                "against_id": result.against_id,
-                "observation_compatibility_id": result.observation_compatibility_id,
-                "production_snapshot_id": result.production_snapshot_id,
-                "production_snapshot_digest": result.production_snapshot_digest,
-                "production_policy_id": result.production_policy_id,
-                "production_policy_version": result.production_policy_version,
-                "production_semantic_engine_contract_id": (
-                    result.production_semantic_engine_contract_id
-                ),
-                "challenge_adapter_id": result.challenge_adapter_id,
-                "challenge_adapter_version": result.challenge_adapter_version,
-            }
-        ),
-        encoding="utf-8",
-    )
-    pack = build_promote_packet(from_json=export, write_artifact=False)
+    export.write_text(json.dumps(payload), encoding="utf-8")
+    pack = build_promote_packet(from_json=export, write_artifact=False, db_path=db)
     assert pack.exit_code() == 2
     assert pack.error
     assert "static_reference" in pack.error

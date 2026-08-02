@@ -16,6 +16,7 @@ from ml_saham.challenge.artifacts import (
     file_sha256_hex,
     write_promote_packet,
 )
+from ml_saham.challenge.challengers import resolve_named_gate_key
 from ml_saham.challenge.champion import CHAMPION_AGAINST_IDS, is_champion_against
 from ml_saham.challenge.policies.registry import load_policy_adapter
 from ml_saham.challenge.production_policy_snapshots import (
@@ -426,13 +427,10 @@ def validate_against_id_for_adapter(against_id: str, adapter: Any) -> str | None
                 "challenge evidence invalid: against_id="
                 f"{against_id!r} has empty/padded gate key"
             )
-        for component in adapter.components:
-            aliases = tuple(getattr(component, "aliases", ()) or ())
-            if component.key == gate_key or gate_key in aliases:
-                return None
-        known = ", ".join(
-            c.key for c in adapter.components
-        ) or "(no components)"
+        resolved = resolve_named_gate_key(gate_key, adapter.components)
+        if resolved is not None:
+            return None
+        known = ", ".join(c.key for c in adapter.components) or "(no components)"
         return (
             "challenge evidence invalid: against_id="
             f"{against_id!r} gate key is not an enabled adapter component "

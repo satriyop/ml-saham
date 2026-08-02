@@ -923,13 +923,13 @@ def run_policy_challenge(
                 ag_s = score_gate_off(test, policy)
                 coefs = {c.key: 0.0 for c in policy.enabled_components()}
             elif against.startswith("gate_off:") or against.startswith("off:"):
-                gkey = against.split(":", 1)[1].strip().lower().replace("-", "_")
-                # resolve alias to canonical enabled key
-                canon = None
-                for c in policy.enabled_components():
-                    if c.key.lower() == gkey or gkey in {a.lower() for a in c.aliases}:
-                        canon = c.key
-                        break
+                from ml_saham.challenge.challengers import resolve_named_gate_key_normalized
+
+                gkey = against.split(":", 1)[1]
+                # resolve alias to canonical enabled key (UX-normalized path)
+                canon = resolve_named_gate_key_normalized(
+                    gkey, policy.enabled_components()
+                )
                 if canon is None:
                     known = ", ".join(c.key for c in policy.enabled_components())
                     return make_result(
