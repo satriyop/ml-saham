@@ -11,37 +11,41 @@ Sibling ownership vs ai-saham: **[BOUNDARY.md](../BOUNDARY.md)** (ingest/corpus 
 ## Operator ritual (SSOT)
 
 Recommended maintainer path: use the same Typer verbs below for automation and
-recovery. The optional localhost Challenge Desk is a thin visual adapter; its
-Phase 0 shell has no challenge actions yet.
+recovery. The optional localhost Challenge Desk is a thin visual adapter over
+the same services (catalog, health, policy run, artifact history/compare,
+promote packet). CLI remains automation, cron, and recovery.
 
-| Step | When | Command | Purpose |
-|------|------|---------|---------|
-| **1. Catalog** | Always start here | `ml-saham challenge list` | **One entry point** for all production PolicySpecs + dig hints (screener / signal / gate / factor / diagnostic) |
-| **2. Weekly tower** | Weekly (or after big capture refresh) | `ml-saham challenge health --with-diagnostics` | Screener tune rollup + **display bags** (not Action). Optional: `--with-factors` / `--with-champion` |
-| **3. Deep dig** | Only when retuning that knob | `challenge engine signal --scenario accum` · `challenge engine risk --scenario accum` · `challenge run …` | Signal / risk / single-policy tournaments — **not** the weekly default |
-| **4. Diagnostics → production?** | After `PROMOTE_CANDIDATE` | Design a **new PolicySpec** → `challenge run` / `factor` (tune) → human memo | **Never** treat diagnostic verdicts as TradeSetup Action |
-| **5. Action ENTER (P4)** | Only when ready | Deferred | Needs dense Action + labels and a real ENTER H0 — **not** more rank IC |
+| Step | When | CLI | Desk (optional) | Purpose |
+|------|------|-----|-----------------|---------|
+| **1. Catalog** | Always start here | `ml-saham challenge list` | **Policy Catalog** | One entry point for PolicySpecs + dig hints |
+| **2. Weekly tower** | Weekly (or after capture refresh) | `ml-saham challenge health --with-diagnostics --compatibility-id …` | **Control Tower** → open last health pack / Run health | Screener rollup + display bags (not Action) |
+| **3. Deep dig** | Only when retuning | `challenge engine …` · `challenge run …` | **Run Challenge** (policy_run) | Signal/risk/engine digs or single-policy tournaments |
+| **4. Reopen / compare** | After packs exist | open `artifacts/challenge/…` | **Artifact History** · **Compare** | Validated reopen; no cross-contract winners |
+| **5. Diagnostics → production?** | After `PROMOTE_CANDIDATE` | design PolicySpec → run/factor → human memo | promote packet from History | Never treat diagnostic as Action |
+| **6. Action ENTER (P4)** | Only when ready | Deferred | Deferred | Needs dense Action + ENTER H0 |
 
 ```bash
-# optional boundary-only local shell (Phase 0)
+# optional local desk (loopback; pip install -e ".[ui]")
 ml-saham challenge desk
 
 # 1 — catalog
 ml-saham challenge list
 
-# 2 — weekly ritual
-ml-saham challenge health --with-diagnostics
+# 2 — weekly ritual (exact compatibility id required for production-facing panels)
+ml-saham challenge health --with-diagnostics --compatibility-id <exact>
 # optional deeper weekly: --with-factors --with-champion
 # install cron: ./scripts/install_challenge_health_cron.sh
 
 # 3 — on-demand digs (when retuning)
 ml-saham challenge engine signal --scenario accum
 ml-saham challenge engine risk --scenario accum --against gate_off
-ml-saham challenge run screener.accum.score_weights --against equal_sleeves
+ml-saham challenge run screener.accum.score_weights --against equal_sleeves \
+  --compatibility-id <exact>
 
 # 4 — diagnostic promote ladder (never Action)
 ml-saham challenge diagnostic run mce.screen_display --all
 # PROMOTE_CANDIDATE ⇒ write PolicySpec design ⇒ challenge run/factor ⇒ human ai-saham change
+# desk: Artifact History → Create promote packet (never auto-applies)
 ```
 
 Hard rules:

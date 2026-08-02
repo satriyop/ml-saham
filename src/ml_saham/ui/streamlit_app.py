@@ -20,6 +20,7 @@ from ml_saham.challenge.workbench import (
     CohortInventoryResult,
     ControlTowerSnapshot,
     DiagnosticCatalogRow,
+    HealthRunView,
     HistoricalResultRow,
     PolicyCatalogRow,
     build_challenge_workbench,
@@ -100,12 +101,140 @@ def render_foundation(overview: ChallengeWorkbenchOverview) -> None:
 def render_control_tower(service: ChallengeWorkbenchService) -> None:
     st.title("Control Tower")
     st.caption(
-        "Historical challenge packs only — no live health/run execution in Phase 1A."
+        "Weekly ritual: open last health pack → refresh health when needed → "
+        "dig policy runs on Run Challenge. Diagnostics never set Action."
     )
     st.info(
         "Tracks: **tune** · **factor** · **champion** · **diagnostic** "
         "(display / PROMOTE_CANDIDATE only — never Action)."
     )
+
+    # --- Weekly ritual: last health + optional run -------------------------
+    st.subheader("Weekly ritual")
+    latest = service.latest_health_pack()
+    if latest.found and latest.artifact_path:
+        st.markdown(
+            f"**Last health pack:** `{latest.artifact_path}`  \n"
+            f"created_at=`{latest.created_at or '—'}` · "
+            f"engine=`{latest.engine_id or '—'}` · "
+            f"diagnostics=`{latest.with_diagnostics}` · "
+            f"factors=`{latest.with_factors}` · "
+            f"champion=`{latest.with_champion}` · "
+            f"n_index=`{latest.n_index}`"
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Open last health pack", key="tower_open_health"):
+                opened = service.open_challenge_artifact(latest.artifact_path)
+                st.session_state.opened_artifact = opened
+                st.session_state.tower_opened_health = opened
+        with c2:
+            st.caption(
+                "CLI refresh: "
+                "`ml-saham challenge health --with-diagnostics "
+                "--compatibility-id <exact>`"
+            )
+        opened_health = st.session_state.get("tower_opened_health")
+        if opened_health is not None and opened_health.ok:
+            st.success(f"Opened health pack ({opened_health.status})")
+            if opened_health.summary_md:
+                with st.expander("Last health summary.md"):
+                    st.markdown(opened_health.summary_md[:8000])
+            # Expand index rows if present via control tower already
+        elif opened_health is not None and not opened_health.ok:
+            st.error(opened_health.error or "open failed")
+    else:
+        st.warning(
+            "No health pack yet. Run weekly health below (or CLI) to create "
+            "`artifacts/challenge/health/<ts>/`."
+        )
+        for note in latest.notes:
+            st.caption(note)
+
+    st.markdown("**Run weekly health** (explicit submit only)")
+    inv = service.list_cohort_inventory()
+    cohort_labels = [
+        f"{r.purpose_family} | {r.compatibility_id} | n={r.observation_count}"
+        for r in inv.rows
+    ]
+    with st.form("health_run_form"):
+        if cohort_labels:
+            cohort_choice = st.selectbox(
+                "Compatibility ID (exact; required)",
+                options=["— no selection —", *cohort_labels],
+                index=0,
+            )
+        else:
+            cohort_choice = "— no selection —"
+            st.caption("No cohorts in inventory — fix upstream DB or use CLI.")
+        scenario = st.selectbox(
+            "Scenario filter",
+            options=["(all)", "accum", "pre-open"],
+            index=0,
+        )
+        with_diagnostics = st.checkbox(
+            "with-diagnostics (recommended weekly)",
+            value=True,
+            help="Display bags only — never Action authority.",
+        )
+        with_factors = st.checkbox("with-factors (deeper dig)", value=False)
+        with_champion = st.checkbox("with-champion (deeper dig)", value=False)
+        write_artifact = st.checkbox("Write health pack", value=True)
+        health_submit = st.form_submit_button("Run health", type="primary")
+
+    if health_submit:
+        if cohort_choice == "— no selection —":
+            st.error("Select an exact compatibility identity before running health.")
+        else:
+            parts = [p.strip() for p in cohort_choice.split("|")]
+            cid = parts[1] if len(parts) > 1 else ""
+            sc = "" if scenario == "(all)" else scenario
+            try:
+                hreq = service.build_health_run_request(
+                    compatibility_id=cid,
+                    scenario=sc,
+                    with_diagnostics=with_diagnostics,
+                    with_factors=with_factors,
+                    with_champion=with_champion,
+                    write_artifact=write_artifact,
+                )
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                attempt = service.new_attempt_id()
+                with st.spinner(
+                    f"Running weekly health (attempt {attempt}) — may take a while…"
+                ):
+                    hview = service.execute_health_run(
+                        hreq,
+                        attempt_id=attempt,
+                        executed_keys=_executed_keys(),
+                    )
+                st.session_state.last_health_view = hview
+                st.session_state.last_health_request = hreq
+
+    hview: HealthRunView | None = st.session_state.get("last_health_view")
+    if hview is not None:
+        st.markdown(
+            f"**Health status:** {_format_status(hview.status)} · "
+            f"elapsed `{hview.elapsed_seconds:.1f}s` · "
+            f"attempt `{hview.attempt_id}`"
+        )
+        if hview.kind == "application_error":
+            st.error(f"Application error (not a market verdict): {hview.error_reference}")
+        if hview.artifact_dir:
+            st.success(f"Health pack: {hview.artifact_dir}")
+        if hview.index:
+            st.dataframe(list(hview.index), use_container_width=True)
+        for line in hview.lines[:40]:
+            st.text(line)
+        if hview.summary_md:
+            with st.expander("Health summary"):
+                st.markdown(hview.summary_md[:12000])
+        st.info(hview.human_next_step)
+
+    st.divider()
+    st.subheader("All historical challenge rows")
     snap: ControlTowerSnapshot = service.control_tower_snapshot(limit=100)
     st.markdown(f"**Inventory status:** `{snap.status}`")
     if snap.by_track:
@@ -115,7 +244,7 @@ def render_control_tower(service: ChallengeWorkbenchService) -> None:
     if not snap.rows:
         st.warning(
             "No historical challenge packs found under the configured artifacts "
-            "root. Run challenges via CLI to populate this view."
+            "root. Run health or policy challenges to populate this view."
         )
         return
 

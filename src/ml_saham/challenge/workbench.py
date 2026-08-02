@@ -26,10 +26,11 @@ from ml_saham.challenge.artifacts import (
 from ml_saham.challenge.diagnostics.registry import list_diagnostics
 from ml_saham.challenge.policies.registry import load_policy, load_policy_adapter
 from ml_saham.challenge.production_policy_snapshots import REQUIRED_POLICIES
+from ml_saham.challenge.health import build_health_report
 from ml_saham.challenge.promote import build_promote_packet
 from ml_saham.challenge.protocols import get_protocol
 from ml_saham.challenge.runner import list_policies, run_policy_challenge
-from ml_saham.challenge.types import ChallengeResult, ChallengeStatus
+from ml_saham.challenge.types import ChallengeResult, ChallengeStatus, HealthReportResult
 from ml_saham.data.aisaham_read import connect
 from ml_saham.data.connection import resolve_db_path
 from ml_saham.data.observation_cohort import (
@@ -383,6 +384,63 @@ class PromotePacketView:
     artifact_dir: str | None
     error: str | None
     auto_applied: bool = False
+
+
+@dataclass(frozen=True)
+class LatestHealthPack:
+    """Most recent challenge/health/* pack under the artifacts root."""
+
+    found: bool
+    artifact_path: str | None
+    created_at: str | None
+    engine_id: str | None
+    with_diagnostics: bool | None
+    with_factors: bool | None
+    with_champion: bool | None
+    n_index: int | None
+    notes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class HealthRunRequest:
+    """Immutable weekly health request (session attempt idempotency in UI)."""
+
+    request_id: str
+    verb: str
+    engine_id: str
+    scenario: str
+    with_diagnostics: bool
+    with_factors: bool
+    with_champion: bool
+    champion_model: str
+    compatibility_id: str
+    write_artifact: bool
+    db_path: str
+    artifacts_root: str
+
+
+@dataclass(frozen=True)
+class HealthRunView:
+    """Presentation DTO for one health attempt."""
+
+    request_id: str
+    attempt_id: str
+    kind: str  # product_result | application_error
+    status: str
+    engine_id: str
+    scenario_filter: str | None
+    with_diagnostics: bool
+    with_factors: bool
+    with_champion: bool
+    lines: tuple[str, ...]
+    notes: tuple[str, ...]
+    summary_md: str
+    index: tuple[dict[str, Any], ...]
+    artifact_dir: str | None
+    elapsed_seconds: float
+    human_next_step: str
+    resolve_error: str | None = None
+    error_reference: str | None = None
 
 
 class ChallengeWorkbenchService:
@@ -1261,6 +1319,227 @@ class ChallengeWorkbenchService:
             auto_applied=False,
         )
 
+    # --- Weekly ritual: last health pack + optional health run ------------
+
+    def latest_health_pack(self) -> LatestHealthPack:
+        """Return the newest ``challenge/health/<ts>`` pack, if any."""
+        root = self._config.artifacts_root / "challenge" / "health"
+        if not root.is_dir():
+            return LatestHealthPack(
+                found=False,
+                artifact_path=None,
+                created_at=None,
+                engine_id=None,
+                with_diagnostics=None,
+                with_factors=None,
+                with_champion=None,
+                n_index=None,
+                notes=(f"No health tree at {root}",),
+            )
+        candidates = [
+            p
+            for p in root.iterdir()
+            if p.is_dir() and (p / "manifest.json").is_file()
+        ]
+        if not candidates:
+            return LatestHealthPack(
+                found=False,
+                artifact_path=None,
+                created_at=None,
+                engine_id=None,
+                with_diagnostics=None,
+                with_factors=None,
+                with_champion=None,
+                n_index=None,
+                notes=("Health directory exists but no packs with manifest.json",),
+            )
+        latest = max(
+            candidates,
+            key=lambda p: p.stat().st_mtime if p.is_dir() else 0.0,
+        )
+        try:
+            manifest = json.loads((latest / "manifest.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return LatestHealthPack(
+                found=True,
+                artifact_path=str(latest),
+                created_at=None,
+                engine_id=None,
+                with_diagnostics=None,
+                with_factors=None,
+                with_champion=None,
+                n_index=None,
+                notes=(f"latest pack unreadable: {exc}",),
+            )
+        if not isinstance(manifest, dict):
+            return LatestHealthPack(
+                found=True,
+                artifact_path=str(latest),
+                created_at=None,
+                engine_id=None,
+                with_diagnostics=None,
+                with_factors=None,
+                with_champion=None,
+                n_index=None,
+                notes=("manifest root is not an object",),
+            )
+        return LatestHealthPack(
+            found=True,
+            artifact_path=str(latest),
+            created_at=_opt_str(manifest.get("created_at")),
+            engine_id=_opt_str(manifest.get("engine_id")),
+            with_diagnostics=bool(manifest.get("with_diagnostics"))
+            if "with_diagnostics" in manifest
+            else None,
+            with_factors=bool(manifest.get("with_factors"))
+            if "with_factors" in manifest
+            else None,
+            with_champion=bool(manifest.get("with_champion"))
+            if "with_champion" in manifest
+            else None,
+            n_index=_opt_int(manifest.get("n_index")),
+            notes=(),
+        )
+
+    def build_health_run_request(
+        self,
+        *,
+        compatibility_id: str,
+        scenario: str = "",
+        with_diagnostics: bool = True,
+        with_factors: bool = False,
+        with_champion: bool = False,
+        champion_model: str = "lgbm_reweight",
+        engine_id: str = "screener",
+        write_artifact: bool = True,
+    ) -> HealthRunRequest:
+        """Immutable health request. Does not execute."""
+        cid = str(compatibility_id).strip()
+        if not cid or cid.startswith("—"):
+            raise ValueError(
+                "compatibility_id must be an exact explicit selection "
+                "(no largest/latest/only default)"
+            )
+        if cid == "(untagged)":
+            cid = ""
+        sc = str(scenario).strip()
+        model = str(champion_model).strip() or "lgbm_reweight"
+        eng = str(engine_id).strip() or "screener"
+        material = {
+            "verb": "health_run",
+            "engine_id": eng,
+            "scenario": sc,
+            "with_diagnostics": bool(with_diagnostics),
+            "with_factors": bool(with_factors),
+            "with_champion": bool(with_champion),
+            "champion_model": model,
+            "compatibility_id": cid,
+            "write_artifact": bool(write_artifact),
+            "db_path": str(self._config.upstream_db_path),
+            "artifacts_root": str(self._config.artifacts_root),
+        }
+        request_id = hashlib.sha256(
+            json.dumps(material, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()[:20]
+        return HealthRunRequest(
+            request_id=request_id,
+            verb="health_run",
+            engine_id=eng,
+            scenario=sc,
+            with_diagnostics=bool(with_diagnostics),
+            with_factors=bool(with_factors),
+            with_champion=bool(with_champion),
+            champion_model=model,
+            compatibility_id=cid,
+            write_artifact=bool(write_artifact),
+            db_path=str(self._config.upstream_db_path),
+            artifacts_root=str(self._config.artifacts_root),
+        )
+
+    def execute_health_run(
+        self,
+        request: HealthRunRequest,
+        *,
+        attempt_id: str,
+        executed_keys: set[str] | None = None,
+    ) -> HealthRunView:
+        """Run weekly health via ``build_health_report`` (synchronous)."""
+        if not attempt_id or not str(attempt_id).strip():
+            raise ValueError("attempt_id is required")
+        key = f"{request.request_id}:{attempt_id}"
+        if executed_keys is not None and key in executed_keys:
+            return HealthRunView(
+                request_id=request.request_id,
+                attempt_id=attempt_id,
+                kind="application_error",
+                status="DUPLICATE_ATTEMPT",
+                engine_id=request.engine_id,
+                scenario_filter=request.scenario or None,
+                with_diagnostics=request.with_diagnostics,
+                with_factors=request.with_factors,
+                with_champion=request.with_champion,
+                lines=(
+                    "DUPLICATE_ATTEMPT:",
+                    "  - This health request_id+attempt_id was already executed.",
+                ),
+                notes=("duplicate attempt suppressed",),
+                summary_md="# DUPLICATE_ATTEMPT\n",
+                index=(),
+                artifact_dir=None,
+                elapsed_seconds=0.0,
+                human_next_step="Use Run health again for a new attempt_id.",
+                error_reference=f"dup:{key}",
+            )
+
+        t0 = time.perf_counter()
+        try:
+            result = build_health_report(
+                Path(request.db_path),
+                engine_id=request.engine_id,
+                scenario=request.scenario or None,
+                with_champion=request.with_champion,
+                with_factors=request.with_factors,
+                with_diagnostics=request.with_diagnostics,
+                champion_model=request.champion_model,
+                write_artifact=request.write_artifact,
+                artifacts_dir=Path(request.artifacts_root),
+                compatibility_id=request.compatibility_id or None,
+            )
+            view = _view_from_health_result(
+                result,
+                request_id=request.request_id,
+                attempt_id=attempt_id,
+                elapsed_seconds=time.perf_counter() - t0,
+            )
+        except Exception as exc:  # noqa: BLE001
+            ref = f"err:{uuid.uuid4().hex[:12]}"
+            view = HealthRunView(
+                request_id=request.request_id,
+                attempt_id=attempt_id,
+                kind="application_error",
+                status="APPLICATION_ERROR",
+                engine_id=request.engine_id,
+                scenario_filter=request.scenario or None,
+                with_diagnostics=request.with_diagnostics,
+                with_factors=request.with_factors,
+                with_champion=request.with_champion,
+                lines=(
+                    "APPLICATION_ERROR:",
+                    f"  - {type(exc).__name__}: {exc}",
+                    f"  - reference={ref}",
+                ),
+                notes=(f"{type(exc).__name__}: {exc}",),
+                summary_md=f"# APPLICATION_ERROR\n\n`{ref}`\n",
+                index=(),
+                artifact_dir=None,
+                elapsed_seconds=time.perf_counter() - t0,
+                human_next_step="Inspect logs with the error reference.",
+                error_reference=ref,
+            )
+        if executed_keys is not None:
+            executed_keys.add(key)
+        return view
+
 
 def build_challenge_workbench(
     *,
@@ -1539,6 +1818,60 @@ def _axis(name: str, left: Any, right: Any) -> ArtifactCompareAxis:
         left=ls,
         right=rs,
         compatible=ls == rs,
+    )
+
+
+def _view_from_health_result(
+    result: HealthReportResult,
+    *,
+    request_id: str,
+    attempt_id: str,
+    elapsed_seconds: float,
+) -> HealthRunView:
+    if result.resolve_error:
+        status = "BLOCKED_POLICY"
+        if "not found" in (result.resolve_error or "").lower():
+            status = "BLOCKED_DATA"
+    else:
+        # Roll up index statuses: any BLOCKED_* dominates; else mixed/ok.
+        statuses = {
+            str(row.get("status") or "")
+            for row in (result.index or [])
+            if isinstance(row, dict)
+        }
+        if any(s.startswith("BLOCKED") for s in statuses):
+            status = "BLOCKED_MIXED" if len(statuses) > 1 else next(
+                (s for s in statuses if s.startswith("BLOCKED")), "BLOCKED_POLICY"
+            )
+        elif not statuses:
+            status = "EMPTY_INDEX"
+        else:
+            status = "HEALTH_COMPLETE"
+
+    next_step = (
+        "Open the health pack in Artifact History / Control Tower. "
+        "Diagnostics never set Action. Dig signal/risk only when retuning. "
+        "Never auto-promote."
+    )
+    return HealthRunView(
+        request_id=request_id,
+        attempt_id=attempt_id,
+        kind="product_result",
+        status=status,
+        engine_id=result.engine_id,
+        scenario_filter=result.scenario_filter,
+        with_diagnostics=result.with_diagnostics,
+        with_factors=result.with_factors,
+        with_champion=result.with_champion,
+        lines=tuple(result.lines or []),
+        notes=tuple(result.notes or []),
+        summary_md=result.summary_md or "",
+        index=tuple(dict(r) for r in (result.index or []) if isinstance(r, dict)),
+        artifact_dir=str(result.artifact_dir) if result.artifact_dir else None,
+        elapsed_seconds=elapsed_seconds,
+        human_next_step=next_step,
+        resolve_error=result.resolve_error,
+        error_reference=None,
     )
 
 
