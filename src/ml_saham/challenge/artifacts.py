@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 from zoneinfo import ZoneInfo
 
 from ml_saham.artifacts.writer import resolve_artifacts_root
@@ -26,10 +27,91 @@ JAKARTA = ZoneInfo("Asia/Jakarta")
 # Challenge product artifact / promote-reopen contract (integer, not coerced).
 # Distinct from curriculum pack SCHEMA_VERSION in ml_saham.artifacts.writer.
 #
+# v4: immutable artifact_id + content_digest over closed challenge evidence;
+#     directory packs bind per-file digests. v3 and earlier are historical /
+#     display-only and are not promote-reopen eligible.
 # v3: material population identity fields (kind/id/detail) and honest
-# baseline_id (production | static_reference). v2 artifacts remain historical
-# display-only and are not promote-reopen eligible.
-CHALLENGE_ARTIFACT_SCHEMA_VERSION = 3
+#     baseline_id (production | static_reference).
+CHALLENGE_ARTIFACT_SCHEMA_VERSION = 4
+# Historical schemas still readable for display, never for promote reopen.
+HISTORICAL_CHALLENGE_ARTIFACT_SCHEMA_VERSIONS = frozenset({1, 2, 3})
+
+# Closed payload for content_digest (excludes operational paths and digests).
+_CONTENT_DIGEST_KEYS: tuple[str, ...] = (
+    "schema_version",
+    "mode",
+    "status",
+    "policy_id",
+    "protocol_id",
+    "policy_hash",
+    "observation_compatibility_id",
+    "production_snapshot_id",
+    "production_snapshot_digest",
+    "production_policy_id",
+    "production_policy_version",
+    "production_semantic_engine_contract_id",
+    "challenge_adapter_id",
+    "challenge_adapter_version",
+    "baseline_id",
+    "against_id",
+    "population_identity_kind",
+    "population_identity_id",
+    "population_identity_detail",
+    "n_rows",
+    "primary_horizon",
+    "primary_ic_baseline",
+    "primary_ic_against",
+    "horizon_metrics",
+    "fold_metrics",
+    "weights",
+    "notes",
+)
+
+
+def canonical_challenge_json(payload: Mapping[str, Any]) -> str:
+    """Deterministic JSON for challenge evidence digests."""
+    return json.dumps(
+        payload,
+        ensure_ascii=True,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def challenge_content_digest(payload: Mapping[str, Any]) -> str:
+    """sha256 hex of closed challenge evidence fields (no self-reference)."""
+    material = {k: payload.get(k) for k in _CONTENT_DIGEST_KEYS}
+    return hashlib.sha256(canonical_challenge_json(material).encode("utf-8")).hexdigest()
+
+
+def challenge_artifact_id(*, content_digest: str, policy_id: str, against_id: str) -> str:
+    """Stable identity for one sealed challenge evidence payload."""
+    material = {
+        "content_digest": content_digest,
+        "policy_id": policy_id,
+        "against_id": against_id,
+    }
+    return hashlib.sha256(canonical_challenge_json(material).encode("utf-8")).hexdigest()
+
+
+def stamp_challenge_evidence_digests(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy with content_digest and artifact_id stamped (schema v4)."""
+    out = dict(payload)
+    out["schema_version"] = CHALLENGE_ARTIFACT_SCHEMA_VERSION
+    digest = challenge_content_digest(out)
+    out["content_digest"] = digest
+    out["artifact_id"] = challenge_artifact_id(
+        content_digest=digest,
+        policy_id=str(out.get("policy_id") or ""),
+        against_id=str(out.get("against_id") or ""),
+    )
+    return out
+
+
+def file_sha256_hex(path: Path) -> str:
+    data = path.read_bytes()
+    return hashlib.sha256(data).hexdigest()
 
 
 def challenge_result_export_payload(
@@ -42,7 +124,7 @@ def challenge_result_export_payload(
     """Build a promote-eligible challenge/champion JSON export (schema stamped).
 
     Used by CLI ``--export-json``, health champion packs, and tests. Always
-    emits integer ``schema_version`` matching writer manifests.
+    emits integer ``schema_version`` matching writer manifests, plus v4 digests.
     """
     resolved_mode = mode
     if resolved_mode is None:
@@ -86,7 +168,7 @@ def challenge_result_export_payload(
     }
     if extra:
         payload.update(extra)
-    return payload
+    return stamp_challenge_evidence_digests(payload)
 
 
 def write_challenge_artifact(
@@ -101,6 +183,26 @@ def write_challenge_artifact(
     out = root / "challenge" / result.policy_id.replace("/", ".") / ts
     out.mkdir(parents=True, exist_ok=True)
 
+    sealed = challenge_result_export_payload(
+        result, mode="challenge_run", artifact_dir=out, extra=extra
+    )
+    metrics = {
+        "primary_ic_baseline": result.primary_ic_baseline,
+        "primary_ic_against": result.primary_ic_against,
+        "horizon_metrics": result.horizon_metrics,
+        "fold_metrics": result.fold_metrics,
+        "notes": result.notes,
+        "status": result.status.value,
+        "content_digest": sealed["content_digest"],
+        "artifact_id": sealed["artifact_id"],
+    }
+    weights = result.weights
+    (out / "metrics.json").write_text(
+        json.dumps(metrics, indent=2) + "\n", encoding="utf-8"
+    )
+    (out / "weights.json").write_text(
+        json.dumps(weights, indent=2) + "\n", encoding="utf-8"
+    )
     manifest = {
         "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_run",
@@ -126,27 +228,30 @@ def write_challenge_artifact(
         "status": result.status.value,
         "n_rows": result.n_rows,
         "primary_horizon": result.primary_horizon,
+        "content_digest": sealed["content_digest"],
+        "artifact_id": sealed["artifact_id"],
         "db_path": str(db_path),
         "created_at": datetime.now(tz=JAKARTA).isoformat(),
     }
     if extra:
         manifest["extra"] = extra
-
     (out / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
-    metrics = {
-        "primary_ic_baseline": result.primary_ic_baseline,
-        "primary_ic_against": result.primary_ic_against,
-        "horizon_metrics": result.horizon_metrics,
-        "fold_metrics": result.fold_metrics,
-        "status": result.status.value,
+    # Per-file digests bind the pack after files exist (manifest last without digests
+    # would recurse). Pack binding file lists digests of the three JSON members.
+    pack_binding = {
+        "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+        "artifact_id": sealed["artifact_id"],
+        "content_digest": sealed["content_digest"],
+        "file_digests": {
+            "manifest.json": file_sha256_hex(out / "manifest.json"),
+            "metrics.json": file_sha256_hex(out / "metrics.json"),
+            "weights.json": file_sha256_hex(out / "weights.json"),
+        },
     }
-    (out / "metrics.json").write_text(
-        json.dumps(metrics, indent=2) + "\n", encoding="utf-8"
-    )
-    (out / "weights.json").write_text(
-        json.dumps(result.weights, indent=2) + "\n", encoding="utf-8"
+    (out / "pack_binding.json").write_text(
+        json.dumps(pack_binding, indent=2) + "\n", encoding="utf-8"
     )
     (out / "summary.md").write_text(result.summary_md or "", encoding="utf-8")
     result.artifact_dir = out

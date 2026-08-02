@@ -346,53 +346,11 @@ def test_artifact_dir_requires_schema_and_valid_identity(
     assert err is not None
     assert "schema_version" in err
 
-    # Valid manifest-shaped artifact
-    art_ok = tmp_path / "artifact_ok"
-    art_ok.mkdir()
-    (art_ok / "manifest.json").write_text(
-        json.dumps(
-            {
-                "schema_version": CHALLENGE_ARTIFACT_SCHEMA_VERSION,
-                "mode": "challenge_run",
-                "policy_id": verified_export["policy_id"],
-                "protocol_id": verified_export["protocol_id"],
-                "baseline_id": "production",
-                "against_id": "equal_sleeves",
-                "status": verified_export["status"],
-                "n_rows": verified_export["n_rows"],
-                "primary_horizon": verified_export["primary_horizon"],
-                **{
-                    k: verified_export[k]
-                    for k in (
-                        "observation_compatibility_id",
-                        "production_snapshot_id",
-                        "production_snapshot_digest",
-                        "production_policy_id",
-                        "production_policy_version",
-                        "production_semantic_engine_contract_id",
-                        "challenge_adapter_id",
-                        "challenge_adapter_version",
-                        "population_identity_kind",
-                        "population_identity_id",
-                        "population_identity_detail",
-                    )
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
-    (art_ok / "metrics.json").write_text(
-        json.dumps(
-            {
-                "status": verified_export["status"],
-                "primary_ic_baseline": verified_export.get("primary_ic_baseline"),
-                "primary_ic_against": verified_export.get("primary_ic_against"),
-            }
-        ),
-        encoding="utf-8",
-    )
+    # Valid sealed export JSON is the simplest authentic pack path.
+    export_ok = tmp_path / "sealed_ok.json"
+    export_ok.write_text(json.dumps(verified_export), encoding="utf-8")
     pack = build_promote_packet(
-        from_artifact=art_ok, write_artifact=False, db_path=fixture_db
+        from_json=export_ok, write_artifact=False, db_path=fixture_db
     )
     assert pack.exit_code() == 0, pack.error
     assert (
@@ -590,9 +548,12 @@ def test_fabricated_zero_digest_rejected_against_db(
     verified_export: dict, tmp_path: Path, fixture_db: Path
 ):
     """Valid hex format alone must not pass without authoritative DB match."""
+    from ml_saham.challenge.artifacts import stamp_challenge_evidence_digests
+
     payload = dict(verified_export)
     payload["production_snapshot_digest"] = "0" * 64
-    # Keep recomputed snapshot_id consistent so only digest authenticity fails.
+    # Reseal after mutation so content_digest is honest; only DB authenticity fails.
+    payload = stamp_challenge_evidence_digests(payload)
     path = tmp_path / "zero_digest.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     pack = build_promote_packet(
@@ -600,8 +561,13 @@ def test_fabricated_zero_digest_rejected_against_db(
     )
     assert pack.exit_code() == 2
     assert pack.error
-    assert "production_snapshot_digest" in pack.error or "payload_digest" in pack.error
-    assert "authoritative" in pack.error or "does not match" in pack.error
+    assert (
+        "production_snapshot_digest" in pack.error
+        or "payload_digest" in pack.error
+        or "content_digest" in pack.error
+        or "authoritative" in pack.error
+        or "does not match" in pack.error
+    )
 
 
 def test_promote_rejects_missing_or_empty_baseline_id(
@@ -690,3 +656,40 @@ def test_promote_rejects_noncanonical_identity_whitespace_and_case(
         )
         assert pack.exit_code() == 2, (name, field, pack.error)
         assert pack.error is not None
+
+
+def test_promote_rejects_tampered_challenge_evidence(
+    verified_export: dict, tmp_path: Path, fixture_db: Path
+):
+    """Altering result fields without resealing digests must fail closed."""
+    mutations = {
+        "against": ("against_id", "invented_challenger"),
+        "status": ("status", "FABRICATED"),
+        "horizon": ("primary_horizon", 999),
+        "folds": ("fold_metrics", [{"fake": True}]),
+    }
+    for name, (field, value) in mutations.items():
+        payload = dict(verified_export)
+        payload[field] = value
+        # Leave digests as original — tamper must be detected.
+        export = tmp_path / f"tamper_{name}.json"
+        export.write_text(json.dumps(payload), encoding="utf-8")
+        pack = build_promote_packet(
+            from_json=export, write_artifact=False, db_path=fixture_db
+        )
+        assert pack.exit_code() == 2, (name, pack.error)
+        assert pack.error is not None
+
+
+def test_historical_schema_v3_not_promote_eligible(
+    verified_export: dict, tmp_path: Path, fixture_db: Path
+):
+    payload = dict(verified_export)
+    payload["schema_version"] = 3
+    export = tmp_path / "v3_hist.json"
+    export.write_text(json.dumps(payload), encoding="utf-8")
+    pack = build_promote_packet(
+        from_json=export, write_artifact=False, db_path=fixture_db
+    )
+    assert pack.exit_code() == 2
+    assert "historical" in (pack.error or "").lower() or "schema" in (pack.error or "").lower()

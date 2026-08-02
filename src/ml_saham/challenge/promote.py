@@ -10,9 +10,13 @@ from typing import Any
 
 from ml_saham.challenge.artifacts import (
     CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+    HISTORICAL_CHALLENGE_ARTIFACT_SCHEMA_VERSIONS,
+    challenge_artifact_id,
+    challenge_content_digest,
+    file_sha256_hex,
     write_promote_packet,
 )
-from ml_saham.challenge.champion import is_champion_against
+from ml_saham.challenge.champion import CHAMPION_AGAINST_IDS, is_champion_against
 from ml_saham.challenge.policies.registry import load_policy_adapter
 from ml_saham.challenge.production_policy_snapshots import (
     POLICY_VERSION,
@@ -21,7 +25,7 @@ from ml_saham.challenge.production_policy_snapshots import (
     verify_export_snapshot_against_db,
 )
 from ml_saham.challenge.protocols import get_protocol
-from ml_saham.challenge.types import PromotePacketResult
+from ml_saham.challenge.types import ChallengeStatus, PromotePacketResult
 from ml_saham.data.aisaham_read import connect as aisaham_connect
 from ml_saham.data.connection import resolve_db_path
 
@@ -78,6 +82,12 @@ def validate_artifact_schema_version(data: dict[str, Any]) -> str | None:
             f"invalid artifact schema_version: {raw_sv!r} "
             f"(must be integer in {sorted(SUPPORTED_ARTIFACT_SCHEMA_VERSIONS)}; "
             "no string/float coercion)"
+        )
+    if raw_sv in HISTORICAL_CHALLENGE_ARTIFACT_SCHEMA_VERSIONS:
+        return (
+            f"historical artifact schema_version={raw_sv} is display-only "
+            f"and not promote-reopen eligible "
+            f"(require schema_version={CHALLENGE_ARTIFACT_SCHEMA_VERSION})"
         )
     if raw_sv not in SUPPORTED_ARTIFACT_SCHEMA_VERSIONS:
         return (
@@ -265,7 +275,6 @@ def validate_production_identity_format(
     against_id, err = _exact_identity_str(data, "against_id")
     if err is not None:
         return err
-    del against_id  # presence/type validated; semantic challenger checks elsewhere
 
     try:
         adapter = load_policy_adapter(policy_id)
@@ -294,7 +303,7 @@ def validate_production_identity_format(
             f"{adapter.protocol_id!r}"
         )
     try:
-        get_protocol(protocol_id)
+        protocol = get_protocol(protocol_id)
     except KeyError:
         return (
             "production identity invalid: unknown or unsupported "
@@ -304,6 +313,74 @@ def validate_production_identity_format(
         return (
             "production identity invalid: semantic contract "
             f"{semantic!r} is not supported by adapter {adapter.adapter_id!r}"
+        )
+
+    if not _against_id_supported(against_id, adapter.supported_challengers):
+        return (
+            "challenge evidence invalid: against_id="
+            f"{against_id!r} is not a supported challenger for adapter "
+            f"{adapter.adapter_id!r} "
+            f"(supported={list(adapter.supported_challengers)!r}; "
+            f"champion={sorted(CHAMPION_AGAINST_IDS)!r})"
+        )
+
+    status = data.get("status")
+    if type(status) is not str or status not in {s.value for s in ChallengeStatus}:
+        return (
+            "challenge evidence invalid: status must be exact ChallengeStatus "
+            f"({', '.join(s.value for s in ChallengeStatus)}), got {status!r}"
+        )
+
+    primary_horizon = data.get("primary_horizon")
+    if type(primary_horizon) is not int:
+        return (
+            "challenge evidence invalid: primary_horizon must be exact int, "
+            f"got {type(primary_horizon).__name__}={primary_horizon!r}"
+        )
+    if primary_horizon != protocol.primary_horizon:
+        return (
+            "challenge evidence invalid: primary_horizon="
+            f"{primary_horizon!r} does not match protocol "
+            f"{protocol_id!r} primary_horizon={protocol.primary_horizon!r}"
+        )
+
+    fold_metrics = data.get("fold_metrics")
+    if fold_metrics is None:
+        fold_metrics = []
+    if not isinstance(fold_metrics, list):
+        return (
+            "challenge evidence invalid: fold_metrics must be a list, "
+            f"got {type(fold_metrics).__name__}"
+        )
+
+    # v4 sealed evidence digests — recompute before reopen.
+    stored_digest, err = _exact_identity_str(data, "content_digest")
+    if err is not None:
+        return (
+            "challenge evidence invalid: content_digest missing "
+            "(schema v4 promote requires sealed digests; v3 is historical-only)"
+        )
+    stored_artifact_id, err = _exact_identity_str(data, "artifact_id")
+    if err is not None:
+        return (
+            "challenge evidence invalid: artifact_id missing "
+            "(schema v4 promote requires sealed digests; v3 is historical-only)"
+        )
+    expected_digest = challenge_content_digest(data)
+    if stored_digest != expected_digest:
+        return (
+            "challenge evidence invalid: content_digest mismatch "
+            f"(stored={stored_digest!r}, recomputed={expected_digest!r})"
+        )
+    expected_artifact_id = challenge_artifact_id(
+        content_digest=expected_digest,
+        policy_id=policy_id,
+        against_id=against_id,
+    )
+    if stored_artifact_id != expected_artifact_id:
+        return (
+            "challenge evidence invalid: artifact_id mismatch "
+            f"(stored={stored_artifact_id!r}, recomputed={expected_artifact_id!r})"
         )
 
     expected_snapshot_id = stable_snapshot_id_for(
@@ -317,6 +394,21 @@ def validate_production_identity_format(
             "(identity mismatch; not merely missing fields)"
         )
     return None
+
+
+def _against_id_supported(against_id: str, supported: tuple[str, ...]) -> bool:
+    """Exact challenger match; gate_off:<key> patterns allow parameterized form."""
+    if against_id in supported:
+        return True
+    if against_id in CHAMPION_AGAINST_IDS:
+        return True
+    for pattern in supported:
+        # Adapter patterns like "gate_off:<gate_key>".
+        if ":<" in pattern and pattern.endswith(">"):
+            prefix = pattern.split(":<", 1)[0] + ":"
+            if against_id.startswith(prefix) and len(against_id) > len(prefix):
+                return True
+    return False
 
 
 def validate_verified_production_identity(
@@ -337,10 +429,11 @@ def validate_verified_production_identity(
     if format_err is not None:
         return format_err
 
-    policy_id = str(data.get("policy_id") or "").strip()
-    compat = str(data.get("observation_compatibility_id") or "").strip()
-    snap_id = str(data.get("production_snapshot_id") or "").strip().lower()
-    digest = str(data.get("production_snapshot_digest") or "").strip().lower()
+    # Exact strings already validated — do not re-normalize.
+    policy_id = data["policy_id"]
+    compat = data["observation_compatibility_id"]
+    snap_id = data["production_snapshot_id"]
+    digest = data["production_snapshot_digest"]
     return verify_export_snapshot_against_db(
         conn,
         compatibility_id=compat,
@@ -435,11 +528,14 @@ def load_evidence_artifact(
             "primary_horizon": manifest.get("primary_horizon"),
             "primary_ic_baseline": metrics.get("primary_ic_baseline"),
             "primary_ic_against": metrics.get("primary_ic_against"),
+            "horizon_metrics": metrics.get("horizon_metrics"),
             "n_rows": manifest.get("n_rows"),
-            "fold_metrics": metrics.get("fold_metrics") or [],
+            "fold_metrics": metrics.get("fold_metrics") if metrics.get("fold_metrics") is not None else [],
             "weights": {},
-            "notes": [],
+            "notes": metrics.get("notes") if metrics.get("notes") is not None else [],
             "mode": manifest.get("mode"),
+            "content_digest": metrics.get("content_digest") or manifest.get("content_digest"),
+            "artifact_id": metrics.get("artifact_id") or manifest.get("artifact_id"),
         }
         for key in _VERIFIED_PRODUCTION_IDENTITY:
             data[key] = manifest.get(key)
@@ -451,6 +547,27 @@ def load_evidence_artifact(
                 data["weights"] = json.loads(weights_p.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 pass
+        # Directory pack binding: per-file digests must match written members.
+        pack_binding_p = dir_path / "pack_binding.json"
+        if pack_binding_p.is_file():
+            try:
+                pack_binding = json.loads(pack_binding_p.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                return None, f"cannot read pack_binding.json: {exc}"
+            file_digests = pack_binding.get("file_digests")
+            if not isinstance(file_digests, dict):
+                return None, "pack_binding.json missing file_digests object"
+            for name in ("manifest.json", "metrics.json", "weights.json"):
+                path = dir_path / name
+                if not path.is_file():
+                    return None, f"pack missing {name}"
+                expected = file_digests.get(name)
+                actual = file_sha256_hex(path)
+                if type(expected) is not str or expected != actual:
+                    return None, (
+                        f"pack file digest mismatch for {name}: "
+                        f"stored={expected!r}, recomputed={actual!r}"
+                    )
         return _after_presence_checks(data, conn=conn)
 
     # No manifest: standalone export-shaped files only (strict schema required).
