@@ -1,7 +1,7 @@
 # Challenge product (ml-saham)
 
 English overview of the **shipped** ADR-002 challenge lab.  
-Design intent: [ADR-001](./adr/ADR-001-challenge-first-product-axis.md) · [ADR-002](./adr/ADR-002-ideal-challenge-system.md).  
+Design intent: [ADR-001](./adr/ADR-001-challenge-first-product-axis.md) · [ADR-002](./adr/ADR-002-ideal-challenge-system.md) · [ADR-003](./adr/ADR-003-local-streamlit-challenge-desk.md).
 Sibling ownership vs ai-saham: **[BOUNDARY.md](../BOUNDARY.md)** (ingest/corpus labels vs challenge protocol labels).
 
 **Not investment advice. Never auto-promotes into `ai-saham`.**
@@ -10,7 +10,9 @@ Sibling ownership vs ai-saham: **[BOUNDARY.md](../BOUNDARY.md)** (ingest/corpus 
 
 ## Operator ritual (SSOT)
 
-Recommended maintainer path — same Typer verbs; no TUI.
+Recommended maintainer path: use the same Typer verbs below for automation and
+recovery. The optional localhost Challenge Desk is a thin visual adapter; its
+Phase 0 shell has no challenge actions yet.
 
 | Step | When | Command | Purpose |
 |------|------|---------|---------|
@@ -21,6 +23,9 @@ Recommended maintainer path — same Typer verbs; no TUI.
 | **5. Action ENTER (P4)** | Only when ready | Deferred | Needs dense Action + labels and a real ENTER H0 — **not** more rank IC |
 
 ```bash
+# optional boundary-only local shell (Phase 0)
+ml-saham challenge desk
+
 # 1 — catalog
 ml-saham challenge list
 

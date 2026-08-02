@@ -1,4 +1,4 @@
-# UX — Challenge lab CLI (`ml-saham`)
+# UX — Challenge lab (`ml-saham`)
 
 UI/UX for the personal IDX **challenge lab** (+ curriculum onboarding).  
 Product axis: [ADR-001](./docs/adr/ADR-001-challenge-first-product-axis.md) · Curriculum: [chapters.md](./chapters.md) · Backlog: [problem_backlog.md](./problem_backlog.md)
@@ -7,8 +7,14 @@ Product axis: [ADR-001](./docs/adr/ADR-001-challenge-first-product-axis.md) · C
 
 ## Verdict
 
-**Primary surface: CLI only.**  
-Not a trading cockpit, TUI workbench, or web app. Optional notebook export / TUI may come later; they are not the spine.
+**Primary product axis: Challenge.** The CLI remains the automation, CI,
+scripting, and recovery surface. The optional localhost Streamlit Challenge
+Desk is the visual management surface defined by
+[ADR-003](./docs/adr/ADR-003-local-streamlit-challenge-desk.md).
+
+Neither surface is a trading cockpit. Both call the same typed challenge
+application boundary; the Desk must not query SQLite, scrape CLI output, or
+calculate product results.
 
 **Command priority:** `challenge` (product) ahead of `learn` (curriculum).
 
@@ -39,6 +45,7 @@ Not a trading cockpit, TUI workbench, or web app. Optional notebook export / TUI
 ```text
 ml-saham
 ├── challenge …              # PRIMARY: ADR-002 policy / engine / factor / health
+│   └── desk                  # optional local Streamlit adapter (Phase 0 shell)
 ├── learn …                  # SECONDARY curriculum (not promotion)
 │   ├── list | chapters      # catalog + progress (E✓ D✓)
 │   ├── status               # DB path + MVP progress
@@ -167,10 +174,32 @@ Report DB path, MVP / v1.1 / phase-2 table coverage, and exact remediation (e.g.
 
 ---
 
+## Challenge Desk (ADR-003)
+
+```bash
+pip install -e ".[ui]"
+ml-saham challenge desk
+```
+
+Phase 0 shows only the product boundary, read-only upstream path, ml-saham
+artifact root, and authority warnings. It exposes no challenge actions or
+placeholder metrics. Later phases add Control Tower, explicit cohort selection,
+challenge execution, result inspection, and validated artifact history in that
+order.
+
+Hard UX rules:
+
+- challenge copy is English;
+- exact blocked/inconclusive status text remains visible;
+- status never relies on color alone;
+- production-facing work never preselects a cohort;
+- diagnostics remain visually separate from tune/Action authority;
+- browser refresh or selector changes never start a challenge.
+
 ## Out of UX scope (for now)
 
 - TUI workbench  
-- Web UI  
+- Remote/multi-user web deployment
 - Chat-first “AI tutor” as the main interface  
 - Retired: flat root `explore` / `demo` / `compare` / `chapters` (use `learn …`); `deepdive`  
 - Notebook as primary path (optional later only)

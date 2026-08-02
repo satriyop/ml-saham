@@ -3,6 +3,7 @@
 Implementation shape for the personal IDX **challenge lab** (+ curriculum onboarding).  
 **Product axis (locked):** [ADR-001 — Challenge-first](./docs/adr/ADR-001-challenge-first-product-axis.md)  
 **Challenge system (design target):** [ADR-002 — Ideal Challenge System](./docs/adr/ADR-002-ideal-challenge-system.md)  
+**Local visual adapter:** [ADR-003 — Streamlit Challenge Desk](./docs/adr/ADR-003-local-streamlit-challenge-desk.md)
 Map: [engine_factor_map.md](./docs/engine_factor_map.md)  
 Curriculum: [chapters.md](./chapters.md) · UX: [ux.md](./ux.md) · Data: [data_contract.md](./data_contract.md) · Artifacts: [artifacts.md](./artifacts.md)
 
@@ -27,7 +28,7 @@ Curriculum: [chapters.md](./chapters.md) · UX: [ux.md](./ux.md) · Data: [data_
 | **Chapters stay problem-centric** | Topic modules teach generic problems; product authority is ADR-002 challenge, not curriculum glue |
 | **Challenge outranks curriculum polish** | When priorities conflict, ship `run_compare` / engine audits before soft demos (ADR-001) |
 | **Language by axis** | Challenge UI/reports **English**; learning `learn explore` narrative **Indonesian** (ADR-001 §6). Flags/slugs always EN |
-| **CLI is the product** | Typer (or Click) app; no web/TUI in MVP |
+| **One authority, two adapters** | Typer remains automation/headless product access; optional localhost Streamlit consumes the same typed challenge application boundary |
 
 ---
 
@@ -37,6 +38,7 @@ Curriculum: [chapters.md](./chapters.md) · UX: [ux.md](./ux.md) · Data: [data_
 |---|---|
 | Language | Python 3.11+ |
 | CLI | Typer |
+| Local UI | Optional Streamlit `>=1.43,<2`, loopback-only |
 | Data | pandas + SQLAlchemy or stdlib `sqlite3` (prefer thin `sqlite3` + pandas for MVP) |
 | ML | scikit-learn; LightGBM where chapters need GBDT |
 | Config | env `ML_SAHAM_DB` + `--db`; optional `~/.ml-saham/config.toml` later |
@@ -64,6 +66,11 @@ ml-saham/
 │   ├── __init__.py
 │   ├── cli/
 │   │   └── app.py            # Typer root: challenge + learn + doctor/vet
+│   ├── ui/
+│   │   ├── launcher.py       # optional localhost Streamlit process boundary
+│   │   └── streamlit_app.py  # thin Challenge Desk presentation adapter
+│   ├── challenge/
+│   │   └── workbench.py      # typed presentation facade shared by adapters
 │   ├── data/
 │   │   ├── connection.py     # resolve --db / env
 │   │   ├── doctor_checks.py  # MVP / v1.1 / phase-2 data presence
@@ -114,11 +121,14 @@ Every chapter under `src/ml_saham/chapters/<slug>/` provides:
 ## Runtime flow
 
 ```text
-CLI
-  → resolve db (flag / env / config)
+Typer CLI --------\
+                   → typed application/challenge boundary → data/eval/artifacts
+Streamlit Desk ---/
+
+Learning CLI
   → registry.get(topic)
   → doctor gate if learn demo/compare (data-tier requirement)
-  → chapter.run_* 
+  → chapter.run_*
   → scoreboard.render (banners)
   → optional artifacts.writer
   → progress.mark
@@ -160,4 +170,5 @@ MVP chapters (0–4, 6) should work in **Direct** mode where possible; introduce
 - Embedding or vendoring `ai-saham`  
 - Background daemons / schedulers  
 - Multi-user auth  
+- Remote Challenge Desk hosting
 - Auto-writing into `ai-saham` YAML

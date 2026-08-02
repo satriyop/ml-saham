@@ -19,6 +19,11 @@ shipped extract paths, CLI map, and multi-fold WIN semantics, prefer
 `docs/challenge_product.md`, `docs/challenge_extract_contract.md`, and
 `data_contract.md` over ADR migration/follow-up prose when they conflict.
 
+Challenge Desk work must follow ADR-003. Streamlit is a thin localhost adapter:
+no direct SQLite/artifact parsing, CLI-output scraping, product calculations,
+implicit cohort selection, identity inference, or auto-promotion. UI code calls
+the typed workbench/application boundary and remains optional for core installs.
+
 Always confirm explicitly that:
 
 - you understand that `ml-saham` is an offline challenge lab first and a

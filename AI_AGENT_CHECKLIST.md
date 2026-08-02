@@ -131,6 +131,9 @@ not load unrelated documents merely to tick boxes.
 - [ ] Challenge policy/protocol/orchestration lives in `challenge/`.
 - [ ] Reusable calculations in `eval/` do not hide product defaults.
 - [ ] CLI only parses, wires, invokes, renders, exports, and maps named errors.
+- [ ] UI only renders typed application DTOs; it has no direct SQL/artifact
+      parsing, CLI scraping, scoring, readiness, verdict, or identity logic.
+- [ ] Core/headless imports and commands work without optional UI dependencies.
 - [ ] Curriculum code does not define challenge authority.
 - [ ] Challenge copy is English; learning narrative may be Indonesian.
 

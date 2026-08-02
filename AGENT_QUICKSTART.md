@@ -169,6 +169,7 @@ its actual boundaries:
 | `eval/` | Reusable pure/statistical calculations | Product-specific identity defaults or CLI policy |
 | `artifacts/` | ml-saham-owned serialization/writes | Production promotion or upstream DB writes |
 | `cli/` | Parse, resolve dependencies, call product functions, render/map errors | Feature math, cohort policy, protocol mutation, verdict invention |
+| `ui/` | Thin local presentation, navigation, form state, launcher | Direct SQL/artifact parsing, CLI scraping, metrics, readiness, verdicts, identity inference |
 | `chapters/` | Learning narrative and demos | Challenge registry or promotion authority |
 
 Prefer typed immutable contracts and explicit function parameters. Do not add a
@@ -244,6 +245,7 @@ changes and stage only owned files.
 | Challenge panel/extractor/protocol/verdict | focused tests; `./scripts/check_challenge_contracts.sh`; affected ADR-002 acceptance tests |
 | Cohort/upstream data reader | observation cohort guards; focused read-only tests; contract script; live smoke when a maintainer DB is available |
 | CLI/output | focused CLI tests and representative `CliRunner`/command smoke |
+| Streamlit/UI | focused facade/launcher/AppTest tests; architecture import guard; core install/import without UI extra; responsive/browser tests when layout becomes material |
 | Artifact schema/writer | focused round-trip, reopen, immutability, failure/atomicity tests |
 | Curriculum only | focused phase/chapter tests; prove challenge registry/output unchanged |
 | Broad/shared Python change | full `pytest -q` in addition to focused/current CI gates |
@@ -398,6 +400,7 @@ For code changes, also read:
 | CLI/product vocabulary | `README.md`, `docs/challenge_product.md`, relevant CLI tests |
 | Curriculum | ADR-001, `chapters.md`, registry, affected chapter/phase tests |
 | Architecture/module boundary | `architecture.md`, `BOUNDARY.md`, current imports and architecture/guard tests |
+| Streamlit/Challenge Desk | ADR-003, `ux.md`, `architecture.md`, typed workbench facade, launcher/UI tests |
 | Task scoping or handoff | `TASK_TEMPLATE.md` |
 
 Read only the relevant ADRs under `docs/adr/`; use `docs/adr/README.md` as the

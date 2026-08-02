@@ -103,6 +103,9 @@ A leakage finding is a correctness failure, not a caveat to append after a
 - `artifacts/` writes only ml-saham-owned outputs.
 - `cli/` parses, wires, invokes, renders, and maps errors; it does not invent
   feature math, protocol policy, or verdicts.
+- `ui/` is an optional thin presentation adapter over typed application DTOs;
+  it does not query SQLite/artifacts directly, scrape CLI output, or own
+  readiness, identity, metric, fold, verdict, or promotion logic.
 - `chapters/` remains pedagogical and cannot define challenge authority.
 - Application behavior is testable without invoking the CLI.
 
@@ -158,6 +161,9 @@ whole-repo Ruff check and format become mandatory.
 - Challenge-facing reports, statuses, metrics, and artifacts are English.
 - Learning narrative may be Indonesian; identifiers remain English.
 - New/changed commands, config, artifact fields, and limitations are documented.
+- UI work has focused facade/launcher/interaction tests, keeps core imports
+  usable without optional UI dependencies, and adds responsive/browser checks
+  when layout becomes material.
 - Examples use current commands and do not imply automatic promotion.
 - Stale adjacent comments/docs encountered in the touched scope are corrected
   or softened after verification.

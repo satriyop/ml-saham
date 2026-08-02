@@ -40,7 +40,10 @@ app = typer.Typer(
 )
 challenge_app = typer.Typer(
     name="challenge",
-    help="ADR-002 policy challenges (run/list/engine/factor/diagnostic/health/champion).",
+    help=(
+        "ADR-002 policy challenges "
+        "(run/list/engine/factor/diagnostic/health/champion/desk)."
+    ),
     no_args_is_help=True,
 )
 diagnostic_app = typer.Typer(
@@ -599,6 +602,7 @@ def challenge_list_cmd() -> None:
     for r in rows:
         table.add_row(r["policy_id"], r["version"], r["hash"], r["protocol"])
     console.print(table)
+
     console.print(
         "[bold]Operator ritual:[/bold] catalog → weekly health --with-diagnostics "
         "→ dig engine signal|risk only when retuning"
@@ -631,6 +635,54 @@ def challenge_list_cmd() -> None:
         "[yellow]PROMOTE_CANDIDATE ≠ ENTER — design PolicySpec then "
         "challenge run/factor.[/yellow]"
     )
+
+
+@challenge_app.command("desk")
+def challenge_desk_cmd(
+    ctx: typer.Context,
+    host: str = typer.Option(
+        "127.0.0.1",
+        "--host",
+        help="Loopback host only: 127.0.0.1, localhost, or ::1",
+    ),
+    port: int = typer.Option(
+        8501,
+        "--port",
+        min=1,
+        max=65535,
+        help="Local Streamlit port",
+    ),
+    no_browser: bool = typer.Option(
+        False,
+        "--no-browser",
+        help="Start the local server without opening a browser",
+    ),
+) -> None:
+    """Launch the optional local Streamlit Challenge Desk."""
+    from ml_saham.challenge.workbench import build_challenge_workbench
+    from ml_saham.ui.launcher import (
+        ChallengeDeskLaunchError,
+        ChallengeDeskLaunchRequest,
+        launch_challenge_desk,
+    )
+
+    service = build_challenge_workbench(
+        db_path=ctx.obj["db"],
+        artifacts_root=ctx.obj.get("artifacts_dir"),
+    )
+    request = ChallengeDeskLaunchRequest(
+        db_path=service.config.upstream_db_path,
+        artifacts_root=service.config.artifacts_root,
+        host=host,
+        port=port,
+        no_browser=no_browser,
+    )
+    try:
+        exit_code = launch_challenge_desk(request)
+    except ChallengeDeskLaunchError as exc:
+        console.print(str(exc), style="red", markup=False)
+        raise typer.Exit(code=1) from None
+    raise typer.Exit(code=exit_code)
 
 
 @diagnostic_app.command("list")

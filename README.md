@@ -8,7 +8,7 @@
 | **2. Learning** | Problem-centric ML chapters so those audits are understandable |
 
 **Product map (start here):** [docs/challenge_product.md](./docs/challenge_product.md)  
-**ADRs:** [ADR-001 challenge-first](./docs/adr/ADR-001-challenge-first-product-axis.md) · [ADR-002 challenge system](./docs/adr/ADR-002-ideal-challenge-system.md)
+**ADRs:** [ADR-001 challenge-first](./docs/adr/ADR-001-challenge-first-product-axis.md) · [ADR-002 challenge system](./docs/adr/ADR-002-ideal-challenge-system.md) · [ADR-003 local Challenge Desk](./docs/adr/ADR-003-local-streamlit-challenge-desk.md)
 
 | Challenge purpose | Question | Status |
 |-------------------|----------|--------|
@@ -49,6 +49,8 @@ cd ~/dev/ml-saham
 python3.11 -m venv .venv   # or 3.12
 source .venv/bin/activate
 pip install -e ".[ml]"     # challenge path (recommended)
+# optional local visual shell
+pip install -e ".[ml,ui]"
 ```
 
 ### Database
@@ -118,6 +120,10 @@ ml-saham challenge factor screener.accum.score_weights --factor consistency
 ml-saham challenge diagnostic list
 ml-saham challenge diagnostic run mce.screen_display --all
 ml-saham challenge diagnostic health --scenario accum
+
+# Optional localhost visual adapter (Phase 0 boundary shell)
+ml-saham challenge desk
+# headless local server: ml-saham challenge desk --no-browser --port 8501
 ```
 
 | Command | Job |
@@ -130,6 +136,7 @@ ml-saham challenge diagnostic health --scenario accum
 | `challenge engine screener` | PolicySpec portfolio (`--scenario` optional) |
 | `challenge factor …` | KEEP / DEMOTE / DROP_CANDIDATE (accum) |
 | `challenge diagnostic …` | KEEP_DISPLAY / DEMOTE_DISPLAY / PROMOTE_CANDIDATE (explain-only) |
+| `challenge desk` | Optional localhost Streamlit adapter; Phase 0 has no challenge actions |
 | `vet` / `doctor --deep` | Data-plane gate |
 | `learn compare <slug>` | Curriculum lab — **not** ADR-002 authority |
 
@@ -167,6 +174,7 @@ Sibling contract: **[BOUNDARY.md](./BOUNDARY.md)**.
 ai-saham  →  fetch/enrich → SQLite → corpus obs + path labels (no accum evaluate product)
 ml-saham  →  read-only DB
               ├─ challenge run / engine / factor / health  →  ADR-002 scoring authority
+              ├─ challenge desk                            →  thin local UI adapter
               └─ learn list / explore / demo / compare     →  curriculum (not promotion)
 ```
 

@@ -18,6 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+ui = ["streamlit>=1.43,<2"]
 ml = [
     "lightgbm>=4.0",
     "polars>=0.20",
