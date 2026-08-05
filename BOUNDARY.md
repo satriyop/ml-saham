@@ -101,7 +101,17 @@ Hard rules (unchanged): **no** ai-saham Python imports · **no** scrapers · **n
 
 ### Compatibility cohort discipline
 
-- ai-saham stamps `learning_observations.compatibility_id` when material config forks.
+- ai-saham stamps `learning_observations.compatibility_id` from **ADR-068
+  behavioural cohort identity** for ACCUM: digest of (behavioural probe
+  outputs, ADR-059 snapshot payload digest, observation payload schema
+  version). Config comments and renames no longer fork; threshold/scoring
+  changes do. Pre-open keeps its own mechanism.
+- ai-saham records `producer_source_revision` on observations as provenance
+  beside identity. Multi-build rows under one `compatibility_id` are valid;
+  do not treat build diversity as corruption.
+- Probe coverage on the ai-saham side is a **measured floor**, not a proof of
+  behavioural equivalence — ml-saham must still treat each `compatibility_id`
+  as an opaque hard boundary.
 - **ml-saham never mixes** multiple `compatibility_id` values in one panel or curriculum load.
 - Shared helper: `src/ml_saham/data/observation_cohort.py` (challenge + curriculum must use it; no ad-hoc `SELECT … FROM learning_observations` in chapters/challenge).
 - **Production-facing challenge** (`challenge run|factor|engine|health|champion` and
