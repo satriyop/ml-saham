@@ -66,7 +66,7 @@ ai-saham `research pre-open evaluate` is **not** required for ml-saham challenge
 | Market / broker / IEV fetch & cache | **write** | read |
 | Live screen / signal / risk / plan / TUI | **owns** | — |
 | `learning_observations` capture / backfill | **write** | **read** (features) |
-| `learning_policy_snapshots` v1 history / v2 active set | **SSOT write** | **read + independently verify** |
+| `learning_policy_snapshots` v1-v3 history / v4 active set | **SSOT write** | **read + independently verify** |
 | `learning_outcome_labels` (`price_path.accum_*`, …) | **SSOT write** | optional join; not default challenge y |
 | Accum **cohort evaluate** / ACCUM `learning_evaluations` | **dropped (legacy)** | **do not depend on** |
 | Policy tournament WIN / LOSE / rank IC / folds (**tune**) | — | **owns** |
@@ -126,9 +126,9 @@ Hard rules (unchanged): **no** ai-saham Python imports · **no** scrapers · **n
 
 ### Verified production-policy snapshots
 
-- Active accumulation comparisons require exactly seven
-  `production_policy_snapshot.v2` rows for the selected compatibility cohort,
-  including `screener.accum.hard_filters`.
+- Active accumulation comparisons require exactly nine
+  `production_policy_snapshot.v4` rows for the selected compatibility cohort,
+  including the unevaluable-gate and resolved signal decision policies.
 - ml-saham recomputes canonical payload digests and snapshot IDs and validates
   all cohort/contract/semantic bindings. It never imports ai-saham Python,
   writes/repairs the table, infers missing rows, or falls back to packaged
@@ -136,7 +136,7 @@ Hard rules (unchanged): **no** ai-saham Python imports · **no** scrapers · **n
 - `VerifiedProductionPolicySnapshot`, ML-owned `ChallengePolicyAdapter`, and
   `Protocol` are separate contracts. Production material cannot come from the
   adapter.
-- Historical `production_policy_snapshot.v1` six-row cohorts are audit history,
+- Historical `production_policy_snapshot.v1`/v2/v3 cohorts are audit history,
   not eligible for current `baseline=production`.
 - Snapshot or adapter integrity failures are `BLOCKED_POLICY`; valid policy
   with insufficient rows/folds is `BLOCKED_DATA`.

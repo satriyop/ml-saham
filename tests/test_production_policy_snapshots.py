@@ -40,11 +40,25 @@ def test_runtime_adapter_specs_contain_no_copied_production_material():
     )
     paths = sorted(root.glob("*accum*.adapter.v1.json"))
     assert len(paths) == 7
+    assert len(REQUIRED_POLICIES) == 9
+    assert {
+        "risk.accum.unevaluable_policy",
+        "signal.accum.decision_policy",
+    } <= set(REQUIRED_POLICIES)
     for path in paths:
         data = json.loads(path.read_text(encoding="utf-8"))
         assert not ({"hash", "source", "source_ref", "max_score"} & set(data))
         for component in data.get("components") or []:
             assert not ({"weight", "enabled", "note"} & set(component))
+
+
+def test_identity_only_gate_rows_have_no_fabricated_challenge_adapters() -> None:
+    for policy_id in (
+        "risk.accum.unevaluable_policy",
+        "signal.accum.decision_policy",
+    ):
+        with pytest.raises(KeyError):
+            load_policy_adapter(policy_id)
 
 
 def _payload(policy_id: str, decision_type: str, semantic: str) -> dict:
@@ -96,6 +110,61 @@ def _payload(policy_id: str, decision_type: str, semantic: str) -> dict:
     elif policy_id == "signal.accum.raw_score":
         common["identity_only"] = True
         common["formula_id"] = None
+    elif policy_id == "risk.accum.unevaluable_policy":
+        common.update(
+            {
+                "formula_id": "assess_risk_gate_evaluator.evaluate.unevaluable_aggregate.v1",
+                "scope": "aggregate_risk_assessment",
+                "action": "surface",
+                "blocks": False,
+                "block_confidence": 50,
+            }
+        )
+    elif policy_id == "signal.accum.decision_policy":
+        common.update(
+            {
+                "formula_id": "decision_policy_service.resolve.v1",
+                "scope": "canonical_accum_signal_entry_quality_and_constraints",
+                "regime_policy": {
+                    regime: {
+                        "enter_allowed": regime in {"RISK_ON", "NEUTRAL"},
+                        "max_decision": (
+                            "ENTER" if regime in {"RISK_ON", "NEUTRAL"} else "WATCH"
+                        ),
+                        "regime_size_multiplier": 1.0,
+                        "enter_threshold": 70,
+                        "watch_threshold": 45,
+                        "min_signal_authority_coverage": 0.7,
+                    }
+                    for regime in ("NEUTRAL", "RISK_OFF", "RISK_ON", "VOLATILE")
+                },
+                "setup_regime_policy": {
+                    "foreign_bounce": {
+                        regime: "allowed"
+                        for regime in ("NEUTRAL", "RISK_OFF", "RISK_ON", "VOLATILE")
+                    }
+                },
+                "setup_regime_actions": {
+                    "allowed": {"max_decision": "ENTER"},
+                },
+                "regime_confidence_min_enter": 0.35,
+                "regime_transitioning_cap_enter": True,
+                "closed_vocabularies": {
+                    "regimes": ["NEUTRAL", "RISK_OFF", "RISK_ON", "VOLATILE"],
+                    "decisions": ["AVOID", "ENTER", "WATCH"],
+                },
+                "missing_data": {
+                    "absent_setup_family": "no_setup_specific_action",
+                    "absent_market_context_regime": "RISK_ON",
+                },
+                "observation_result_fields": {
+                    "entry_quality": "features_by_window.7.signal.assessment.entry_quality",
+                    "decision_constraints": (
+                        "features_by_window.7.signal.assessment.decision_constraints"
+                    ),
+                },
+            }
+        )
     return common
 
 
@@ -197,7 +266,59 @@ def test_missing_or_bad_snapshot_fails_closed(tmp_path) -> None:
         "DELETE FROM learning_policy_snapshots WHERE policy_id = ?",
         ("signal.accum.flags",),
     )
-    with pytest.raises(PolicySnapshotError, match="exactly seven"):
+    with pytest.raises(PolicySnapshotError, match="exactly nine"):
+        load_verified_snapshot_set(conn, COMPATIBILITY_ID)
+
+
+def test_decision_policy_formula_contract_mismatch_fails_closed(tmp_path) -> None:
+    conn = sqlite3.connect(tmp_path / "bad-decision-formula.db")
+    conn.row_factory = sqlite3.Row
+    _create_table(conn)
+    _insert_set(conn)
+    row = conn.execute(
+        "SELECT canonical_payload_json FROM learning_policy_snapshots WHERE policy_id = ?",
+        ("signal.accum.decision_policy",),
+    ).fetchone()
+    payload = json.loads(row[0])
+    payload["formula_id"] = "wrong.formula.v1"
+    payload_json = canonical_json(payload)
+    conn.execute(
+        "UPDATE learning_policy_snapshots SET canonical_payload_json = ?, payload_digest = ? "
+        "WHERE policy_id = ?",
+        (
+            payload_json,
+            hashlib.sha256(payload_json.encode("utf-8")).hexdigest(),
+            "signal.accum.decision_policy",
+        ),
+    )
+
+    with pytest.raises(PolicySnapshotError, match="formula_id"):
+        load_verified_snapshot_set(conn, COMPATIBILITY_ID)
+
+
+def test_decision_policy_boolean_threshold_fails_closed(tmp_path) -> None:
+    conn = sqlite3.connect(tmp_path / "bad-decision-threshold.db")
+    conn.row_factory = sqlite3.Row
+    _create_table(conn)
+    _insert_set(conn)
+    row = conn.execute(
+        "SELECT canonical_payload_json FROM learning_policy_snapshots WHERE policy_id = ?",
+        ("signal.accum.decision_policy",),
+    ).fetchone()
+    payload = json.loads(row[0])
+    payload["regime_confidence_min_enter"] = True
+    payload_json = canonical_json(payload)
+    conn.execute(
+        "UPDATE learning_policy_snapshots SET canonical_payload_json = ?, payload_digest = ? "
+        "WHERE policy_id = ?",
+        (
+            payload_json,
+            hashlib.sha256(payload_json.encode("utf-8")).hexdigest(),
+            "signal.accum.decision_policy",
+        ),
+    )
+
+    with pytest.raises(PolicySnapshotError, match="must be numeric"):
         load_verified_snapshot_set(conn, COMPATIBILITY_ID)
 
 
@@ -258,7 +379,7 @@ def test_composed_adapters_reproduce_declared_golden_vectors(tmp_path) -> None:
     assert score_production([gated], policy("risk.accum.hard_gates")) == [0.0]
 
 
-def test_unknown_extra_policy_row_is_ignored_for_closed_v2(tmp_path) -> None:
+def test_unknown_extra_policy_row_fails_closed_for_v4(tmp_path) -> None:
     conn = sqlite3.connect(tmp_path / "extra.db")
     conn.row_factory = sqlite3.Row
     _create_table(conn)
@@ -285,9 +406,8 @@ def test_unknown_extra_policy_row_is_ignored_for_closed_v2(tmp_path) -> None:
             "2026-07-31T12:00:00+00:00",
         ),
     )
-    assert set(load_verified_snapshot_set(conn, COMPATIBILITY_ID)) == set(
-        REQUIRED_POLICIES
-    )
+    with pytest.raises(PolicySnapshotError, match="extra=.*future.policy"):
+        load_verified_snapshot_set(conn, COMPATIBILITY_ID)
 
 
 def test_historical_v1_six_row_cohort_is_not_active_production(tmp_path) -> None:
@@ -295,7 +415,11 @@ def test_historical_v1_six_row_cohort_is_not_active_production(tmp_path) -> None
     conn.row_factory = sqlite3.Row
     _create_table(conn)
     for policy_id, (decision_type, semantic) in REQUIRED_POLICIES.items():
-        if policy_id == "screener.accum.hard_filters":
+        if policy_id in {
+            "screener.accum.hard_filters",
+            "risk.accum.unevaluable_policy",
+            "signal.accum.decision_policy",
+        }:
             continue
         conn.execute(
             "INSERT INTO learning_policy_snapshots VALUES "
@@ -319,7 +443,7 @@ def test_historical_v1_six_row_cohort_is_not_active_production(tmp_path) -> None
                 "2026-07-30T12:00:00+00:00",
             ),
         )
-    with pytest.raises(PolicySnapshotError, match="exactly seven"):
+    with pytest.raises(PolicySnapshotError, match="exactly nine"):
         load_verified_snapshot_set(conn, COMPATIBILITY_ID)
 
 

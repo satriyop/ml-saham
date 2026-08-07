@@ -71,6 +71,55 @@ def _payload(policy_id: str, decision_type: str, semantic: str) -> dict:
             "signal_score": {"enabled": False, "floor": 45.0},
         }
         payload["output_scale"] = {"min": 0.0, "max": 1.0}
+    elif policy_id == "risk.accum.unevaluable_policy":
+        payload.update(
+            {
+                "formula_id": "assess_risk_gate_evaluator.evaluate.unevaluable_aggregate.v1",
+                "scope": "aggregate_risk_assessment",
+                "action": "surface",
+                "blocks": False,
+                "block_confidence": 50,
+            }
+        )
+    elif policy_id == "signal.accum.decision_policy":
+        regimes = ("NEUTRAL", "RISK_OFF", "RISK_ON", "VOLATILE")
+        payload.update(
+            {
+                "formula_id": "decision_policy_service.resolve.v1",
+                "scope": "canonical_accum_signal_entry_quality_and_constraints",
+                "regime_policy": {
+                    regime: {
+                        "enter_allowed": regime in {"RISK_ON", "NEUTRAL"},
+                        "max_decision": (
+                            "ENTER" if regime in {"RISK_ON", "NEUTRAL"} else "WATCH"
+                        ),
+                        "regime_size_multiplier": 1.0,
+                        "enter_threshold": 70,
+                        "watch_threshold": 45,
+                        "min_signal_authority_coverage": 0.7,
+                    }
+                    for regime in regimes
+                },
+                "setup_regime_policy": {},
+                "setup_regime_actions": {"allowed": {"max_decision": "ENTER"}},
+                "regime_confidence_min_enter": 0.35,
+                "regime_transitioning_cap_enter": True,
+                "closed_vocabularies": {
+                    "regimes": list(regimes),
+                    "decisions": ["AVOID", "ENTER", "WATCH"],
+                },
+                "missing_data": {
+                    "absent_setup_family": "no_setup_specific_action",
+                    "absent_market_context_regime": "RISK_ON",
+                },
+                "observation_result_fields": {
+                    "entry_quality": "features_by_window.7.signal.assessment.entry_quality",
+                    "decision_constraints": (
+                        "features_by_window.7.signal.assessment.decision_constraints"
+                    ),
+                },
+            }
+        )
     else:
         payload["identity_only"] = True
         payload["formula_id"] = None

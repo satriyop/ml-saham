@@ -64,7 +64,7 @@ Related: [challenge_health.md](./challenge_health.md) · [challenge_diagnostic_v
 `ml-saham` **challenge** stress-tests digest-verified production policies from
 the personal IDX stack against clean challengers, on **read-only** `ai-saham`
 SQLite. Accumulation `baseline=production` requires the selected cohort's exact
-seven-row `production_policy_snapshot.v2` set; there is no packaged fallback.
+nine-row `production_policy_snapshot.v4` set; there is no packaged fallback.
 
 | In scope | Out of scope |
 |----------|----------------|
@@ -154,7 +154,7 @@ Prefer **tune vs champion** for purpose (not a third product axis).
 
 | Layer | Product surface |
 |-------|-----------------|
-| Accum sleeves (snapshot v2; sector breadth excluded) | `screener.accum.score_weights` |
+| Accum sleeves (snapshot v4; sector breadth excluded) | `screener.accum.score_weights` |
 | Signal | `raw_score` · `flags` · `classification` · **`evidence_group_weights`** |
 | Risk hard gates | `risk.accum.hard_gates` (+ `gate_off:<gate>`; mean excess open) |
 | Weekly cron | `scripts/install_challenge_health_cron.sh` → `health --with-diagnostics` |

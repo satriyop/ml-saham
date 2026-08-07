@@ -18,7 +18,7 @@ from ml_saham.challenge.types import (
 )
 from ml_saham.data.aisaham_read import table_columns, table_exists
 
-SNAPSHOT_CONTRACT = "production_policy_snapshot.v2"
+SNAPSHOT_CONTRACT = "production_policy_snapshot.v4"
 PURPOSE = "ACCUMULATION_DISCOVERY"
 LEARNING_OBSERVATION_CONTRACT = "learning_observation.accumulation_discovery.v2"
 PRODUCER_OBSERVATION_CONTRACT = "accumulation-discovery.v2"
@@ -33,6 +33,8 @@ REQUIRED_POLICIES: dict[str, tuple[str, str]] = {
     "risk.accum.hard_gates": ("gate", "risk.hard_gates.accum.v1"),
     "signal.accum.raw_score": ("score", "signal.semantic_engine.v1.5"),
     "screener.accum.hard_filters": ("gate", "screen.accum.hard_filters.v1"),
+    "risk.accum.unevaluable_policy": ("gate", "risk.unevaluable_gate.accum.v1"),
+    "signal.accum.decision_policy": ("gate", "signal.decision_policy.accum.v1"),
 }
 
 SNAPSHOT_COLUMNS = {
@@ -57,6 +59,157 @@ SNAPSHOT_COLUMNS = {
 
 class PolicySnapshotError(ValueError):
     """Snapshot absence or verification failure; callers map to BLOCKED_POLICY."""
+
+
+def _require_exact_value(
+    payload: Mapping[str, Any], policy_id: str, key: str, expected: Any
+) -> None:
+    if payload.get(key) != expected:
+        raise PolicySnapshotError(
+            f"{policy_id}: payload {key!r} does not match {expected!r}"
+        )
+
+
+def _verify_identity_only_payload_contract(
+    policy_id: str, payload: Mapping[str, Any]
+) -> None:
+    if policy_id == "risk.accum.unevaluable_policy":
+        _require_exact_value(
+            payload,
+            policy_id,
+            "formula_id",
+            "assess_risk_gate_evaluator.evaluate.unevaluable_aggregate.v1",
+        )
+        _require_exact_value(payload, policy_id, "scope", "aggregate_risk_assessment")
+        return
+    if policy_id != "signal.accum.decision_policy":
+        return
+
+    _require_exact_value(
+        payload,
+        policy_id,
+        "formula_id",
+        "decision_policy_service.resolve.v1",
+    )
+    _require_exact_value(
+        payload,
+        policy_id,
+        "scope",
+        "canonical_accum_signal_entry_quality_and_constraints",
+    )
+    regimes = ("NEUTRAL", "RISK_OFF", "RISK_ON", "VOLATILE")
+    decisions = ("AVOID", "ENTER", "WATCH")
+    regime_policy = payload.get("regime_policy")
+    if not isinstance(regime_policy, Mapping) or set(regime_policy) != set(regimes):
+        raise PolicySnapshotError(f"{policy_id}: regime_policy is not the closed set")
+    required_regime_fields = {
+        "enter_allowed",
+        "max_decision",
+        "regime_size_multiplier",
+        "enter_threshold",
+        "watch_threshold",
+        "min_signal_authority_coverage",
+    }
+    for regime in regimes:
+        row = regime_policy[regime]
+        if not isinstance(row, Mapping) or set(row) != required_regime_fields:
+            raise PolicySnapshotError(
+                f"{policy_id}: regime_policy.{regime} fields mismatch"
+            )
+        if type(row["enter_allowed"]) is not bool:
+            raise PolicySnapshotError(
+                f"{policy_id}: regime_policy.{regime}.enter_allowed must be boolean"
+            )
+        if row["max_decision"] not in decisions:
+            raise PolicySnapshotError(
+                f"{policy_id}: regime_policy.{regime}.max_decision is invalid"
+            )
+        for field in (
+            "regime_size_multiplier",
+            "watch_threshold",
+            "min_signal_authority_coverage",
+        ):
+            if type(row[field]) not in (int, float):
+                raise PolicySnapshotError(
+                    f"{policy_id}: regime_policy.{regime}.{field} must be numeric"
+                )
+        enter_threshold = row["enter_threshold"]
+        if enter_threshold is not None and type(enter_threshold) not in (int, float):
+            raise PolicySnapshotError(
+                f"{policy_id}: regime_policy.{regime}.enter_threshold "
+                "must be numeric or null"
+            )
+    setup_regime_policy = payload.get("setup_regime_policy")
+    if not isinstance(setup_regime_policy, Mapping):
+        raise PolicySnapshotError(f"{policy_id}: setup_regime_policy must be an object")
+    for family, by_regime in setup_regime_policy.items():
+        if not isinstance(family, str) or not isinstance(by_regime, Mapping):
+            raise PolicySnapshotError(
+                f"{policy_id}: setup_regime_policy entries must be objects"
+            )
+        if set(by_regime) != set(regimes):
+            raise PolicySnapshotError(
+                f"{policy_id}: setup_regime_policy.{family} is not the closed regime set"
+            )
+        if any(not isinstance(action_name, str) for action_name in by_regime.values()):
+            raise PolicySnapshotError(
+                f"{policy_id}: setup_regime_policy.{family} actions must be strings"
+            )
+    setup_regime_actions = payload.get("setup_regime_actions")
+    if not isinstance(setup_regime_actions, Mapping):
+        raise PolicySnapshotError(
+            f"{policy_id}: setup_regime_actions must be an object"
+        )
+    for action_name, action in setup_regime_actions.items():
+        if not isinstance(action_name, str) or not isinstance(action, Mapping):
+            raise PolicySnapshotError(
+                f"{policy_id}: setup_regime_actions entries must be objects"
+            )
+        if set(action) != {"max_decision"} or action["max_decision"] not in decisions:
+            raise PolicySnapshotError(
+                f"{policy_id}: setup_regime_actions.{action_name} is invalid"
+            )
+    known_actions = set(setup_regime_actions)
+    for family, by_regime in setup_regime_policy.items():
+        unknown_actions = set(by_regime.values()) - known_actions
+        if unknown_actions:
+            raise PolicySnapshotError(
+                f"{policy_id}: setup_regime_policy.{family} references unknown actions"
+            )
+    if type(payload.get("regime_confidence_min_enter")) not in (int, float):
+        raise PolicySnapshotError(
+            f"{policy_id}: regime_confidence_min_enter must be numeric"
+        )
+    if type(payload.get("regime_transitioning_cap_enter")) is not bool:
+        raise PolicySnapshotError(
+            f"{policy_id}: regime_transitioning_cap_enter must be boolean"
+        )
+    _require_exact_value(
+        payload,
+        policy_id,
+        "closed_vocabularies",
+        {"regimes": list(regimes), "decisions": list(decisions)},
+    )
+    _require_exact_value(
+        payload,
+        policy_id,
+        "missing_data",
+        {
+            "absent_setup_family": "no_setup_specific_action",
+            "absent_market_context_regime": "RISK_ON",
+        },
+    )
+    _require_exact_value(
+        payload,
+        policy_id,
+        "observation_result_fields",
+        {
+            "entry_quality": "features_by_window.7.signal.assessment.entry_quality",
+            "decision_constraints": (
+                "features_by_window.7.signal.assessment.decision_constraints"
+            ),
+        },
+    )
 
 
 def _json_value(value: Any) -> Any:
@@ -188,6 +341,7 @@ def _verify_row(
     ):
         if payload.get(key) != expected_value:
             raise PolicySnapshotError(f"{policy_id}: payload metadata {key!r} mismatch")
+    _verify_identity_only_payload_contract(policy_id, payload)
     if not str(data["source_revision"]).strip():
         raise PolicySnapshotError(f"{policy_id}: empty source_revision")
     return VerifiedProductionPolicySnapshot(
@@ -268,19 +422,19 @@ def load_verified_snapshot_set(
         "WHERE purpose = ? AND compatibility_id = ? ORDER BY policy_id",
         (PURPOSE, compatibility_id),
     ).fetchall()
-    relevant_rows = [r for r in rows if str(r["policy_id"]) in REQUIRED_POLICIES]
-    if len(relevant_rows) != len(REQUIRED_POLICIES):
-        found = {str(r["policy_id"]) for r in relevant_rows}
+    found = {str(r["policy_id"]) for r in rows}
+    if len(rows) != len(REQUIRED_POLICIES) or found != set(REQUIRED_POLICIES):
         missing = sorted(set(REQUIRED_POLICIES) - found)
+        extra = sorted(found - set(REQUIRED_POLICIES))
         raise PolicySnapshotError(
-            f"verified cohort requires exactly seven snapshots; found={len(relevant_rows)} "
-            f"missing={missing}"
+            f"verified cohort requires exactly nine snapshots; found={len(rows)} "
+            f"missing={missing} extra={extra}"
         )
-    verified_rows = [_verify_row(row, compatibility_id) for row in relevant_rows]
+    verified_rows = [_verify_row(row, compatibility_id) for row in rows]
     verified = {snapshot.policy_id: snapshot for snapshot in verified_rows}
     if set(verified) != set(REQUIRED_POLICIES):
         raise PolicySnapshotError(
-            "snapshot cohort does not match the closed v2 policy set"
+            "snapshot cohort does not match the closed v4 policy set"
         )
     material_hashes = {snapshot.material_config_hash for snapshot in verified.values()}
     if len(material_hashes) != 1:

@@ -157,7 +157,7 @@ candles (+ IHSG)         ─read──►  protocol y (excess / open-close)
 | `captured_at` | Capture time (ordering / dedupe) |
 | `decision_payload_json` | Full decision JSON (components, scores, ticker, dates) |
 | `observation_id` | Identity for join to corpus outcomes (when column present) |
-| `compatibility_id` | Semantic cohort / rulebook stamp (ai-saham material-config hash) |
+| `compatibility_id` | ACCUM behavioral cohort stamp: probe-output digest + active policy snapshot-set digest + observation payload schema version |
 
 **Read by challenge for features / scores:**
 
@@ -171,7 +171,7 @@ candles (+ IHSG)         ─read──►  protocol y (excess / open-close)
 | Path | Cohort selection |
 |------|------------------|
 | **Production-facing challenge** (run / factor / engine / health / champion prep) | **Explicit** purpose-family id required (`--compatibility-id`). ACCUM and PRE_OPEN observation panels must find that id in their family; no largest auto-select. IEV rank does **not** use observation `compatibility_id` (binds `iev_batch` population identity from selected row material). |
-| **Baseline honesty** | `baseline=production` only with verified production-policy snapshot + adapter. Static pre-open/IEV fixtures require explicit `--baseline static_reference` (never silent production remap). |
+| **Baseline honesty** | ACCUM `baseline=production` requires the exact nine-row `production_policy_snapshot.v4` set plus a supported adapter. v1-v3 are historical only. Static pre-open/IEV fixtures require explicit `--baseline static_reference` (never silent production remap). |
 | **Exploratory / curriculum** (`fetch_*` without preferred, chapters) | May default to largest `n` (ties → newest `max(captured_at)`). Notes record selected id and excluded cohort sizes. |
 | **Legacy fixtures** without the column | Unfiltered path (no cohort stamp). |
 
