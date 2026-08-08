@@ -2,18 +2,70 @@
   "ticker": "GOLD",
   "session_date": "2024-06-03",
   "canonical_window": 7,
-  "comment": "Live ACCUM has trade_setup under features_by_window only — not top-level.",
+  "comment": "Schema-15 ACCUM risk audit under features_by_window.7.risk; trade_setup is coarse companion only.",
   "features_by_window": {
     "7": {
       "trade_setup": {
         "action": "BLOCKED_STRUCTURAL",
         "blocking_gates": ["FreeFloatGate", "BandarGate"]
+      },
+      "risk": {
+        "gate_triggered": "FreeFloatGate",
+        "unevaluable_gates": [],
+        "gate_evaluations": [
+          {
+            "gate": "FreeFloatGate",
+            "tier": "structural",
+            "order": 0,
+            "evaluated": true,
+            "outcome": "triggered",
+            "triggered": true,
+            "reason": "free float below floor",
+            "confidence": 80
+          },
+          {
+            "gate": "BandarGate",
+            "tier": "execution",
+            "order": 1,
+            "evaluated": true,
+            "outcome": "triggered",
+            "triggered": true,
+            "reason": "bandar sell pressure",
+            "confidence": 80
+          },
+          {
+            "gate": "LiquidityGate",
+            "tier": "structural",
+            "order": 2,
+            "evaluated": false,
+            "outcome": "not_evaluated",
+            "triggered": null,
+            "reason": null,
+            "confidence": null
+          }
+        ]
       }
     },
     "30": {
       "trade_setup": {
         "action": "ENTER",
         "blocking_gates": []
+      },
+      "risk": {
+        "gate_triggered": null,
+        "unevaluable_gates": [],
+        "gate_evaluations": [
+          {
+            "gate": "FreeFloatGate",
+            "tier": "structural",
+            "order": 0,
+            "evaluated": true,
+            "outcome": "pass",
+            "triggered": false,
+            "reason": "ok",
+            "confidence": 100
+          }
+        ]
       }
     }
   }

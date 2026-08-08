@@ -39,9 +39,30 @@ def test_expanded_gates_in_policy():
 def test_extract_fundamental_and_per_gate_off():
     pol = load_policy("risk.accum.hard_gates")
     payload = {
-        "trade_setup": {
-            "action": "BLOCKED",
-            "blocking_gates": ["BandarGate", "FundamentalGate"],
+        "features_by_window": {
+            "7": {
+                "risk": {
+                    "gate_triggered": "BandarGate",
+                    "unevaluable_gates": [],
+                    "gate_evaluations": [
+                        {
+                            "gate": "BandarGate",
+                            "outcome": "triggered",
+                            "triggered": True,
+                        },
+                        {
+                            "gate": "FundamentalGate",
+                            "outcome": "triggered",
+                            "triggered": True,
+                        },
+                        {
+                            "gate": "LiquidityGate",
+                            "outcome": "pass",
+                            "triggered": False,
+                        },
+                    ],
+                }
+            }
         }
     }
     comps = extract_gate_components(payload, pol)

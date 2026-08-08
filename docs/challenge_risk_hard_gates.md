@@ -30,11 +30,25 @@ Enabled gates: bandar, liquidity, fundamental, free_float, technical (when prese
 
 ## Baseline
 
-`src/ml_saham/challenge/policies/risk_accum_hard_gates.v1.json`  
-`score_kind=gate_block` · panel from observation `trade_setup.blocking_gates`.
+`src/ml_saham/challenge/policies/risk_accum_hard_gates.adapter.v2.json`
+`score_kind=gate_block` · panel from observation
+`features_by_window.7.risk.gate_evaluations` (schema 15).
+
+| Outcome | Component |
+|---------|-----------|
+| `triggered` | 1.0 (genuine gate fire) |
+| `blocked_on_missing` | 1.0 (gate's own missing-data policy blocked) |
+| `pass` / `skipped` / `not_evaluated` | 0.0 |
+
+`skipped` is critical: an aggregate `unevaluable_policy=block` may still put a
+gate name in coarse `gate_triggered` / `blocking_gates`, but the audit row stays
+`skipped`/`triggered=false` and must **not** count as a genuine hard-gate fire.
+
+Missing or malformed `risk.gate_evaluations` → row unextractable (no first-enabled-gate fallback).
 
 ## Never
 
-- Present this as Accum sleeve factor KEEP/DEMOTE  
-- Auto-promote gate thresholds into ai-saham  
+- Present this as Accum sleeve factor KEEP/DEMOTE
+- Auto-promote gate thresholds into ai-saham
 - Claim full Action ENTER desk accuracy (P4 deferred)
+- Attribute per-gate blocks from `trade_setup.blocking_gates` alone on current schema

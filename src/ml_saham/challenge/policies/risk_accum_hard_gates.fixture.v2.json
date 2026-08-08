@@ -1,0 +1,46 @@
+{
+  "fixture_only": true,
+  "policy_id": "risk.accum.hard_gates",
+  "version": "v2",
+  "hash": "riskgate_v2_gate_eval",
+  "protocol_id": "accum_path_v1",
+  "panel_kind": "accum_gates",
+  "score_kind": "gate_block",
+  "source": "ai-saham schema-15 risk.gate_evaluations hard-gate panel (adapter v2)",
+  "source_ref": "features_by_window.*.risk.gate_evaluations; companion trade_setup.blocking_gates is non-authoritative",
+  "max_score": 1.0,
+  "components": [
+    {
+      "key": "bandar_gate",
+      "aliases": ["BandarGate", "bandar"],
+      "weight": 1.0,
+      "enabled": true
+    },
+    {
+      "key": "liquidity_gate",
+      "aliases": ["LiquidityGate", "liquidity"],
+      "weight": 1.0,
+      "enabled": true
+    },
+    {
+      "key": "fundamental_gate",
+      "aliases": ["FundamentalGate", "fundamental", "PiotroskiGate"],
+      "weight": 1.0,
+      "enabled": true,
+      "note": "triggered or blocked_on_missing -> 1.0; skipped (aggregate unevaluable) -> 0.0"
+    },
+    {
+      "key": "free_float_gate",
+      "aliases": ["FreeFloatGate", "free_float", "FreeFloat"],
+      "weight": 1.0,
+      "enabled": true
+    },
+    {
+      "key": "technical_gate",
+      "aliases": ["TechnicalGate", "technical"],
+      "weight": 1.0,
+      "enabled": true,
+      "note": "Production technical is opt-in; still challengeable when present on observations"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "adapter_id": "ml-saham.risk.accum.hard_gates.adapter",
+  "adapter_version": "v2",
+  "supported_policy_id": "risk.accum.hard_gates",
+  "supported_snapshot_contract": "production_policy_snapshot.v4",
+  "supported_semantic_engine_contract_ids": ["risk.hard_gates.accum.v1"],
+  "protocol_id": "accum_path_v1",
+  "panel_kind": "accum_gates",
+  "score_kind": "gate_block",
+  "supported_challengers": ["production", "gate_off", "gate_off:<gate_key>"],
+  "conformance_id": "golden.risk.accum.hard_gates.v2",
+  "extraction": {
+    "source": "features_by_window.7.risk.gate_evaluations",
+    "blocked_outcomes": ["triggered", "blocked_on_missing"],
+    "clear_outcomes": ["pass", "skipped", "not_evaluated"],
+    "forbids": [
+      "first_enabled_gate_fallback",
+      "trade_setup.blocking_gates_as_sole_authority"
+    ]
+  },
+  "components": [
+    {"key": "bandar_gate", "aliases": ["BandarGate", "bandar"]},
+    {"key": "liquidity_gate", "aliases": ["LiquidityGate", "liquidity"]},
+    {"key": "fundamental_gate", "aliases": ["FundamentalGate", "fundamental", "PiotroskiGate"]},
+    {"key": "free_float_gate", "aliases": ["FreeFloatGate", "free_float", "FreeFloat"]},
+    {"key": "technical_gate", "aliases": ["TechnicalGate", "technical"]}
+  ]
+}

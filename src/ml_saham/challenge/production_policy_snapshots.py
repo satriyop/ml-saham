@@ -70,6 +70,41 @@ def _require_exact_value(
         )
 
 
+def _verify_risk_audit_result_fields(
+    policy_id: str, payload: Mapping[str, Any]
+) -> None:
+    """Require schema-15 risk audit paths declared by ai-saham task 09."""
+    fields = payload.get("observation_result_fields")
+    if not isinstance(fields, Mapping):
+        raise PolicySnapshotError(
+            f"{policy_id}: observation_result_fields must be an object"
+        )
+    if policy_id == "risk.accum.unevaluable_policy":
+        expected = {
+            "unevaluable_gates": "features_by_window.7.risk.unevaluable_gates",
+            "gate_evaluations": "features_by_window.7.risk.gate_evaluations",
+        }
+        if dict(fields) != expected:
+            raise PolicySnapshotError(
+                f"{policy_id}: observation_result_fields must bind risk audit paths"
+            )
+        return
+    if policy_id == "risk.accum.hard_gates":
+        gate_evals = fields.get("gate_evaluations")
+        if gate_evals != "features_by_window.7.risk.gate_evaluations":
+            raise PolicySnapshotError(
+                f"{policy_id}: observation_result_fields.gate_evaluations "
+                "must be features_by_window.7.risk.gate_evaluations"
+            )
+        # Coarse companions may remain; they are not sufficient alone.
+        for companion in ("blocking_gates", "risk_status"):
+            if companion in fields and not isinstance(fields[companion], str):
+                raise PolicySnapshotError(
+                    f"{policy_id}: observation_result_fields.{companion} must be a path string"
+                )
+        return
+
+
 def _verify_identity_only_payload_contract(
     policy_id: str, payload: Mapping[str, Any]
 ) -> None:
@@ -81,6 +116,10 @@ def _verify_identity_only_payload_contract(
             "assess_risk_gate_evaluator.evaluate.unevaluable_aggregate.v1",
         )
         _require_exact_value(payload, policy_id, "scope", "aggregate_risk_assessment")
+        _verify_risk_audit_result_fields(policy_id, payload)
+        return
+    if policy_id == "risk.accum.hard_gates":
+        _verify_risk_audit_result_fields(policy_id, payload)
         return
     if policy_id != "signal.accum.decision_policy":
         return

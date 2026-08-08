@@ -593,6 +593,32 @@ def build_mvp_fixture(
                 if seed % 19 == 0:
                     gates.append("TechnicalGate")
                 action = "BLOCKED" if gates else "ALLOW"
+                # Schema-15 risk audit: triggered for named blocks, pass otherwise.
+                all_gate_names = (
+                    "BandarGate",
+                    "LiquidityGate",
+                    "FundamentalGate",
+                    "FreeFloatGate",
+                    "TechnicalGate",
+                )
+                gate_evaluations = [
+                    {
+                        "gate": name,
+                        "tier": ("execution" if name == "BandarGate" else "structural"),
+                        "order": order,
+                        "evaluated": True,
+                        "outcome": "triggered" if name in gates else "pass",
+                        "triggered": name in gates,
+                        "reason": "fixture block" if name in gates else "ok",
+                        "confidence": 80 if name in gates else 100,
+                    }
+                    for order, name in enumerate(all_gate_names)
+                ]
+                risk_audit = {
+                    "gate_triggered": gates[0] if gates else None,
+                    "unevaluable_gates": [],
+                    "gate_evaluations": gate_evaluations,
+                }
                 sig_flags = []
                 if seed % 5 == 0:
                     sig_flags.append("VALUATION_STRETCHED")
@@ -654,8 +680,20 @@ def build_mvp_fixture(
                             "blocking_gates": gates,
                             "signal_multiplier": 0.8 + (seed % 5) / 10.0,
                         },
+                        "risk": risk_audit,
                         "sub_signal_fingerprint": fingerprint,
                     }
+                    # ADR-056 window pack (production path for hard-gate adapter v2)
+                    payload["features_by_window"] = {
+                        "7": {
+                            "trade_setup": payload["trade_setup"],
+                            "risk": risk_audit,
+                            "candidate": payload["candidate"],
+                            "signal": payload["signal"],
+                            "sub_signal_fingerprint": fingerprint,
+                        }
+                    }
+                    payload["canonical_window"] = 7
                     oid = f"obs-{t}-{d}-{purpose}"
                     # Large primary cohort for dual-cohort discipline tests.
                     obs_rows.append(

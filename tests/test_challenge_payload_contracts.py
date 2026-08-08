@@ -111,17 +111,28 @@ def test_signal_flags_from_window_active_flags():
     assert comps["valuation_stretched"] == 1.0
 
 
-def test_risk_gates_from_window_trade_setup_not_top_level():
-    """Live ACCUM risk is under features_by_window.*.trade_setup — root path is false-clear."""
+def test_risk_gates_from_window_risk_audit_not_top_level():
+    """Live ACCUM risk audit is under features_by_window.*.risk — root path is unextractable."""
     payload = load_golden("risk_adr056_trade_setup.json")
     pol = load_policy("risk.accum.hard_gates")
     comps = extract_gate_components(payload, pol)
     assert comps is not None
     assert comps["bandar_gate"] == 1.0
     assert comps["free_float_gate"] == 1.0
-    # Root-only empty would previously report all zeros (false clear)
+    # Root-only / coarse trade_setup without risk audit fails closed (no false clear)
     root_empty = {"trade_setup": {}}
     assert extract_gate_components(root_empty, pol) is None
+    window_ts_only = {
+        "features_by_window": {
+            "7": {
+                "trade_setup": {
+                    "action": "BLOCKED",
+                    "blocking_gates": ["BandarGate"],
+                }
+            }
+        }
+    }
+    assert extract_gate_components(window_ts_only, pol) is None
 
 
 def test_historical_single_window_diagnostic_golden_is_rejected():

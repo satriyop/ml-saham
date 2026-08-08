@@ -1,4 +1,4 @@
-"""risk.accum.hard_gates — gate metric, not sleeve KEEP/DEMOTE."""
+"""risk.accum.hard_gates — gate metric from schema-15 risk.gate_evaluations."""
 
 from __future__ import annotations
 
@@ -9,9 +9,13 @@ from typer.testing import CliRunner
 
 from ml_saham.challenge.engines import list_engines
 from ml_saham.challenge.panel_gates import extract_gate_components
-from ml_saham.challenge.policies.registry import load_policy
+from ml_saham.challenge.policies.registry import load_policy, load_policy_adapter
 from ml_saham.challenge.runner import run_policy_challenge
-from ml_saham.challenge.scorers import mean_excess_allowed, score_gate_off, score_production
+from ml_saham.challenge.scorers import (
+    mean_excess_allowed,
+    score_gate_off,
+    score_production,
+)
 from ml_saham.challenge.types import ChallengeStatus
 from ml_saham.cli.app import app
 from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
@@ -24,10 +28,40 @@ def fixture_db(tmp_path: Path) -> Path:
     return build_mvp_fixture(tmp_path / "gate.db", min_bars=120)
 
 
+def _window_payload(
+    evaluations: list[dict],
+    *,
+    unevaluable: list[str] | None = None,
+    gate_triggered: str | None = None,
+) -> dict:
+    return {
+        "ticker": "X",
+        "session_date": "2024-01-01",
+        "canonical_window": 7,
+        "features_by_window": {
+            "7": {
+                "trade_setup": {
+                    "action": "BLOCKED_STRUCTURAL",
+                    "blocking_gates": [gate_triggered] if gate_triggered else [],
+                },
+                "risk": {
+                    "gate_triggered": gate_triggered,
+                    "unevaluable_gates": unevaluable or [],
+                    "gate_evaluations": evaluations,
+                },
+            }
+        },
+    }
+
+
 def test_policy_and_engines():
     pol = load_policy("risk.accum.hard_gates")
     assert pol.score_kind == "gate_block"
     assert pol.panel_kind == "accum_gates"
+    assert pol.version == "v2"
+    adapter = load_policy_adapter("risk.accum.hard_gates")
+    assert adapter.adapter_version == "v2"
+    assert adapter.conformance_id == "golden.risk.accum.hard_gates.v2"
     eng = {e["engine_id"]: e for e in list_engines()}
     assert "risk" in eng
     assert "risk.accum.hard_gates" in eng["risk"]["policies"]["accum"]
@@ -35,15 +69,23 @@ def test_policy_and_engines():
     assert "signal.accum.raw_score" in eng["signal"]["policies"]["accum"]
 
 
-def test_extract_bandar_gate_legacy_top_level():
-    """Fixture/legacy shape still works."""
+def test_extract_from_gate_evaluations_triggered():
     pol = load_policy("risk.accum.hard_gates")
-    payload = {
-        "trade_setup": {
-            "action": "BLOCKED",
-            "blocking_gates": ["BandarGate"],
-        }
-    }
+    payload = _window_payload(
+        [
+            {
+                "gate": "BandarGate",
+                "outcome": "triggered",
+                "triggered": True,
+            },
+            {
+                "gate": "LiquidityGate",
+                "outcome": "pass",
+                "triggered": False,
+            },
+        ],
+        gate_triggered="BandarGate",
+    )
     comps = extract_gate_components(payload, pol)
     assert comps is not None
     assert comps["bandar_gate"] == 1.0
@@ -51,7 +93,7 @@ def test_extract_bandar_gate_legacy_top_level():
 
 
 def test_extract_gates_from_adr056_features_by_window():
-    """Live captures nest trade_setup under features_by_window — not root payload."""
+    """Live captures nest risk audit under features_by_window — not root payload."""
     from tests.fixtures.golden import load_golden
 
     pol = load_policy("risk.accum.hard_gates")
@@ -62,8 +104,95 @@ def test_extract_gates_from_adr056_features_by_window():
     assert comps["free_float_gate"] == 1.0
     assert comps["bandar_gate"] == 1.0
     assert comps["liquidity_gate"] == 0.0
-    # empty payload without any trade_setup must not invent all-clear
+    # empty payload without risk audit must not invent all-clear
     assert extract_gate_components({"ticker": "X"}, pol) is None
+
+
+def test_outcome_mapping_blocked_and_clear():
+    """triggered/blocked_on_missing -> 1.0; pass/skipped/not_evaluated -> 0.0."""
+    pol = load_policy("risk.accum.hard_gates")
+    payload = _window_payload(
+        [
+            {"gate": "FundamentalGate", "outcome": "triggered", "triggered": True},
+            {"gate": "BandarGate", "outcome": "blocked_on_missing", "triggered": True},
+            {"gate": "LiquidityGate", "outcome": "pass", "triggered": False},
+            {"gate": "FreeFloatGate", "outcome": "skipped", "triggered": False},
+            {
+                "gate": "TechnicalGate",
+                "outcome": "not_evaluated",
+                "triggered": None,
+            },
+        ]
+    )
+    comps = extract_gate_components(payload, pol)
+    assert comps is not None
+    assert comps["fundamental_gate"] == 1.0
+    assert comps["bandar_gate"] == 1.0
+    assert comps["liquidity_gate"] == 0.0
+    assert comps["free_float_gate"] == 0.0
+    assert comps["technical_gate"] == 0.0
+
+
+def test_aggregate_unevaluable_block_is_not_genuine_fundamental_trigger():
+    """Counterexample: gate_triggered=FundamentalGate but outcome=skipped -> 0.0."""
+    pol = load_policy("risk.accum.hard_gates")
+    payload = _window_payload(
+        [
+            {
+                "gate": "FundamentalGate",
+                "outcome": "skipped",
+                "triggered": False,
+            }
+        ],
+        unevaluable=["FundamentalGate"],
+        gate_triggered="FundamentalGate",
+    )
+    # Coarse companion would have said fundamental blocked; audit says skipped.
+    assert payload["features_by_window"]["7"]["trade_setup"]["blocking_gates"] == [
+        "FundamentalGate"
+    ]
+    comps = extract_gate_components(payload, pol)
+    assert comps is not None
+    assert comps["fundamental_gate"] == 0.0
+    assert all(v == 0.0 for v in comps.values())
+
+
+def test_no_first_enabled_gate_fallback_on_blocked_action():
+    """Blocked action without extractable audit must not invent a gate fire."""
+    pol = load_policy("risk.accum.hard_gates")
+    # Historical coarse shape only — no risk.gate_evaluations.
+    legacy = {
+        "trade_setup": {
+            "action": "BLOCKED_STRUCTURAL",
+            "blocking_gates": [],
+        }
+    }
+    assert extract_gate_components(legacy, pol) is None
+    window_only_ts = {
+        "features_by_window": {
+            "7": {
+                "trade_setup": {
+                    "action": "BLOCKED",
+                    "blocking_gates": [],
+                }
+            }
+        }
+    }
+    assert extract_gate_components(window_only_ts, pol) is None
+
+
+def test_malformed_gate_evaluations_fail_closed():
+    pol = load_policy("risk.accum.hard_gates")
+    bad_type = {
+        "features_by_window": {"7": {"risk": {"gate_evaluations": "not-a-list"}}}
+    }
+    assert extract_gate_components(bad_type, pol) is None
+    bad_outcome = _window_payload(
+        [{"gate": "BandarGate", "outcome": "mystery", "triggered": True}]
+    )
+    assert extract_gate_components(bad_outcome, pol) is None
+    bad_row = _window_payload([{"gate": "BandarGate"}])  # missing outcome
+    assert extract_gate_components(bad_row, pol) is None
 
 
 def test_mean_excess_allowed_and_gate_off():
@@ -71,10 +200,18 @@ def test_mean_excess_allowed_and_gate_off():
 
     pol = load_policy("risk.accum.hard_gates")
     rows = [
-        PanelRow("A", "2024-01-01", {"bandar_gate": 1.0, "liquidity_gate": 0.0}, {10: -0.05}),
-        PanelRow("B", "2024-01-01", {"bandar_gate": 0.0, "liquidity_gate": 0.0}, {10: 0.02}),
-        PanelRow("C", "2024-01-02", {"bandar_gate": 0.0, "liquidity_gate": 0.0}, {10: 0.01}),
-        PanelRow("D", "2024-01-02", {"bandar_gate": 0.0, "liquidity_gate": 1.0}, {10: -0.04}),
+        PanelRow(
+            "A", "2024-01-01", {"bandar_gate": 1.0, "liquidity_gate": 0.0}, {10: -0.05}
+        ),
+        PanelRow(
+            "B", "2024-01-01", {"bandar_gate": 0.0, "liquidity_gate": 0.0}, {10: 0.02}
+        ),
+        PanelRow(
+            "C", "2024-01-02", {"bandar_gate": 0.0, "liquidity_gate": 0.0}, {10: 0.01}
+        ),
+        PanelRow(
+            "D", "2024-01-02", {"bandar_gate": 0.0, "liquidity_gate": 1.0}, {10: -0.04}
+        ),
     ]
     prod = score_production(rows, pol)
     off = score_gate_off(rows, pol)
@@ -104,7 +241,9 @@ def test_run_gate_on_fixture(fixture_db: Path):
     assert "GATE" in text or "gate" in text.lower()
     assert "mean excess" in text.lower() or "mean_open" in text or "ALLOWED" in text
     assert "KEEP_DISPLAY" not in text
-    assert "KEEP/DEMOTE" in text or "not sleeve" in text.lower() or "gate" in text.lower()
+    assert (
+        "KEEP/DEMOTE" in text or "not sleeve" in text.lower() or "gate" in text.lower()
+    )
     # not presented as factor KEEP
     assert "Factor validity" not in text
     if r.status not in (ChallengeStatus.BLOCKED_DATA, ChallengeStatus.BLOCKED_POLICY):
@@ -120,9 +259,7 @@ def test_ridge_remaps_to_gate_off(fixture_db: Path):
         write_artifact=False,
         compatibility_id=FIXTURE_COMPATIBILITY_ID,
     )
-    assert r.against_id == "gate_off" or any(
-        "gate_off" in n for n in r.notes
-    )
+    assert r.against_id == "gate_off" or any("gate_off" in n for n in r.notes)
     assert r.status != ChallengeStatus.BLOCKED_POLICY or "gate" in "\n".join(r.notes)
 
 

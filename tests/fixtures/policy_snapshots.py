@@ -56,6 +56,11 @@ def _payload(policy_id: str, decision_type: str, semantic: str) -> dict:
             {"key": "technical_gate", "enabled": True},
         ]
         payload["output_scale"] = {"min": 0.0, "max": 1.0}
+        payload["observation_result_fields"] = {
+            "gate_evaluations": "features_by_window.7.risk.gate_evaluations",
+            "blocking_gates": "features_by_window.7.trade_setup.blocking_gates",
+            "risk_status": "features_by_window.7.candidate.risk_status",
+        }
     elif policy_id == "screener.accum.hard_filters":
         payload["formula_id"] = "accumulation_screen.first_match_hard_filters.v1"
         payload["first_match_order"] = [
@@ -79,6 +84,10 @@ def _payload(policy_id: str, decision_type: str, semantic: str) -> dict:
                 "action": "surface",
                 "blocks": False,
                 "block_confidence": 50,
+                "observation_result_fields": {
+                    "unevaluable_gates": "features_by_window.7.risk.unevaluable_gates",
+                    "gate_evaluations": "features_by_window.7.risk.gate_evaluations",
+                },
             }
         )
     elif policy_id == "signal.accum.decision_policy":

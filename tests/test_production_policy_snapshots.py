@@ -38,15 +38,24 @@ def test_runtime_adapter_specs_contain_no_copied_production_material():
         / "challenge"
         / "policies"
     )
-    paths = sorted(root.glob("*accum*.adapter.v1.json"))
-    assert len(paths) == 7
+    paths = sorted(
+        set(root.glob("*accum*.adapter.v1.json"))
+        | set(root.glob("*accum*.adapter.v2.json"))
+    )
+    # Active adapters only (hard_gates is v2; ignore retired v1 siblings if present).
+    active = []
+    for path in paths:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if path.name == "risk_accum_hard_gates.adapter.v1.json":
+            continue
+        active.append((path, data))
+    assert len(active) == 7
     assert len(REQUIRED_POLICIES) == 9
     assert {
         "risk.accum.unevaluable_policy",
         "signal.accum.decision_policy",
     } <= set(REQUIRED_POLICIES)
-    for path in paths:
-        data = json.loads(path.read_text(encoding="utf-8"))
+    for path, data in active:
         assert not ({"hash", "source", "source_ref", "max_score"} & set(data))
         for component in data.get("components") or []:
             assert not ({"weight", "enabled", "note"} & set(component))
@@ -92,6 +101,11 @@ def _payload(policy_id: str, decision_type: str, semantic: str) -> dict:
     elif policy_id == "risk.accum.hard_gates":
         common["components"] = [{"key": "fundamental_gate", "enabled": True}]
         common["output_scale"] = {"min": 0.0, "max": 1.0}
+        common["observation_result_fields"] = {
+            "gate_evaluations": "features_by_window.7.risk.gate_evaluations",
+            "blocking_gates": "features_by_window.7.trade_setup.blocking_gates",
+            "risk_status": "features_by_window.7.candidate.risk_status",
+        }
     elif policy_id == "screener.accum.hard_filters":
         common["formula_id"] = "accumulation_screen.first_match_hard_filters.v1"
         common["first_match_order"] = [
@@ -118,6 +132,10 @@ def _payload(policy_id: str, decision_type: str, semantic: str) -> dict:
                 "action": "surface",
                 "blocks": False,
                 "block_confidence": 50,
+                "observation_result_fields": {
+                    "unevaluable_gates": "features_by_window.7.risk.unevaluable_gates",
+                    "gate_evaluations": "features_by_window.7.risk.gate_evaluations",
+                },
             }
         )
     elif policy_id == "signal.accum.decision_policy":
@@ -331,7 +349,8 @@ def test_composed_adapters_reproduce_declared_golden_vectors(tmp_path) -> None:
 
     def policy(policy_id: str):
         adapter = load_policy_adapter(policy_id)
-        assert adapter.conformance_id == f"golden.{policy_id}.v1"
+        expected_version = "v2" if policy_id == "risk.accum.hard_gates" else "v1"
+        assert adapter.conformance_id == f"golden.{policy_id}.{expected_version}"
         assert adapter.supported_challengers
         return compose_execution_policy(snapshots[policy_id], adapter)
 

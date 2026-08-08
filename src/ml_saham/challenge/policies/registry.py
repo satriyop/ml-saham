@@ -23,7 +23,7 @@ _POLICY_FILES: dict[str, str] = {
     "signal.accum.flags": "signal_accum_flags.fixture.v1.json",
     "signal.accum.classification": "signal_accum_classification.fixture.v1.json",
     "signal.accum.evidence_group_weights": "signal_accum_evidence_group_weights.fixture.v1.json",
-    "risk.accum.hard_gates": "risk_accum_hard_gates.fixture.v1.json",
+    "risk.accum.hard_gates": "risk_accum_hard_gates.fixture.v2.json",
 }
 
 _ADAPTER_FILES: dict[str, str] = {
@@ -33,7 +33,7 @@ _ADAPTER_FILES: dict[str, str] = {
     ),
     "signal.accum.flags": "signal_accum_flags.adapter.v1.json",
     "signal.accum.classification": "signal_accum_classification.adapter.v1.json",
-    "risk.accum.hard_gates": "risk_accum_hard_gates.adapter.v1.json",
+    "risk.accum.hard_gates": "risk_accum_hard_gates.adapter.v2.json",
     "signal.accum.raw_score": "signal_accum_raw_score.adapter.v1.json",
     "screener.accum.hard_filters": "screener_accum_hard_filters.adapter.v1.json",
 }
