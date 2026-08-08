@@ -98,7 +98,9 @@ def validate_artifact_schema_version(data: dict[str, Any]) -> str | None:
     return None
 
 
-def _exact_identity_str(data: dict[str, Any], key: str) -> tuple[str | None, str | None]:
+def _exact_identity_str(
+    data: dict[str, Any], key: str
+) -> tuple[str | None, str | None]:
     """Return (value, error). Requires exact non-empty str — no strip/lower/coerce."""
     if key not in data or data[key] is None:
         return None, f"production identity invalid: {key} is missing"
