@@ -159,18 +159,20 @@ candles (+ IHSG)         ─read──►  protocol y (excess / open-close)
 | `observation_id` | Identity for join to corpus outcomes (when column present) |
 | `compatibility_id` | ACCUM behavioral cohort stamp: probe-output digest + active policy snapshot-set digest + observation payload schema version |
 
-Schema-14 ACCUM observations additionally contain a closed root
+Current schema-15 ACCUM observations contain a closed root
 `diagnostic_bindings` object. Each of the four shipped diagnostic IDs binds its
 exact immutable ai-saham producer snapshot IDs and payload digests. The
 corresponding rows live in `learning_diagnostic_producer_snapshots`; ml-saham
 reads and verifies them but never writes, repairs, migrates, or infers them.
+Every 7/30/90 window also carries the exact typed `structural_filter` decision;
+missing-value rejection is distinct from a genuine below-threshold rejection.
 
 Production diagnostic panels require both the explicit Action
 `compatibility_id` and the relevant explicit diagnostic compatibility ID.
-Every counted row must be schema 14 and share both verified identities. Feature
+Every counted row must be schema 15 and share both verified identities. Feature
 paths are fixed to window 7, with frozen observation-bound market context and
 canonical `sc_sector_breadth`; missing values stay unavailable rather than
-zero. Schema 13 or older receives no compatibility alias or reinterpretation.
+zero. Schema 14 or older receives no compatibility alias or reinterpretation.
 
 Diagnostic results use sealed artifact schema 4. They are non-promotable and
 carry producer/spec/population/range provenance; the read verifier re-resolves

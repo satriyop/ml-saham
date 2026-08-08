@@ -67,7 +67,7 @@ ai-saham `research pre-open evaluate` is **not** required for ml-saham challenge
 | Live screen / signal / risk / plan / TUI | **owns** | — |
 | `learning_observations` capture / backfill | **write** | **read** (features) |
 | `learning_policy_snapshots` v1-v3 history / v4 active set | **SSOT write** | **read + independently verify** |
-| `learning_diagnostic_producer_snapshots` + schema-14 bindings | **SSOT write** | **read + independently verify** |
+| `learning_diagnostic_producer_snapshots` + schema-15 bindings | **SSOT write** | **read + independently verify** |
 | `learning_outcome_labels` (`price_path.accum_*`, …) | **SSOT write** | optional join; not default challenge y |
 | Accum **cohort evaluate** / ACCUM `learning_evaluations` | **dropped (legacy)** | **do not depend on** |
 | Policy tournament WIN / LOSE / rank IC / folds (**tune**) | — | **owns** |
@@ -158,7 +158,8 @@ Hard rules (unchanged): **no** ai-saham Python imports · **no** scrapers · **n
   `diagnostic_compatibility_id`. Diagnostic health accepts a repeatable exact
   diagnostic-ID mapping; a missing mapping blocks only that bag.
 - ai-saham owns six immutable `diagnostic_producer_snapshot.v1` producers and
-  four closed bindings in observation schema 14. ml-saham recomputes canonical
+  four closed bindings in current observation schema 15. Schema 14 remains
+  immutable historical material. ml-saham recomputes canonical
   payload digests, snapshot IDs, producer sets, and composite IDs through its
   read-only connection; it never synthesizes or repairs them.
 - Current product extraction uses only `features_by_window.7`, exact named

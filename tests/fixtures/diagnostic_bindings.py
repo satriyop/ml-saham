@@ -1,4 +1,4 @@
-"""Schema-14 diagnostic authority fixture matching the upstream wire contract."""
+"""Schema-15 diagnostic authority fixture matching the upstream wire contract."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import sqlite3
 
 from ml_saham.challenge.diagnostic_producer_bindings import (
     BINDING_CONTRACT,
+    OBSERVATION_SCHEMA_VERSION,
     PURPOSE,
     REQUIRED_PRODUCERS,
     SNAPSHOT_CONTRACT,
@@ -15,7 +16,7 @@ from ml_saham.challenge.diagnostic_producer_bindings import (
 )
 
 
-def bind_schema14_diagnostics(
+def bind_schema15_diagnostics(
     conn: sqlite3.Connection, *, compatibility_id: str
 ) -> dict[str, str]:
     conn.execute(
@@ -79,7 +80,7 @@ def bind_schema14_diagnostics(
             {
                 "contract_id": BINDING_CONTRACT,
                 "diagnostic_id": diagnostic_id,
-                "observation_schema_version": 14,
+                "observation_schema_version": OBSERVATION_SCHEMA_VERSION,
                 "producers": identity_rows,
             }
         )
@@ -106,10 +107,17 @@ def bind_schema14_diagnostics(
             "signal": payload["signal"],
             "sub_signal_fingerprint": fingerprint,
             "candidate": payload["candidate"],
+            "structural_filter": {
+                "outcome": "disabled",
+                "field": None,
+                "reason": None,
+                "observed_value": None,
+                "threshold": None,
+            },
         }
         payload.update(
             {
-                "schema_version": 14,
+                "schema_version": OBSERVATION_SCHEMA_VERSION,
                 "session_date": payload["snapshot_date"],
                 "features_by_window": {"7": window, "30": window, "90": window},
                 "shared": {

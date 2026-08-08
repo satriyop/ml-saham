@@ -19,14 +19,14 @@ from tests.fixtures.build_mvp_fixture import (
     FIXTURE_COMPATIBILITY_ID,
     build_mvp_fixture,
 )
-from tests.fixtures.diagnostic_bindings import bind_schema14_diagnostics
+from tests.fixtures.diagnostic_bindings import bind_schema15_diagnostics
 
 
 @pytest.fixture
 def bound_db(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     path = build_mvp_fixture(tmp_path / "bound.db", min_bars=80)
     with sqlite3.connect(path) as conn:
-        diagnostic_ids = bind_schema14_diagnostics(
+        diagnostic_ids = bind_schema15_diagnostics(
             conn, compatibility_id=FIXTURE_COMPATIBILITY_ID
         )
     return path, diagnostic_ids
@@ -63,7 +63,16 @@ def test_valid_binding_verifies_without_mutating_sqlite(
 
 @pytest.mark.parametrize(
     "mutation",
-    ["schema13", "missing", "extra", "mixed", "bad_digest", "bad_formula"],
+    [
+        "schema14",
+        "missing_structural",
+        "malformed_structural",
+        "missing",
+        "extra",
+        "mixed",
+        "bad_digest",
+        "bad_formula",
+    ],
 )
 def test_invalid_bindings_fail_closed(
     bound_db: tuple[Path, dict[str, str]], mutation: str
@@ -82,8 +91,20 @@ def test_invalid_bindings_fail_closed(
             )
     with connect(path) as conn:
         payloads = _payloads(conn)
-        if mutation == "schema13":
-            payloads[0]["schema_version"] = 13
+        if mutation == "schema14":
+            payloads[0]["schema_version"] = 14
+        elif mutation == "missing_structural":
+            del payloads[0]["features_by_window"]["30"]["structural_filter"]
+        elif mutation == "malformed_structural":
+            payloads[0]["features_by_window"]["7"]["structural_filter"].update(
+                {
+                    "outcome": "rejected",
+                    "field": "market_cap_idr",
+                    "reason": "below_threshold",
+                    "observed_value": None,
+                    "threshold": 100_000_000_000,
+                }
+            )
         elif mutation == "missing":
             del payloads[0]["diagnostic_bindings"]["sector.peer_context"]
         elif mutation == "extra":

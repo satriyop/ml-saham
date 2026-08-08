@@ -16,7 +16,17 @@ from ml_saham.data.aisaham_read import table_columns, table_exists
 SNAPSHOT_CONTRACT = "diagnostic_producer_snapshot.v1"
 BINDING_CONTRACT = "diagnostic_binding.accum.v1"
 PURPOSE = "ACCUMULATION_DISCOVERY"
-OBSERVATION_SCHEMA_VERSION = 14
+OBSERVATION_SCHEMA_VERSION = 15
+
+_STRUCTURAL_FILTER_FIELDS = {
+    "outcome",
+    "field",
+    "reason",
+    "observed_value",
+    "threshold",
+}
+_STRUCTURAL_REJECTION_FIELDS = {"market_cap_idr", "piotroski_f_score"}
+_STRUCTURAL_REJECTION_REASONS = {"missing_value", "below_threshold"}
 
 REQUIRED_PRODUCERS: dict[str, tuple[str, ...]] = {
     "mce.screen_display": ("diagnostic.market_context.frozen",),
@@ -83,6 +93,62 @@ def _exact_mapping(value: Any, *, field: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise DiagnosticBindingError(f"{field} must be an object")
     return value
+
+
+def _verify_structural_filter(value: Any, *, field: str) -> None:
+    decision = _exact_mapping(value, field=field)
+    if set(decision) != _STRUCTURAL_FILTER_FIELDS:
+        raise DiagnosticBindingError(f"{field}: fields mismatch")
+    outcome = decision.get("outcome")
+    rejected_field = decision.get("field")
+    reason = decision.get("reason")
+    observed = decision.get("observed_value")
+    threshold = decision.get("threshold")
+    if outcome in {"disabled", "passed"}:
+        if any(
+            item is not None
+            for item in (rejected_field, reason, observed, threshold)
+        ):
+            raise DiagnosticBindingError(
+                f"{field}: non-rejected outcome carries rejection details"
+            )
+        return
+    if outcome != "rejected":
+        raise DiagnosticBindingError(f"{field}: unsupported outcome")
+    if rejected_field not in _STRUCTURAL_REJECTION_FIELDS:
+        raise DiagnosticBindingError(f"{field}: unsupported rejection field")
+    if reason not in _STRUCTURAL_REJECTION_REASONS:
+        raise DiagnosticBindingError(f"{field}: unsupported rejection reason")
+    if type(threshold) is not int or threshold <= 0:
+        raise DiagnosticBindingError(
+            f"{field}: rejection threshold must be a positive int"
+        )
+    if reason == "missing_value":
+        if observed is not None:
+            raise DiagnosticBindingError(
+                f"{field}: missing-value rejection carries observed_value"
+            )
+        return
+    if type(observed) is not int or observed >= threshold:
+        raise DiagnosticBindingError(
+            f"{field}: below-threshold rejection has invalid observed_value"
+        )
+
+
+def _verify_schema15_windows(payload: Mapping[str, Any]) -> None:
+    windows = _exact_mapping(
+        payload.get("features_by_window"), field="features_by_window"
+    )
+    if set(windows) != {"7", "30", "90"}:
+        raise DiagnosticBindingError("schema-15 features_by_window must be 7/30/90")
+    for window in ("7", "30", "90"):
+        pack = _exact_mapping(
+            windows.get(window), field=f"features_by_window.{window}"
+        )
+        _verify_structural_filter(
+            pack.get("structural_filter"),
+            field=f"features_by_window.{window}.structural_filter",
+        )
 
 
 def _verify_snapshot_row(
@@ -180,8 +246,9 @@ def verify_diagnostic_observation_bindings(
     for payload in decision_payloads:
         if payload.get("schema_version") != OBSERVATION_SCHEMA_VERSION:
             raise DiagnosticBindingError(
-                "diagnostic panels require observation schema 14"
+                "diagnostic panels require observation schema 15"
             )
+        _verify_schema15_windows(payload)
         bindings = _exact_mapping(
             payload.get("diagnostic_bindings"), field="diagnostic_bindings"
         )

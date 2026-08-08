@@ -125,7 +125,7 @@ def test_risk_gates_from_window_trade_setup_not_top_level():
 
 
 def test_historical_single_window_diagnostic_golden_is_rejected():
-    """Pre-schema-14 partial-window fixtures cannot acquire product authority."""
+    """Historical partial-window fixtures cannot acquire product authority."""
     payload = load_golden("diagnostic_adr056_window.json")
     assert not payload.get("signal")
     assert not payload.get("sub_signal_fingerprint")

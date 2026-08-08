@@ -18,7 +18,7 @@ _DIAG_FILES: dict[str, str] = {
     "company_quality.bag": "company_quality.v1.json",
 }
 
-DIAGNOSTIC_EXTRACTOR_CONTRACT_ID = "diagnostic_panel.schema14.window7.v1"
+DIAGNOSTIC_EXTRACTOR_CONTRACT_ID = "diagnostic_panel.schema15.window7.v1"
 DIAGNOSTIC_REGIME_MAP = {
     "RISK_ON": 1.0,
     "NEUTRAL": 0.0,

@@ -1,4 +1,4 @@
-"""Strict schema-14 diagnostic panel over verified ACCUM observations."""
+"""Strict schema-15 diagnostic panel over verified ACCUM observations."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from typing import Any
 
 from ml_saham.challenge.diagnostic_producer_bindings import (
     DiagnosticBindingError,
+    OBSERVATION_SCHEMA_VERSION,
     VerifiedDiagnosticBinding,
     verify_diagnostic_observation_bindings,
 )
@@ -51,7 +52,7 @@ class DiagnosticPanelIdentity:
     session_end: str
     cutoff_start: str
     cutoff_end: str
-    observation_schema_version: int = 14
+    observation_schema_version: int = OBSERVATION_SCHEMA_VERSION
 
 
 @dataclass
@@ -73,12 +74,12 @@ def _window_7(payload: dict[str, Any]) -> dict[str, Any]:
     windows = payload.get("features_by_window")
     if not isinstance(windows, dict) or set(windows) != {"7", "30", "90"}:
         raise DiagnosticPanelBindingError(
-            "schema-14 features_by_window must be 7/30/90"
+            "schema-15 features_by_window must be 7/30/90"
         )
     window = windows.get("7")
     if not isinstance(window, dict):
         raise DiagnosticPanelBindingError(
-            "schema-14 canonical diagnostic window 7 missing"
+            "schema-15 canonical diagnostic window 7 missing"
         )
     return window
 
@@ -136,7 +137,7 @@ def extract_frozen_market_context_features(payload: dict[str, Any]) -> dict[str,
 def extract_diagnostic_features(
     payload: dict[str, Any], spec: DiagnosticSpec
 ) -> dict[str, float] | None:
-    """Extract only schema-14 canonical lineage; no aliases or live reloads."""
+    """Extract only schema-15 canonical lineage; no aliases or live reloads."""
 
     signal, fingerprint, _candidate = _window_views(payload)
     enabled = tuple(feature.key for feature in spec.enabled_features())
@@ -256,7 +257,7 @@ def build_diagnostic_panel(
             session = payload.get("session_date")
             if not isinstance(population_id, str) or not population_id:
                 raise DiagnosticPanelBindingError(
-                    "schema-14 population identity missing"
+                    "schema-15 population identity missing"
                 )
             if (
                 not isinstance(cutoff, str)
@@ -264,7 +265,7 @@ def build_diagnostic_panel(
                 or not isinstance(session, str)
             ):
                 raise DiagnosticPanelBindingError(
-                    "schema-14 session/cutoff provenance missing"
+                    "schema-15 session/cutoff provenance missing"
                 )
             population_ids.add(population_id)
             cutoffs.append(cutoff)

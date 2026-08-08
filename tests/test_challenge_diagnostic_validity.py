@@ -27,7 +27,7 @@ from ml_saham.challenge.types import DiagnosticVerdict
 from ml_saham.cli.app import app
 from tests.fixtures.build_mvp_fixture import build_mvp_fixture
 from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID
-from tests.fixtures.diagnostic_bindings import bind_schema14_diagnostics
+from tests.fixtures.diagnostic_bindings import bind_schema15_diagnostics
 
 runner = CliRunner()
 
@@ -43,7 +43,7 @@ def bound_fixture_db(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     import sqlite3
 
     with sqlite3.connect(path) as conn:
-        diagnostic_ids = bind_schema14_diagnostics(
+        diagnostic_ids = bind_schema15_diagnostics(
             conn, compatibility_id=FIXTURE_COMPATIBILITY_ID
         )
     return path, diagnostic_ids
@@ -151,7 +151,7 @@ def test_run_mce_feature_on_fixture(
         )
         assert manifest["schema_version"] == 4
         assert manifest["non_promotable"] is True
-        assert manifest["observation_schema_version"] == 14
+        assert manifest["observation_schema_version"] == 15
         assert manifest["observation_compatibility_id"] == FIXTURE_COMPATIBILITY_ID
         assert (
             verify_diagnostic_artifact(r.artifact_dir, db_path=fixture_db) == manifest
