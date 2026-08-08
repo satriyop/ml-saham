@@ -30,7 +30,11 @@ from ml_saham.challenge.health import build_health_report
 from ml_saham.challenge.promote import build_promote_packet
 from ml_saham.challenge.protocols import get_protocol
 from ml_saham.challenge.runner import list_policies, run_policy_challenge
-from ml_saham.challenge.types import ChallengeResult, ChallengeStatus, HealthReportResult
+from ml_saham.challenge.types import (
+    ChallengeResult,
+    ChallengeStatus,
+    HealthReportResult,
+)
 from ml_saham.data.aisaham_read import connect
 from ml_saham.data.connection import resolve_db_path
 from ml_saham.data.observation_cohort import (
@@ -592,9 +596,7 @@ class ChallengeWorkbenchService:
         readiness = CapabilityField(
             name="cohort_protocol_readiness",
             status=CAPABILITY_NOT_IMPLEMENTED,
-            detail=(
-                "C0 producer/Protocol readiness is not available in Phase 1A."
-            ),
+            detail=("C0 producer/Protocol readiness is not available in Phase 1A."),
         )
 
         db_path = self._config.upstream_db_path
@@ -1246,10 +1248,7 @@ class ChallengeWorkbenchService:
             )
 
         delta: float | None = None
-        if (
-            left.primary_ic_against is not None
-            and right.primary_ic_against is not None
-        ):
+        if left.primary_ic_against is not None and right.primary_ic_against is not None:
             delta = right.primary_ic_against - left.primary_ic_against
 
         winner: str | None = None
@@ -1270,9 +1269,7 @@ class ChallengeWorkbenchService:
                     winner = "Left higher primary IC(against) under compatible axes"
                 else:
                     winner = "Tied primary IC(against)"
-            notes.append(
-                "Winner banner is descriptive only — not promotion authority."
-            )
+            notes.append("Winner banner is descriptive only — not promotion authority.")
         else:
             notes.append(
                 "Statuses not in WIN/LOSE/INCONCLUSIVE set — no winner banner."
@@ -1337,9 +1334,7 @@ class ChallengeWorkbenchService:
                 notes=(f"No health tree at {root}",),
             )
         candidates = [
-            p
-            for p in root.iterdir()
-            if p.is_dir() and (p / "manifest.json").is_file()
+            p for p in root.iterdir() if p.is_dir() and (p / "manifest.json").is_file()
         ]
         if not candidates:
             return LatestHealthPack(
@@ -1358,7 +1353,9 @@ class ChallengeWorkbenchService:
             key=lambda p: p.stat().st_mtime if p.is_dir() else 0.0,
         )
         try:
-            manifest = json.loads((latest / "manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (latest / "manifest.json").read_text(encoding="utf-8")
+            )
         except (OSError, json.JSONDecodeError) as exc:
             return LatestHealthPack(
                 found=True,
@@ -1573,9 +1570,7 @@ def _historical_row_from_manifest(
     mode = str(payload.get("mode") or "")
     track_hint = str(payload.get("track") or "")
     track = (
-        _TRACK_BY_MANIFEST_TRACK.get(track_hint)
-        or _TRACK_BY_MODE.get(mode)
-        or "other"
+        _TRACK_BY_MANIFEST_TRACK.get(track_hint) or _TRACK_BY_MODE.get(mode) or "other"
     )
     status = payload.get("status")
     if status is None:
@@ -1588,6 +1583,18 @@ def _historical_row_from_manifest(
         schema_version = int(schema_raw) if schema_raw is not None else None
     except (TypeError, ValueError):
         schema_version = None
+
+    verification_notes: tuple[str, ...] = ()
+    if is_diag and schema_version == 4:
+        try:
+            from ml_saham.challenge.diagnostic_artifact import (
+                verify_diagnostic_artifact,
+            )
+
+            verify_diagnostic_artifact(manifest_path.parent)
+        except (KeyError, OSError, ValueError) as exc:
+            status_s = "BLOCKED_DIAGNOSTIC_BINDING"
+            verification_notes = (str(exc),)
 
     return HistoricalResultRow(
         track=track,
@@ -1603,7 +1610,7 @@ def _historical_row_from_manifest(
         artifact_path=str(manifest_path.parent),
         schema_version=schema_version,
         is_diagnostic_display=is_diag,
-        notes=(),
+        notes=verification_notes,
     )
 
 
@@ -1688,9 +1695,7 @@ def _list_item_from_manifest(pack: Path, manifest: dict[str, Any]) -> ArtifactLi
     mode = str(manifest.get("mode") or "")
     track_hint = str(manifest.get("track") or "")
     track = (
-        _TRACK_BY_MANIFEST_TRACK.get(track_hint)
-        or _TRACK_BY_MODE.get(mode)
-        or "other"
+        _TRACK_BY_MANIFEST_TRACK.get(track_hint) or _TRACK_BY_MODE.get(mode) or "other"
     )
     schema_raw = manifest.get("schema_version")
     try:
@@ -1840,8 +1845,12 @@ def _view_from_health_result(
             if isinstance(row, dict)
         }
         if any(s.startswith("BLOCKED") for s in statuses):
-            status = "BLOCKED_MIXED" if len(statuses) > 1 else next(
-                (s for s in statuses if s.startswith("BLOCKED")), "BLOCKED_POLICY"
+            status = (
+                "BLOCKED_MIXED"
+                if len(statuses) > 1
+                else next(
+                    (s for s in statuses if s.startswith("BLOCKED")), "BLOCKED_POLICY"
+                )
             )
         elif not statuses:
             status = "EMPTY_INDEX"

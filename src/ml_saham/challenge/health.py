@@ -407,6 +407,7 @@ def build_health_report(
     write_artifact: bool = True,
     artifacts_dir: Path | None = None,
     compatibility_id: str | None = None,
+    diagnostic_compatibility_ids: dict[str, str] | None = None,
 ) -> HealthReportResult:
     """Run health recipe; always prefer honest BLOCKED over crash.
 
@@ -516,6 +517,8 @@ def build_health_report(
             scenario=diag_sc,
             write_artifact=False,
             artifacts_dir=None,
+            compatibility_id=compatibility_id,
+            diagnostic_compatibility_ids=diagnostic_compatibility_ids,
         )
         diagnostics_payload = _diagnostics_payload(dbatch)
 

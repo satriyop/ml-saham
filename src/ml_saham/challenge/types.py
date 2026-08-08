@@ -37,6 +37,7 @@ class DiagnosticVerdict(str, Enum):
     INCONCLUSIVE = "INCONCLUSIVE"
     BLOCKED_DATA = "BLOCKED_DATA"
     BLOCKED_SPEC = "BLOCKED_SPEC"
+    BLOCKED_DIAGNOSTIC_BINDING = "BLOCKED_DIAGNOSTIC_BINDING"
 
 
 @dataclass(frozen=True)
@@ -399,6 +400,7 @@ class DiagnosticSpec:
     control_score: str = "accum_production"
     kind: str = "diagnostic"
     banner: str = "ADR-057: not Action authority — display / promote-candidate only"
+    content_digest: str = ""
 
     def enabled_features(self) -> tuple[DiagnosticFeature, ...]:
         return tuple(f for f in self.features if f.enabled)
@@ -426,11 +428,27 @@ class DiagnosticChallengeResult:
     summary_md: str = ""
     notes: list[str] = field(default_factory=list)
     artifact_dir: Path | None = None
+    observation_compatibility_id: str = ""
+    diagnostic_compatibility_id: str = ""
+    producer_snapshot_ids: tuple[str, ...] = ()
+    producer_payload_digests: tuple[str, ...] = ()
+    producer_source_revisions: tuple[str, ...] = ()
+    action_policy_snapshot_ids: tuple[str, ...] = ()
+    action_policy_payload_digests: tuple[str, ...] = ()
+    action_policy_source_revisions: tuple[str, ...] = ()
+    population_identity_id: str = ""
+    session_start: str = ""
+    session_end: str = ""
+    cutoff_start: str = ""
+    cutoff_end: str = ""
+    diagnostic_spec_content_digest: str = ""
+    observation_schema_version: int | None = None
 
     def exit_code(self) -> int:
         if self.verdict in (
             DiagnosticVerdict.BLOCKED_DATA,
             DiagnosticVerdict.BLOCKED_SPEC,
+            DiagnosticVerdict.BLOCKED_DIAGNOSTIC_BINDING,
         ):
             return 2
         return 0
@@ -451,11 +469,28 @@ class BatchDiagnosticResult:
     summary_md: str = ""
     notes: list[str] = field(default_factory=list)
     artifact_dir: Path | None = None
+    observation_compatibility_id: str = ""
+    diagnostic_compatibility_id: str = ""
+    producer_snapshot_ids: tuple[str, ...] = ()
+    producer_payload_digests: tuple[str, ...] = ()
+    producer_source_revisions: tuple[str, ...] = ()
+    action_policy_snapshot_ids: tuple[str, ...] = ()
+    action_policy_payload_digests: tuple[str, ...] = ()
+    action_policy_source_revisions: tuple[str, ...] = ()
+    population_identity_id: str = ""
+    session_start: str = ""
+    session_end: str = ""
+    cutoff_start: str = ""
+    cutoff_end: str = ""
+    diagnostic_spec_content_digest: str = ""
+    observation_schema_version: int | None = None
+    diagnostic_identity_map: dict[str, Any] = field(default_factory=dict)
 
     def exit_code(self) -> int:
         if self.blocked in (
             DiagnosticVerdict.BLOCKED_DATA,
             DiagnosticVerdict.BLOCKED_SPEC,
+            DiagnosticVerdict.BLOCKED_DIAGNOSTIC_BINDING,
         ):
             return 2
         return 0

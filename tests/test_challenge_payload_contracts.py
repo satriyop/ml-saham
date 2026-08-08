@@ -22,8 +22,9 @@ from ml_saham.challenge.panel_pre_open_obs import (
 )
 from ml_saham.challenge.diagnostics.registry import load_diagnostic
 from ml_saham.challenge.panel_diagnostic import (
-    _mctx_from_observation,
+    DiagnosticPanelBindingError,
     extract_diagnostic_features,
+    extract_frozen_market_context_features,
 )
 from ml_saham.challenge.panel_gates import extract_gate_components
 from ml_saham.challenge.panel_signal import extract_signal_components
@@ -123,41 +124,16 @@ def test_risk_gates_from_window_trade_setup_not_top_level():
     assert extract_gate_components(root_empty, pol) is None
 
 
-def test_diagnostics_from_window_not_root_level():
-    """Sector / institutional / CQ bags read window signal + fingerprint (ADR-056)."""
+def test_historical_single_window_diagnostic_golden_is_rejected():
+    """Pre-schema-14 partial-window fixtures cannot acquire product authority."""
     payload = load_golden("diagnostic_adr056_window.json")
     assert not payload.get("signal")
     assert not payload.get("sub_signal_fingerprint")
 
-    inst = extract_diagnostic_features(
-        payload, load_diagnostic("institutional.accumulation_bag")
-    )
-    assert inst is not None
-    assert inst["institutional_flow_score"] == pytest.approx(42.5)
-    assert inst["ia_foreign_participation"] == pytest.approx(0.82)
-
-    sector = extract_diagnostic_features(payload, load_diagnostic("sector.peer_context"))
-    assert sector is not None
-    assert sector["sector_context_score"] == pytest.approx(12.0)
-    # sector-context DIAG peer breadth (not retired Accum group-breadth bonus)
-    assert sector["peer_breadth"] == pytest.approx(0.35)
-
-
-    cq = extract_diagnostic_features(payload, load_diagnostic("company_quality.bag"))
-    assert cq is not None
-    # group score 0 present false → fingerprint aggregate / liquidity
-    assert cq["tp_liquidity_score"] == pytest.approx(0.9)
-    assert cq["company_quality_score"] == pytest.approx(50.0) or cq[
-        "company_quality_score"
-    ] == pytest.approx(0.0)
-
-    # root-only empty → no extract
-    assert (
+    with pytest.raises(DiagnosticPanelBindingError):
         extract_diagnostic_features(
-            {"ticker": "X"}, load_diagnostic("institutional.accumulation_bag")
+            payload, load_diagnostic("institutional.accumulation_bag")
         )
-        is None
-    )
 
 
 def test_accum_sleeves_from_golden_adr056_prefers_canonical_window():
@@ -186,13 +162,17 @@ def test_open_30m_return_pct_is_percent_points_not_fraction():
     assert r2 == pytest.approx(-0.006173)
     assert r2 != pytest.approx(-0.6173)
 
-    r3 = _pct_points_to_fraction(g["metrics_large_move_pct"]["open_to_close_return_pct"])
+    r3 = _pct_points_to_fraction(
+        g["metrics_large_move_pct"]["open_to_close_return_pct"]
+    )
     assert r3 == pytest.approx(-0.013333)
 
 
 def test_no_old_abs_le_one_fraction_heuristic_in_product_pre_open():
     """Source guard: product path must not reintroduce |x|<=1 ⇒ fraction."""
-    src = Path("src/ml_saham/challenge/panel_pre_open_obs.py").read_text(encoding="utf-8")
+    src = Path("src/ml_saham/challenge/panel_pre_open_obs.py").read_text(
+        encoding="utf-8"
+    )
     assert "abs(x) > 1" not in src
     assert "abs(x) <= 1" not in src
     assert "_pct_points_to_fraction" in src
@@ -202,8 +182,13 @@ def test_no_old_abs_le_one_fraction_heuristic_in_product_pre_open():
 
 def test_pre_open_label_notes_forbid_mixed_horizon_benchmark():
     """Documented invariant: open_30m stock path is gross, not full-day IHSG excess."""
-    src = Path("src/ml_saham/challenge/panel_pre_open_obs.py").read_text(encoding="utf-8")
-    assert "Do **not** subtract full-session IHSG" in src or "not excess vs full-day IHSG" in src
+    src = Path("src/ml_saham/challenge/panel_pre_open_obs.py").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        "Do **not** subtract full-session IHSG" in src
+        or "not excess vs full-day IHSG" in src
+    )
     assert "open_30m" in src
 
 
@@ -217,7 +202,9 @@ def test_iev_golden_batch_prefers_ncp_preopen_not_largest_post_open():
     assert all(r["collected_at"] == "2024-06-17T08:56:04" for r in picked)
     # largest post-open had CCC + huge iev — must not be selected
     assert all(r["collected_at"] != "2024-06-17T09:08:29" for r in picked)
-    assert any("NCP" in n or "pre-open" in n.lower() or "ncp" in n.lower() for n in notes)
+    assert any(
+        "NCP" in n or "pre-open" in n.lower() or "ncp" in n.lower() for n in notes
+    )
 
 
 def test_product_iev_features_have_no_volume_over_price_imbalance():
@@ -252,7 +239,14 @@ def test_protocols_require_min_folds_for_win():
 def test_single_fold_ic_edge_provisional_not_win():
     status, _, _, notes = _verdict(
         ACCUM_PATH_V1,
-        [{"ic_baseline": 0.01, "ic_against": 0.10, "tail_baseline": 0.0, "tail_against": 0.0}],
+        [
+            {
+                "ic_baseline": 0.01,
+                "ic_against": 0.10,
+                "tail_baseline": 0.0,
+                "tail_against": 0.0,
+            }
+        ],
         baseline_id="production",
         against_id="equal_sleeves",
     )
@@ -263,33 +257,11 @@ def test_single_fold_ic_edge_provisional_not_win():
 def test_mce_prefers_observation_bound_market_context():
     """MCE must use shared.market_context on the observation, not a table re-join by date."""
     payload = load_golden("mce_bound_market_context.json")
-    bound = _mctx_from_observation(payload)
+    bound = extract_frozen_market_context_features(payload)
     assert bound is not None
     assert bound["regime_score"] == pytest.approx(-0.5)  # RISK_OFF
     assert bound["vix"] == pytest.approx(15.77)
     assert bound["eido"] == pytest.approx(-2.28)
 
-    # Table fallback with *different* regime must not override when bound exists
-    table_wrong = {
-        "regime_score": 1.0,  # BULL — wrong for this capture
-        "vix": 99.0,
-        "eido": 0.0,
-        "usd_idr": 0.0,
-        "idx_trend": 0.0,
-        "idx_breadth": 0.0,
-        "foreign_flow": 0.0,
-    }
-    feats = extract_diagnostic_features(
-        payload, load_diagnostic("mce.screen_display"), mctx=bound
-    )
-    assert feats is not None
-    assert feats["regime_score"] == pytest.approx(-0.5)
-    assert feats["vix"] == pytest.approx(15.77)
-    # If caller incorrectly passed only table_wrong without bound, scores would differ —
-    # extract uses mctx dict as primary fill for mce; bound must be what we pass.
-    feats_bad = extract_diagnostic_features(
-        payload, load_diagnostic("mce.screen_display"), mctx=table_wrong
-    )
-    assert feats_bad is not None
-    assert feats_bad["regime_score"] == pytest.approx(1.0)
-    # Panel path uses _mctx_from_observation first so bound wins over table_wrong date join
+    with pytest.raises(DiagnosticPanelBindingError):
+        extract_diagnostic_features(payload, load_diagnostic("mce.screen_display"))

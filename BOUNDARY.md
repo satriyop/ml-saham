@@ -67,6 +67,7 @@ ai-saham `research pre-open evaluate` is **not** required for ml-saham challenge
 | Live screen / signal / risk / plan / TUI | **owns** | — |
 | `learning_observations` capture / backfill | **write** | **read** (features) |
 | `learning_policy_snapshots` v1-v3 history / v4 active set | **SSOT write** | **read + independently verify** |
+| `learning_diagnostic_producer_snapshots` + schema-14 bindings | **SSOT write** | **read + independently verify** |
 | `learning_outcome_labels` (`price_path.accum_*`, …) | **SSOT write** | optional join; not default challenge y |
 | Accum **cohort evaluate** / ACCUM `learning_evaluations` | **dropped (legacy)** | **do not depend on** |
 | Policy tournament WIN / LOSE / rank IC / folds (**tune**) | — | **owns** |
@@ -149,6 +150,26 @@ Hard rules (unchanged): **no** ai-saham Python imports · **no** scrapers · **n
   no such identity today: requesting `production` is **`BLOCKED_POLICY`** (no
   silent remap). Reference digs require an explicit
   `--baseline static_reference` and are not promote-eligible.
+
+### Purpose-specific diagnostic identity (ADR-069)
+
+- Diagnostic challenge authority is two-dimensional: one explicit ACCUM Action
+  `compatibility_id` plus one explicit purpose-specific
+  `diagnostic_compatibility_id`. Diagnostic health accepts a repeatable exact
+  diagnostic-ID mapping; a missing mapping blocks only that bag.
+- ai-saham owns six immutable `diagnostic_producer_snapshot.v1` producers and
+  four closed bindings in observation schema 14. ml-saham recomputes canonical
+  payload digests, snapshot IDs, producer sets, and composite IDs through its
+  read-only connection; it never synthesizes or repairs them.
+- Current product extraction uses only `features_by_window.7`, exact named
+  Alpha/Trigger contributions, canonical `sc_sector_breadth`, and frozen
+  `shared.market_context`. Root aliases, first-present windows, current MCE
+  table joins, and packaged production-policy fallbacks are historical only.
+- Diagnostic artifact schema 4 is sealed, explicitly non-promotable, and binds
+  both identities, producer snapshots/digests/source revisions, current spec
+  and extractor content, population, session/cutoff ranges, and sample unit.
+  Current display/reopen re-resolves upstream authority. Schema 3 remains
+  historical display-only.
 - **Population identity** is typed and purpose-specific: `accum_compat` /
   `pre_open_compat` (observation cohort id) or `iev_batch` (selection contract
   + stable hash of selected IEV row material: capture time, NCP lock, rank,

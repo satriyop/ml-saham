@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
@@ -16,6 +17,35 @@ _DIAG_FILES: dict[str, str] = {
     "institutional.accumulation_bag": "institutional_accumulation.v1.json",
     "company_quality.bag": "company_quality.v1.json",
 }
+
+DIAGNOSTIC_EXTRACTOR_CONTRACT_ID = "diagnostic_panel.schema14.window7.v1"
+DIAGNOSTIC_REGIME_MAP = {
+    "RISK_ON": 1.0,
+    "NEUTRAL": 0.0,
+    "RISK_OFF": -0.5,
+    "VOLATILE": -1.0,
+}
+
+
+def diagnostic_spec_content_digest(
+    spec_data: dict,
+    *,
+    extractor_contract_id: str = DIAGNOSTIC_EXTRACTOR_CONTRACT_ID,
+    regime_map: dict[str, float] | None = None,
+) -> str:
+    integrity_payload = {
+        "extractor_contract_id": extractor_contract_id,
+        "regime_map": DIAGNOSTIC_REGIME_MAP if regime_map is None else regime_map,
+        "spec": spec_data,
+    }
+    canonical = json.dumps(
+        integrity_payload,
+        ensure_ascii=True,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def list_diagnostic_ids() -> list[str]:
@@ -68,6 +98,7 @@ def load_diagnostic(diagnostic_id: str) -> DiagnosticSpec:
         with resources.files(pkg).joinpath(name).open("r", encoding="utf-8") as fh:
             data = json.load(fh)
 
+    content_digest = diagnostic_spec_content_digest(data)
     feats = tuple(
         DiagnosticFeature(
             key=str(f["key"]),
@@ -93,6 +124,7 @@ def load_diagnostic(diagnostic_id: str) -> DiagnosticSpec:
             data.get("banner")
             or "ADR-057: not Action authority — display / promote-candidate only"
         ),
+        content_digest=content_digest,
     )
 
 

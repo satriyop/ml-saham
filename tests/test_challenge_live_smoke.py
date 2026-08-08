@@ -16,8 +16,8 @@ import pytest
 
 from ml_saham.challenge.diagnostics.registry import load_diagnostic
 from ml_saham.challenge.panel_diagnostic import (
-    _mctx_from_observation,
     extract_diagnostic_features,
+    extract_frozen_market_context_features,
 )
 from ml_saham.challenge.panel_gates import extract_gate_components
 from ml_saham.challenge.panel_iev import load_iev_raw_rows
@@ -117,7 +117,7 @@ def test_live_diagnostics_extract_hits(live_db: Path):
 def test_live_mce_prefers_bound_context(live_db: Path):
     bound = 0
     for p in _iter_accum_payloads(live_db, limit=100):
-        if _mctx_from_observation(p) is not None:
+        if extract_frozen_market_context_features(p):
             bound += 1
     assert bound >= 50, "shared.market_context missing on live ACCUM — MCE PIT broken"
 

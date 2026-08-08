@@ -22,7 +22,12 @@ from ml_saham.challenge.diagnostics.registry import (
 )
 from ml_saham.challenge.metrics import Fold, ic_safe, time_purged_folds
 from ml_saham.challenge.panel import PanelRow
-from ml_saham.challenge.panel_diagnostic import DiagnosticPanelRow, build_diagnostic_panel
+from ml_saham.challenge.panel_diagnostic import (
+    DiagnosticPanelBindingError,
+    DiagnosticPanelIdentity,
+    DiagnosticPanelRow,
+    build_diagnostic_panel,
+)
 from ml_saham.challenge.protocols import ACCUM_PATH_V1, get_protocol
 from ml_saham.challenge.types import (
     BatchDiagnosticResult,
@@ -238,11 +243,15 @@ def _run_one_feature(
     agree = None
     if valid_res:
         agree = sum(
-            1 for f in valid_res if abs(float(f["residual_ic"])) >= protocol.win_margin * 0.5
+            1
+            for f in valid_res
+            if abs(float(f["residual_ic"])) >= protocol.win_margin * 0.5
             or float(f["residual_ic"]) > 0
         ) / len(valid_res)
         # prefer sign agreement on positive residual IC (information direction free for display)
-        agree = sum(1 for f in valid_res if float(f["residual_ic"]) > 0) / len(valid_res)
+        agree = sum(1 for f in valid_res if float(f["residual_ic"]) > 0) / len(
+            valid_res
+        )
 
     verdict, vnotes = _diagnostic_verdict(
         protocol,
@@ -332,32 +341,69 @@ def _prep(
     db_path: Path | str,
     diagnostic_id: str,
     protocol_id: str | None,
+    compatibility_id: str | None,
+    diagnostic_compatibility_id: str | None,
 ) -> tuple[
     DiagnosticSpec | None,
     Protocol | None,
     list[DiagnosticPanelRow],
     list[str],
     DiagnosticVerdict | None,
+    DiagnosticPanelIdentity | None,
 ]:
     try:
         spec = load_diagnostic(diagnostic_id)
         proto_id = protocol_id or spec.protocol_id
         protocol = get_protocol(proto_id)
     except KeyError as exc:
-        return None, None, [], [str(exc)], DiagnosticVerdict.BLOCKED_SPEC
+        return None, None, [], [str(exc)], DiagnosticVerdict.BLOCKED_SPEC, None
 
-    rows, notes = build_diagnostic_panel(
-        db_path,
-        spec,
-        horizons=protocol.horizons_report,
-        primary_horizon=protocol.primary_horizon,
-    )
+    try:
+        rows, notes, identity = build_diagnostic_panel(
+            db_path,
+            spec,
+            horizons=protocol.horizons_report,
+            primary_horizon=protocol.primary_horizon,
+            compatibility_id=compatibility_id,
+            diagnostic_compatibility_id=diagnostic_compatibility_id,
+        )
+    except DiagnosticPanelBindingError as exc:
+        return (
+            spec,
+            protocol,
+            [],
+            [str(exc)],
+            DiagnosticVerdict.BLOCKED_DIAGNOSTIC_BINDING,
+            None,
+        )
     if len(rows) < protocol.min_n_total:
         notes = list(notes) + [
             f"panel too small n={len(rows)} < min_n_total={protocol.min_n_total}"
         ]
-        return spec, protocol, rows, notes, DiagnosticVerdict.BLOCKED_DATA
-    return spec, protocol, rows, notes, None
+        return spec, protocol, rows, notes, DiagnosticVerdict.BLOCKED_DATA, identity
+    return spec, protocol, rows, notes, None, identity
+
+
+def _stamp_identity(
+    result: DiagnosticChallengeResult | BatchDiagnosticResult,
+    spec: DiagnosticSpec,
+    identity: DiagnosticPanelIdentity,
+) -> None:
+    result.observation_compatibility_id = identity.observation_compatibility_id
+    result.diagnostic_compatibility_id = identity.diagnostic_compatibility_id
+    result.producer_snapshot_ids = identity.producer_snapshot_ids
+    result.producer_payload_digests = identity.producer_payload_digests
+    result.producer_source_revisions = identity.producer_source_revisions
+    result.action_policy_snapshot_ids = identity.action_policy_snapshot_ids
+    result.action_policy_payload_digests = identity.action_policy_payload_digests
+    result.action_policy_source_revisions = identity.action_policy_source_revisions
+    result.population_identity_id = identity.population_identity_id
+    result.session_start = identity.session_start
+    result.session_end = identity.session_end
+    result.cutoff_start = identity.cutoff_start
+    result.cutoff_end = identity.cutoff_end
+    result.diagnostic_spec_content_digest = spec.content_digest
+    result.observation_schema_version = identity.observation_schema_version
 
 
 def run_diagnostic_challenge(
@@ -368,11 +414,39 @@ def run_diagnostic_challenge(
     protocol_id: str | None = None,
     write_artifact: bool = True,
     artifacts_dir: Path | None = None,
+    compatibility_id: str | None = None,
+    diagnostic_compatibility_id: str | None = None,
 ) -> DiagnosticChallengeResult:
     path = Path(db_path)
     feature_raw = feature.strip()
 
-    spec, protocol, rows, notes, blocked = _prep(path, diagnostic_id, protocol_id)
+    try:
+        requested_spec = load_diagnostic(diagnostic_id)
+    except KeyError:
+        requested_spec = None
+    if (
+        requested_spec is not None
+        and resolve_feature_key(requested_spec, feature_raw) is None
+    ):
+        enabled = ", ".join(f.key for f in requested_spec.enabled_features())
+        msg = f"unknown or disabled feature {feature_raw!r}. Enabled: {enabled}"
+        return DiagnosticChallengeResult(
+            verdict=DiagnosticVerdict.BLOCKED_SPEC,
+            diagnostic_id=requested_spec.diagnostic_id,
+            protocol_id=protocol_id or requested_spec.protocol_id,
+            diagnostic_hash=requested_spec.hash,
+            feature=feature_raw,
+            n_rows=0,
+            primary_horizon=ACCUM_PATH_V1.primary_horizon,
+            lines=["BLOCKED_SPEC:", f"  - {msg}"],
+            summary_md=f"# Diagnostic challenge BLOCKED_SPEC\n\n{msg}\n",
+            notes=[msg],
+            diagnostic_spec_content_digest=requested_spec.content_digest,
+        )
+
+    spec, protocol, rows, notes, blocked, identity = _prep(
+        path, diagnostic_id, protocol_id, compatibility_id, diagnostic_compatibility_id
+    )
     if blocked is not None or spec is None or protocol is None:
         msg = "; ".join(notes) if notes else blocked.value if blocked else "blocked"
         return DiagnosticChallengeResult(
@@ -382,8 +456,13 @@ def run_diagnostic_challenge(
             diagnostic_hash=spec.hash if spec else "",
             feature=feature_raw,
             n_rows=len(rows),
-            primary_horizon=protocol.primary_horizon if protocol else ACCUM_PATH_V1.primary_horizon,
-            lines=[f"{(blocked or DiagnosticVerdict.BLOCKED_SPEC).value}:", f"  - {msg}"],
+            primary_horizon=protocol.primary_horizon
+            if protocol
+            else ACCUM_PATH_V1.primary_horizon,
+            lines=[
+                f"{(blocked or DiagnosticVerdict.BLOCKED_SPEC).value}:",
+                f"  - {msg}",
+            ],
             summary_md=f"# Diagnostic challenge blocked\n\n{msg}\n",
             notes=notes,
         )
@@ -416,11 +495,11 @@ def run_diagnostic_challenge(
 
     result = _run_one_feature(rows, folds, spec, protocol, canon)
     result.notes = list(notes) + list(result.notes)
+    assert identity is not None
+    _stamp_identity(result, spec, identity)
 
     if write_artifact:
-        write_diagnostic_artifact(
-            result, db_path=path, artifacts_root=artifacts_dir
-        )
+        write_diagnostic_artifact(result, db_path=path, artifacts_root=artifacts_dir)
     return result
 
 
@@ -431,9 +510,13 @@ def run_diagnostic_challenge_batch(
     protocol_id: str | None = None,
     write_artifact: bool = True,
     artifacts_dir: Path | None = None,
+    compatibility_id: str | None = None,
+    diagnostic_compatibility_id: str | None = None,
 ) -> BatchDiagnosticResult:
     path = Path(db_path)
-    spec, protocol, rows, notes, blocked = _prep(path, diagnostic_id, protocol_id)
+    spec, protocol, rows, notes, blocked, identity = _prep(
+        path, diagnostic_id, protocol_id, compatibility_id, diagnostic_compatibility_id
+    )
     if blocked is not None or spec is None or protocol is None:
         msg = "; ".join(notes) if notes else "blocked"
         return BatchDiagnosticResult(
@@ -441,9 +524,14 @@ def run_diagnostic_challenge_batch(
             protocol_id=protocol_id or "",
             diagnostic_hash=spec.hash if spec else "",
             n_rows=len(rows),
-            primary_horizon=protocol.primary_horizon if protocol else ACCUM_PATH_V1.primary_horizon,
+            primary_horizon=protocol.primary_horizon
+            if protocol
+            else ACCUM_PATH_V1.primary_horizon,
             blocked=blocked or DiagnosticVerdict.BLOCKED_SPEC,
-            lines=[f"{(blocked or DiagnosticVerdict.BLOCKED_SPEC).value}:", f"  - {msg}"],
+            lines=[
+                f"{(blocked or DiagnosticVerdict.BLOCKED_SPEC).value}:",
+                f"  - {msg}",
+            ],
             summary_md=f"# Diagnostic batch blocked\n\n{msg}\n",
             notes=notes,
         )
@@ -513,6 +601,10 @@ def run_diagnostic_challenge_batch(
         summary_md="\n".join(md) + "\n",
         notes=notes,
     )
+    assert identity is not None
+    _stamp_identity(batch, spec, identity)
+    for result in batch.results:
+        _stamp_identity(result, spec, identity)
     if write_artifact:
         write_batch_diagnostic_artifact(
             batch, db_path=path, artifacts_root=artifacts_dir
@@ -526,6 +618,8 @@ def run_diagnostic_health(
     scenario: str | None = "accum",
     write_artifact: bool = True,
     artifacts_dir: Path | None = None,
+    compatibility_id: str | None = None,
+    diagnostic_compatibility_ids: dict[str, str] | None = None,
 ) -> BatchDiagnosticResult:
     """Roll up all diagnostics for a scenario into one multi-bag batch report."""
     path = Path(db_path)
@@ -549,6 +643,7 @@ def run_diagnostic_health(
         )
 
     all_results: list[DiagnosticChallengeResult] = []
+    identity_map: dict[str, dict[str, object]] = {}
     notes: list[str] = [f"diagnostic health scenario={sc}"]
     n_rows = 0
     protocol_id = ""
@@ -558,8 +653,13 @@ def run_diagnostic_health(
             str(did),
             write_artifact=False,
             artifacts_dir=artifacts_dir,
+            compatibility_id=compatibility_id,
+            diagnostic_compatibility_id=(diagnostic_compatibility_ids or {}).get(
+                str(did)
+            ),
         )
         if batch.blocked is not None:
+            identity_map[str(did)] = {"blocked": batch.blocked.value}
             notes.append(f"{did}: {batch.blocked.value}")
             # still record blocked as synthetic rows
             all_results.append(
@@ -575,6 +675,18 @@ def run_diagnostic_health(
                 )
             )
             continue
+        identity_map[str(did)] = {
+            "blocked": None,
+            "diagnostic_compatibility_id": batch.diagnostic_compatibility_id,
+            "producer_snapshot_ids": list(batch.producer_snapshot_ids),
+            "producer_payload_digests": list(batch.producer_payload_digests),
+            "producer_source_revisions": list(batch.producer_source_revisions),
+            "diagnostic_spec_content_digest": batch.diagnostic_spec_content_digest,
+            "population_identity_id": batch.population_identity_id,
+            "session_range": {"start": batch.session_start, "end": batch.session_end},
+            "cutoff_range": {"start": batch.cutoff_start, "end": batch.cutoff_end},
+            "n_rows": batch.n_rows,
+        }
         protocol_id = batch.protocol_id
         n_rows = max(n_rows, batch.n_rows)
         for r in batch.results:
@@ -642,6 +754,8 @@ def run_diagnostic_health(
         lines=lines,
         summary_md="\n".join(md) + "\n",
         notes=notes,
+        observation_compatibility_id=(compatibility_id or ""),
+        diagnostic_identity_map=identity_map,
     )
     if write_artifact:
         write_batch_diagnostic_artifact(

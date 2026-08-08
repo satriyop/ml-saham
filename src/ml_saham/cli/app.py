@@ -722,6 +722,24 @@ def challenge_diagnostic_list_cmd() -> None:
     )
 
 
+def _parse_diagnostic_compatibility_ids(values: list[str]) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for raw in values:
+        diagnostic_id, separator, compatibility_id = raw.partition("=")
+        diagnostic_id = diagnostic_id.strip()
+        compatibility_id = compatibility_id.strip()
+        if not separator or not diagnostic_id or not compatibility_id:
+            raise typer.BadParameter(
+                "diagnostic compatibility ids must be DIAGNOSTIC_ID=sha256:..."
+            )
+        if diagnostic_id in parsed:
+            raise typer.BadParameter(
+                f"duplicate diagnostic compatibility id for {diagnostic_id}"
+            )
+        parsed[diagnostic_id] = compatibility_id
+    return parsed
+
+
 @diagnostic_app.command("run")
 def challenge_diagnostic_run_cmd(
     ctx: typer.Context,
@@ -759,6 +777,16 @@ def challenge_diagnostic_run_cmd(
         False,
         "--no-artifact",
         help="Skip artifact pack under artifacts/challenge/diagnostic/",
+    ),
+    compatibility_id: Optional[str] = typer.Option(
+        None,
+        "--compatibility-id",
+        help="Required exact ACCUM Action compatibility id",
+    ),
+    diagnostic_compatibility_id: Optional[str] = typer.Option(
+        None,
+        "--diagnostic-compatibility-id",
+        help="Required exact diagnostic producer compatibility id",
     ),
 ) -> None:
     """Calibrate explain-only bag: KEEP_DISPLAY / DEMOTE / DROP / PROMOTE_CANDIDATE."""
@@ -805,6 +833,8 @@ def challenge_diagnostic_run_cmd(
             diagnostic_id,
             write_artifact=not no_artifact,
             artifacts_dir=Path(arts) if arts else None,
+            compatibility_id=compatibility_id,
+            diagnostic_compatibility_id=diagnostic_compatibility_id,
         )
         for line in batch.lines:
             console.print(line)
@@ -830,6 +860,12 @@ def challenge_diagnostic_run_cmd(
                     for r in batch.results
                 ],
                 "artifact_dir": str(batch.artifact_dir) if batch.artifact_dir else None,
+                "observation_compatibility_id": batch.observation_compatibility_id,
+                "diagnostic_compatibility_id": batch.diagnostic_compatibility_id,
+                "producer_snapshot_ids": list(batch.producer_snapshot_ids),
+                "producer_payload_digests": list(batch.producer_payload_digests),
+                "diagnostic_spec_content_digest": batch.diagnostic_spec_content_digest,
+                "observation_schema_version": batch.observation_schema_version,
                 "banner": "ADR-057: not Action authority",
             }
             export_json.write_text(
@@ -848,6 +884,8 @@ def challenge_diagnostic_run_cmd(
         feature=feature or "",
         write_artifact=not no_artifact,
         artifacts_dir=Path(arts) if arts else None,
+        compatibility_id=compatibility_id,
+        diagnostic_compatibility_id=diagnostic_compatibility_id,
     )
     for line in result.lines:
         console.print(line)
@@ -869,6 +907,12 @@ def challenge_diagnostic_run_cmd(
             "fold_metrics": result.fold_metrics,
             "notes": result.notes,
             "artifact_dir": str(result.artifact_dir) if result.artifact_dir else None,
+            "observation_compatibility_id": result.observation_compatibility_id,
+            "diagnostic_compatibility_id": result.diagnostic_compatibility_id,
+            "producer_snapshot_ids": list(result.producer_snapshot_ids),
+            "producer_payload_digests": list(result.producer_payload_digests),
+            "diagnostic_spec_content_digest": result.diagnostic_spec_content_digest,
+            "observation_schema_version": result.observation_schema_version,
             "banner": "ADR-057: not Action authority",
         }
         export_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -903,17 +947,30 @@ def challenge_diagnostic_health_cmd(
         "--no-artifact",
         help="Skip artifact pack",
     ),
+    compatibility_id: Optional[str] = typer.Option(
+        None,
+        "--compatibility-id",
+        help="Required exact ACCUM Action compatibility id",
+    ),
+    diagnostic_compatibility_ids: list[str] = typer.Option(
+        [],
+        "--diagnostic-compatibility-id",
+        help="Repeat DIAGNOSTIC_ID=sha256:... for every diagnostic bag",
+    ),
 ) -> None:
     """Control-tower style rollup of all diagnostic bags for a scenario."""
     from ml_saham.challenge import run_diagnostic_health
 
     db_path: Path = ctx.obj["db"]
     arts = ctx.obj.get("artifacts_dir")
+    diagnostic_ids = _parse_diagnostic_compatibility_ids(diagnostic_compatibility_ids)
     batch = run_diagnostic_health(
         db_path,
         scenario=scenario,
         write_artifact=not no_artifact,
         artifacts_dir=Path(arts) if arts else None,
+        compatibility_id=compatibility_id,
+        diagnostic_compatibility_ids=diagnostic_ids,
     )
     for line in batch.lines:
         console.print(line)
@@ -936,6 +993,8 @@ def challenge_diagnostic_health_cmd(
                 for r in batch.results
             ],
             "artifact_dir": str(batch.artifact_dir) if batch.artifact_dir else None,
+            "observation_compatibility_id": batch.observation_compatibility_id,
+            "diagnostic_identity_map": batch.diagnostic_identity_map,
             "banner": "ADR-057: not Action authority",
         }
         export_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -1172,6 +1231,11 @@ def challenge_health_cmd(
             "exact purpose-family cohort (no largest auto-select; IEV ignores this)"
         ),
     ),
+    diagnostic_compatibility_ids: list[str] = typer.Option(
+        [],
+        "--diagnostic-compatibility-id",
+        help="With diagnostics, repeat DIAGNOSTIC_ID=sha256:... for every bag",
+    ),
     no_artifact: bool = typer.Option(
         False,
         "--no-artifact",
@@ -1197,6 +1261,9 @@ def challenge_health_cmd(
         write_artifact=not no_artifact,
         artifacts_dir=Path(arts) if arts else None,
         compatibility_id=compatibility_id,
+        diagnostic_compatibility_ids=_parse_diagnostic_compatibility_ids(
+            diagnostic_compatibility_ids
+        ),
     )
     for line in result.lines:
         console.print(line)

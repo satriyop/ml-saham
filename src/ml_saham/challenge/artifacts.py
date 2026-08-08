@@ -33,6 +33,39 @@ JAKARTA = ZoneInfo("Asia/Jakarta")
 # Promote reopen accepts only schema v4 sealed evidence.
 CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION = 4
 CHALLENGE_DISPLAY_ARTIFACT_SCHEMA_VERSION = 3
+DIAGNOSTIC_ARTIFACT_SCHEMA_VERSION = 4
+DIAGNOSTIC_ARTIFACT_CONTRACT_ID = "diagnostic_result_artifact.v4"
+
+
+def _seal_diagnostic_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+    material = {
+        key: value
+        for key, value in manifest.items()
+        if key not in {"artifact_id", "content_digest", "created_at", "db_path"}
+    }
+    canonical = json.dumps(
+        material,
+        ensure_ascii=True,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    content_digest = "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    artifact_material = {
+        "contract_id": DIAGNOSTIC_ARTIFACT_CONTRACT_ID,
+        "content_digest": content_digest,
+    }
+    artifact_id = (
+        "sha256:"
+        + hashlib.sha256(
+            json.dumps(artifact_material, sort_keys=True, separators=(",", ":")).encode(
+                "utf-8"
+            )
+        ).hexdigest()
+    )
+    return {**manifest, "content_digest": content_digest, "artifact_id": artifact_id}
+
+
 # Alias used by sealed promote-evidence writers/export path.
 CHALLENGE_ARTIFACT_SCHEMA_VERSION = CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION
 # Historical schemas still readable for display, never for promote reopen.
@@ -462,12 +495,29 @@ def write_diagnostic_artifact(
     )
     out.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "schema_version": CHALLENGE_DISPLAY_ARTIFACT_SCHEMA_VERSION,
+        "schema_version": DIAGNOSTIC_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_diagnostic",
+        "non_promotable": True,
+        "contract_id": DIAGNOSTIC_ARTIFACT_CONTRACT_ID,
         "track": "diagnostic_validity",
         "diagnostic_id": result.diagnostic_id,
         "protocol_id": result.protocol_id,
         "diagnostic_hash": result.diagnostic_hash,
+        "diagnostic_spec_content_digest": result.diagnostic_spec_content_digest,
+        "observation_compatibility_id": result.observation_compatibility_id,
+        "diagnostic_compatibility_id": result.diagnostic_compatibility_id,
+        "producer_snapshot_ids": list(result.producer_snapshot_ids),
+        "producer_payload_digests": list(result.producer_payload_digests),
+        "producer_source_revisions": list(result.producer_source_revisions),
+        "action_policy_snapshot_ids": list(result.action_policy_snapshot_ids),
+        "action_policy_payload_digests": list(result.action_policy_payload_digests),
+        "action_policy_source_revisions": list(result.action_policy_source_revisions),
+        "observation_schema_version": result.observation_schema_version,
+        "population_identity_kind": "accum_membership_digest",
+        "population_identity_id": result.population_identity_id,
+        "session_range": {"start": result.session_start, "end": result.session_end},
+        "cutoff_range": {"start": result.cutoff_start, "end": result.cutoff_end},
+        "sample_unit": "ticker-session-window7",
         "feature": result.feature,
         "verdict": result.verdict.value,
         "n_rows": result.n_rows,
@@ -476,6 +526,7 @@ def write_diagnostic_artifact(
         "db_path": str(db_path),
         "created_at": datetime.now(tz=JAKARTA).isoformat(),
     }
+    manifest = _seal_diagnostic_manifest(manifest)
     (out / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
@@ -527,13 +578,34 @@ def write_batch_diagnostic_artifact(
         }
         for r in result.results
     ]
+    is_health = result.diagnostic_id.startswith("_health.")
     manifest = {
-        "schema_version": CHALLENGE_DISPLAY_ARTIFACT_SCHEMA_VERSION,
-        "mode": "challenge_diagnostic_batch",
+        "schema_version": DIAGNOSTIC_ARTIFACT_SCHEMA_VERSION,
+        "mode": "challenge_diagnostic_health"
+        if is_health
+        else "challenge_diagnostic_batch",
+        "non_promotable": True,
+        "contract_id": DIAGNOSTIC_ARTIFACT_CONTRACT_ID,
         "track": "diagnostic_validity_batch",
         "diagnostic_id": result.diagnostic_id,
         "protocol_id": result.protocol_id,
         "diagnostic_hash": result.diagnostic_hash,
+        "diagnostic_spec_content_digest": result.diagnostic_spec_content_digest,
+        "observation_compatibility_id": result.observation_compatibility_id,
+        "diagnostic_compatibility_id": result.diagnostic_compatibility_id,
+        "producer_snapshot_ids": list(result.producer_snapshot_ids),
+        "producer_payload_digests": list(result.producer_payload_digests),
+        "producer_source_revisions": list(result.producer_source_revisions),
+        "action_policy_snapshot_ids": list(result.action_policy_snapshot_ids),
+        "action_policy_payload_digests": list(result.action_policy_payload_digests),
+        "action_policy_source_revisions": list(result.action_policy_source_revisions),
+        "observation_schema_version": result.observation_schema_version,
+        "diagnostic_identity_map": result.diagnostic_identity_map,
+        "population_identity_kind": "accum_membership_digest",
+        "population_identity_id": result.population_identity_id,
+        "session_range": {"start": result.session_start, "end": result.session_end},
+        "cutoff_range": {"start": result.cutoff_start, "end": result.cutoff_end},
+        "sample_unit": "ticker-session-window7",
         "n_rows": result.n_rows,
         "primary_horizon": result.primary_horizon,
         "n_features": len(result.results),
@@ -544,6 +616,7 @@ def write_batch_diagnostic_artifact(
         "features": [f["feature"] for f in factors_payload],
         "verdicts": {f["feature"]: f["verdict"] for f in factors_payload},
     }
+    manifest = _seal_diagnostic_manifest(manifest)
     (out / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
