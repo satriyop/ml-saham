@@ -207,6 +207,20 @@ def validate_fold_geometry_evidence(
                 f"challenge evidence invalid: fold_metrics[{i}]."
                 f"embargo_sessions_actual={actual} < required={required}"
             )
+        min_train_sess = int(getattr(protocol, "min_train_sessions", 1) or 1)
+        min_test_sess = int(getattr(protocol, "min_test_sessions", 1) or 1)
+        if fold["n_train_sessions"] < min_train_sess:
+            return (
+                f"challenge evidence invalid: fold_metrics[{i}]."
+                f"n_train_sessions={fold['n_train_sessions']} < protocol "
+                f"min_train_sessions={min_train_sess}"
+            )
+        if fold["n_test_sessions"] < min_test_sess:
+            return (
+                f"challenge evidence invalid: fold_metrics[{i}]."
+                f"n_test_sessions={fold['n_test_sessions']} < protocol "
+                f"min_test_sessions={min_test_sess}"
+            )
         train_max = fold["train_date_max"]
         test_min = fold["date_min"]
         test_max = fold["date_max"]

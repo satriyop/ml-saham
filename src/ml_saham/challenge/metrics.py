@@ -165,6 +165,12 @@ def _build_fold(
 
     train_idx = _indices_for_sessions(rows, order, train_sessions)
     test_idx = _indices_for_sessions(rows, order, test_sessions)
+    n_train_sess = len(train_sessions)
+    n_test_sess = len(test_sessions)
+    min_train_sess = int(getattr(protocol, "min_train_sessions", 1) or 1)
+    min_test_sess = int(getattr(protocol, "min_test_sessions", 1) or 1)
+    if n_train_sess < min_train_sess or n_test_sess < min_test_sess:
+        return None
     if len(test_idx) < protocol.min_n_test or len(train_idx) < min_train_rows:
         return None
 
@@ -177,8 +183,8 @@ def _build_fold(
     fold = Fold(
         train_idx=train_idx,
         test_idx=test_idx,
-        n_train_sessions=len(train_sessions),
-        n_test_sessions=len(test_sessions),
+        n_train_sessions=n_train_sess,
+        n_test_sessions=n_test_sess,
         embargo_sessions_actual=gap,
         train_date_max=train_max,
         test_date_min=test_min,
@@ -199,6 +205,8 @@ def time_purged_folds(rows: Sequence[PanelRow], protocol: Protocol) -> list[Fold
       ``embargo_sessions``, ``n_folds`` chunking, and min train/test N.
     - Each returned fold has proven: no session overlap, all train dates
       precede all test dates, and embargo gap ≥ ``protocol.embargo_sessions``.
+    - Session floors ``min_train_sessions`` / ``min_test_sessions`` (ML-OOS-02)
+      are protocol fields derived from fold-geometry simulation.
     """
     if len(rows) < protocol.min_n_total:
         return []
@@ -218,9 +226,7 @@ def time_purged_folds(rows: Sequence[PanelRow], protocol: Protocol) -> list[Fold
     # Divide unique sessions into n_folds+1 contiguous blocks; block 0 is the
     # initial train reservoir; later blocks are successive test windows.
     chunk = max(1, n_sess // (protocol.n_folds + 1))
-    # Preserve prior multi-fold train-row floor (stricter than the removed
-    # single-fold fallback's 10).
-    min_train_rows = 15
+    min_train_rows = int(getattr(protocol, "min_train_rows", 15) or 15)
 
     for f in range(protocol.n_folds):
         test_start_i = chunk * (f + 1)

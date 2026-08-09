@@ -42,7 +42,11 @@ sealed into ``content_digest``. Schema **v4 and earlier** are
 display-only / not promote-reopen eligible. Per-fold session geometry fields
 are required and type-checked on reopen.
 
-## Not changed here (needs separate vetting)
+## Related
 
-Minimum train/test **session** floors, fold count, embargo value, daily IC,
-holdout size, multiplicity, single-fold LOSE→INCONCLUSIVE policy.
+Session floors (ML-OOS-02): `docs/decisions/ml_oos_02_session_floors_2026-08-09.md`.
+
+## Still deferred
+
+Fold count, embargo value, daily IC, holdout size, multiplicity,
+single-fold LOSE→INCONCLUSIVE policy.

@@ -163,6 +163,13 @@ class Protocol:
     costs: str = "gross_banner"
     # WIN requires this many valid OOS folds (single-fold edge = provisional only)
     min_folds_for_win: int = 2
+    # Session floors (ML-OOS-02): unique panel dates per split. Derived from
+    # fold-geometry simulation of n_folds/embargo/min_folds_for_win — not free
+    # statistical knobs. Defaults are identity bounds (≥1).
+    min_train_sessions: int = 1
+    min_test_sessions: int = 1
+    # Row floor for train (historical multi-fold constant); test uses min_n_test.
+    min_train_rows: int = 15
 
 
 @dataclass
