@@ -255,12 +255,30 @@ def time_purged_folds(rows: Sequence[PanelRow], protocol: Protocol) -> list[Fold
 
 
 def ic_safe(scores: Sequence[float], returns: Sequence[float]) -> float | None:
-    """Rank IC or None if undefined (constant scores, empty, non-finite)."""
+    """Rank IC or None if undefined (constant scores, empty, non-finite).
+
+    Only **finite** score/return pairs participate. Infinity or NaN pairs are
+    dropped; fewer than 2 finite pairs → None. This prevents valid-looking IC
+    from inputs that contain ``inf`` (blast radius: all challenge fold IC
+    paths using ``ic_safe``; curriculum ``rank_ic`` is unchanged).
+    """
     try:
-        if len(scores) < 2 or len(scores) != len(returns):
+        if len(scores) != len(returns):
             return None
-        s = [float(x) for x in scores]
-        r = [float(x) for x in returns]
+        s: list[float] = []
+        r: list[float] = []
+        for a, b in zip(scores, returns, strict=True):
+            try:
+                fa = float(a)
+                fb = float(b)
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(fa) or not math.isfinite(fb):
+                continue
+            s.append(fa)
+            r.append(fb)
+        if len(s) < 2:
+            return None
         if max(s) - min(s) < 1e-12:
             return None
         if max(r) - min(r) < 1e-12:

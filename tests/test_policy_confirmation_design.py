@@ -78,7 +78,8 @@ def test_session_rank_ics_and_summary():
     grouped = group_pairs_by_session(rows)
     points = session_rank_ics(grouped)
     assert len(points) == 2
-    assert all(p.n_names == 3 for p in points)
+    assert all(p.n_valid_pairs == 3 for p in points)
+    assert all(p.n_input_pairs == 3 for p in points)
     assert points[0].rank_ic is not None
     summary = summarize_session_ics(
         points,

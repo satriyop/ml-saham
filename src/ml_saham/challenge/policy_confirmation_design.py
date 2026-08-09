@@ -17,6 +17,7 @@ Semantic classification: PROTOCOL_CONTRACT design research (not product law yet)
 
 from __future__ import annotations
 
+import math
 import statistics
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
@@ -201,6 +202,12 @@ def sessions_per_parameter(
     train_sessions: int, *, n_fit_parameters: int
 ) -> float | None:
     """Descriptive ratio only; None when parameters unknown (e.g. LGBM)."""
+    if type(train_sessions) is not int or type(n_fit_parameters) is not int:
+        raise ValueError("train_sessions and n_fit_parameters must be exact int")
+    if train_sessions < 0:
+        raise ValueError(f"train_sessions must be >= 0, got {train_sessions}")
+    if n_fit_parameters < -1:
+        raise ValueError(f"n_fit_parameters must be >= -1, got {n_fit_parameters}")
     if n_fit_parameters < 0:
         return None
     if n_fit_parameters == 0:
@@ -215,11 +222,38 @@ def sessions_per_parameter(
 # ---------------------------------------------------------------------------
 
 
+def _require_nonneg_int(name: str, value: object) -> int:
+    """Fail closed on bool, non-int, or negative values (no silent clamp)."""
+    if type(value) is not int:
+        raise ValueError(f"{name} must be exact int, got {type(value).__name__}={value!r}")
+    if value < 0:
+        raise ValueError(f"{name} must be >= 0, got {value}")
+    return value
+
+
+def _finite_pairs(
+    pairs: Sequence[tuple[float, float]],
+) -> list[tuple[float, float]]:
+    out: list[tuple[float, float]] = []
+    for a, b in pairs:
+        try:
+            fa = float(a)
+            fb = float(b)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(fa) and math.isfinite(fb):
+            out.append((fa, fb))
+    return out
+
+
 @dataclass(frozen=True)
 class SessionICPoint:
     session: str
     rank_ic: float | None
-    n_names: int
+    # Finite score/return pairs that participated in IC (not raw input length).
+    n_valid_pairs: int
+    # Raw input pair count before non-finite drop.
+    n_input_pairs: int
 
 
 @dataclass(frozen=True)
@@ -244,10 +278,18 @@ def session_rank_ics(
     points: list[SessionICPoint] = []
     for session in sorted(session_scores_returns.keys()):
         pairs = list(session_scores_returns[session])
-        scores = [p[0] for p in pairs]
-        rets = [p[1] for p in pairs]
-        ic = ic_safe(scores, rets)
-        points.append(SessionICPoint(session=session, rank_ic=ic, n_names=len(pairs)))
+        valid = _finite_pairs(pairs)
+        scores = [p[0] for p in valid]
+        rets = [p[1] for p in valid]
+        ic = ic_safe(scores, rets) if len(valid) >= 2 else None
+        points.append(
+            SessionICPoint(
+                session=session,
+                rank_ic=ic,
+                n_valid_pairs=len(valid),
+                n_input_pairs=len(pairs),
+            )
+        )
     return points
 
 
@@ -270,6 +312,7 @@ def summarize_session_ics(
         "stdev is population stdev of session ICs (descriptive dispersion)",
         "no bootstrap / block-bootstrap / Newey-West chosen as product law",
         "pooled_rank_ic is cross-sectional pool over all rows if provided",
+        "n_valid_pairs counts finite pairs only (inf/nan dropped)",
     ]
     if pooled_scores is not None and pooled_returns is not None:
         pooled = ic_safe(pooled_scores, pooled_returns)
@@ -313,7 +356,8 @@ class HoldoutGeometryCandidate:
     # Holdout occupies the final H sessions of the full calendar.
     holdout_start_i: int
     holdout_end_i: int  # exclusive
-    # True if holdout is strictly after all fold test sessions.
+    # True only when holdout fits the calendar, ≥1 fold formed, and holdout
+    # sits strictly after every fold test block.
     holdout_after_all_fold_tests: bool
     notes: str
 
@@ -327,32 +371,55 @@ def holdout_geometry_candidate(
 ) -> HoldoutGeometryCandidate:
     """Pure placement study for a *candidate* holdout length.
 
-    Does not choose the holdout length for Protocol. Fail-soft: empty folds
-    still report geometry.
+    Does not choose the holdout length for Protocol. Negative inputs raise
+    ValueError (fail closed). ``holdout_after_all_fold_tests`` is True only
+    for a fully valid placement: 0 < H ≤ N, folds formed ≥ 1, and holdout
+    strictly after all fold tests.
     """
-    h = max(0, int(holdout_sessions_candidate))
-    n = max(0, int(n_sessions_total))
-    n_fold_region = max(0, n - h)
+    n = _require_nonneg_int("n_sessions_total", n_sessions_total)
+    h = _require_nonneg_int("holdout_sessions_candidate", holdout_sessions_candidate)
+    n_folds_i = _require_nonneg_int("n_folds", n_folds)
+    embargo_i = _require_nonneg_int("embargo_sessions", embargo_sessions)
+    if n_folds_i < 1:
+        raise ValueError(f"n_folds must be >= 1, got {n_folds_i}")
+
+    if h > n:
+        return HoldoutGeometryCandidate(
+            n_sessions_total=n,
+            holdout_sessions_candidate=h,
+            n_sessions_for_folds=0,
+            folds_formed=0,
+            last_test_end_i=None,
+            holdout_start_i=0,
+            holdout_end_i=n,
+            holdout_after_all_fold_tests=False,
+            notes="holdout exceeds calendar (invalid placement)",
+        )
+
+    n_fold_region = n - h
     folds = simulate_session_folds(
-        n_fold_region, n_folds=n_folds, embargo_sessions=embargo_sessions
+        n_fold_region, n_folds=n_folds_i, embargo_sessions=embargo_i
     )
     last_end = max((f.test_end_i for f in folds), default=None)
     holdout_start = n_fold_region
     holdout_end = n
-    after = True
-    if last_end is not None and last_end > holdout_start:
-        after = False
+
     if h <= 0:
         after = False
         note = "candidate holdout_sessions=0 (no final holdout)"
-    elif n_fold_region < n_folds + 1:
-        note = "fold region too short for any fold under n_folds+1 rule"
-    elif not folds:
-        note = "no folds formed in fold region (embargo/depth)"
-    elif after:
-        note = "holdout strictly after all fold test blocks (geometry OK for study)"
-    else:
+    elif not folds or last_end is None:
+        after = False
+        if n_fold_region < n_folds_i + 1:
+            note = "fold region too short for any fold under n_folds+1 rule"
+        else:
+            note = "no folds formed in fold region (embargo/depth)"
+    elif last_end > holdout_start:
+        after = False
         note = "holdout overlaps fold test region (invalid placement)"
+    else:
+        after = True
+        note = "holdout strictly after all fold test blocks (geometry OK for study)"
+
     return HoldoutGeometryCandidate(
         n_sessions_total=n,
         holdout_sessions_candidate=h,
@@ -389,6 +456,14 @@ def sweep_holdout_candidates(
 # ---------------------------------------------------------------------------
 
 
+def _require_nonempty_str(name: str, value: object) -> str:
+    if type(value) is not str:
+        raise ValueError(f"{name} must be exact str, got {type(value).__name__}={value!r}")
+    if not value or value != value.strip():
+        raise ValueError(f"{name} must be non-empty without surrounding whitespace, got {value!r}")
+    return value
+
+
 @dataclass(frozen=True)
 class MultiplicitySearchRecord:
     """Audit record for a multi-challenger search — no p-value correction.
@@ -405,11 +480,22 @@ class MultiplicitySearchRecord:
     notes: str = ""
 
     def __post_init__(self) -> None:
-        # frozen dataclass: validate via object.__setattr__ not needed if we check
         if len(self.challenger_ids) != self.n_comparisons:
             raise ValueError(
                 "n_comparisons must equal len(challenger_ids) "
                 f"({self.n_comparisons} vs {len(self.challenger_ids)})"
+            )
+        if not self.search_id or self.search_id != self.search_id.strip():
+            raise ValueError(f"search_id must be non-empty, got {self.search_id!r}")
+        if not self.selection_rule or self.selection_rule != self.selection_rule.strip():
+            raise ValueError(
+                f"selection_rule must be non-empty, got {self.selection_rule!r}"
+            )
+        if not self.challenger_ids:
+            raise ValueError("challenger_ids must be non-empty")
+        if len(set(self.challenger_ids)) != len(self.challenger_ids):
+            raise ValueError(
+                f"challenger_ids must be unique, got {self.challenger_ids!r}"
             )
 
 
@@ -421,12 +507,21 @@ def multiplicity_search_record(
     primary_metric: str = "mean_fold_ic_edge",
     notes: str = "",
 ) -> MultiplicitySearchRecord:
+    sid = _require_nonempty_str("search_id", search_id)
+    rule = _require_nonempty_str("selection_rule", selection_rule)
+    metric = _require_nonempty_str("primary_metric", primary_metric)
     ids = tuple(str(c) for c in challenger_ids)
+    if not ids:
+        raise ValueError("challenger_ids must be non-empty")
+    if any(not c or c != c.strip() for c in ids):
+        raise ValueError(f"challenger_ids entries must be non-empty str, got {ids!r}")
+    if len(set(ids)) != len(ids):
+        raise ValueError(f"challenger_ids must be unique, got {ids!r}")
     return MultiplicitySearchRecord(
-        search_id=search_id,
+        search_id=sid,
         challenger_ids=ids,
-        selection_rule=selection_rule,
-        primary_metric=primary_metric,
+        selection_rule=rule,
+        primary_metric=metric,
         n_comparisons=len(ids),
         notes=notes
         or (

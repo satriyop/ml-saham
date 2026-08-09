@@ -109,9 +109,25 @@ PYTHONPATH=src python scripts/report_ml_oos_02_design.py \
 5. Promote reopen accepts that contract id and re-validates bound fields.  
 6. Historical exploratory artifacts remain display-only / non-eligible.
 
+## Measurement hardening (2026-08-10)
+
+Fail-closed primitives (no silent clamp / false-valid geometry):
+
+- Holdout: `holdout > n_sessions` or no folds ⇒ `holdout_after_all_fold_tests=False`
+- Negative ints rejected (`ValueError`), not clamped to 0
+- Multiplicity: empty `search_id` / `selection_rule`, empty or **duplicate**
+  challenger ids rejected
+- Session IC: `n_valid_pairs` = finite pairs only; `n_input_pairs` = raw length
+- Shared `ic_safe`: non-finite (inf/nan) pairs dropped; need ≥2 finite pairs
+
+Blast radius for `ic_safe`: all challenge fold IC paths; curriculum `rank_ic`
+unchanged. Adversarial tests:
+`tests/test_policy_confirmation_design_adversarial.py`.
+
 ## Explicit non-goals of this slice
 
 - Planting `policy_min_*` into `accum_path_v1`
 - Marking ML-OOS-02 complete
 - Softening exploratory promote blocks
 - Inventing CI / holdout / multiplicity constants in code
+- Registering `POLICY_CONFIRMATION_CONTRACTS`
