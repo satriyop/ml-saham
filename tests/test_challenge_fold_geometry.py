@@ -122,7 +122,7 @@ def test_interior_missing_sessions_order_still_respected():
         embargo_sessions=5,
         win_margin=0.01,
         min_fold_agree=0.5,
-        min_folds_for_win=1,
+        min_folds_for_verdict=1,
     )
     folds = time_purged_folds(rows, proto)
     assert folds
@@ -150,7 +150,7 @@ def test_uneven_ticker_coverage_across_sessions():
         embargo_sessions=5,
         win_margin=0.01,
         min_fold_agree=0.5,
-        min_folds_for_win=1,
+        min_folds_for_verdict=1,
     )
     folds = time_purged_folds(rows, proto)
     assert folds

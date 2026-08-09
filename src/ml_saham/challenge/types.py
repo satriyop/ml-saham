@@ -167,8 +167,9 @@ class Protocol:
     min_fold_agree: float  # fraction of folds challenger must win
     label: str = "excess_vs_ihsg"
     costs: str = "gross_banner"
-    # WIN requires this many valid OOS folds (single-fold edge = provisional only)
-    min_folds_for_win: int = 2
+    # Symmetric minimum valid OOS folds for directional WIN *or* LOSE
+    # (VERDICT_SEMANTICS). Thin calendars stay INCONCLUSIVE either direction.
+    min_folds_for_verdict: int = 2
     # Structural geometry minima (unique panel dates). Derived from fold-geometry
     # simulation only — NOT policy-grade ML sample sizes (see ML-OOS-02 decision).
     geometry_min_train_sessions: int = 1
@@ -179,6 +180,8 @@ class Protocol:
     # registered. Promote / task-06 policy-grade path fails closed otherwise.
     evidence_grade: str = EVIDENCE_GRADE_EXPLORATORY
     policy_confirmation_contract_id: str = ""
+    # Bound into sealed promote-evidence identity (VERDICT_SEMANTICS contract).
+    verdict_semantics_contract_id: str = "verdict_semantics.symmetric_directional.v1"
 
 
 @dataclass
@@ -216,6 +219,7 @@ class ChallengeResult:
     # Authority separation: EXPLORATORY ≠ policy-grade promote / task-06 evidence.
     evidence_grade: str = EVIDENCE_GRADE_EXPLORATORY
     policy_confirmation_contract_id: str = ""
+    verdict_semantics_contract_id: str = "verdict_semantics.symmetric_directional.v1"
 
     def exit_code(self) -> int:
         if self.status in (

@@ -242,12 +242,12 @@ def test_product_panel_iev_source_forbids_iev_over_iep_assignment():
 # --- (4) Verdict = evidence shape ---
 
 
-def test_protocols_require_min_folds_for_win():
-    assert ACCUM_PATH_V1.min_folds_for_win >= 2
-    assert PRE_OPEN_SESSION_V1.min_folds_for_win >= 2
+def test_protocols_require_min_folds_for_verdict():
+    assert ACCUM_PATH_V1.min_folds_for_verdict >= 2
+    assert PRE_OPEN_SESSION_V1.min_folds_for_verdict >= 2
 
 
-def test_single_fold_ic_edge_provisional_not_win():
+def test_single_fold_ic_edge_insufficient_case_not_win():
     status, _, _, notes = _verdict(
         ACCUM_PATH_V1,
         [
@@ -262,7 +262,8 @@ def test_single_fold_ic_edge_provisional_not_win():
         against_id="equal_sleeves",
     )
     assert status == ChallengeStatus.INCONCLUSIVE
-    assert any("provisional" in n.lower() for n in notes)
+    joined = " ".join(notes).lower()
+    assert "insufficient case to replace production" in joined
 
 
 def test_mce_prefers_observation_bound_market_context():

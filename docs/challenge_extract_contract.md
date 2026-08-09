@@ -14,7 +14,7 @@ Related: [data_contract.md](../data_contract.md) (paths/units table) · [challen
 | Fixture for *wiring* smoke | Fixture as the *only* payload contract |
 | Legacy root-level fallback | Root-only extract that is empty on 100% of live rows |
 | Curriculum toy math in `chapters/` | Same math as product PolicySpec features without re-derivation |
-| `INCONCLUSIVE` / provisional notes | `WIN` on a single OOS fold |
+| `INCONCLUSIVE` / insufficient-case notes | `WIN` or `LOSE` on a single OOS fold |
 
 ---
 
@@ -47,7 +47,7 @@ For any change under `src/ml_saham/challenge/panel*.py`, policies, or diagnostic
 - [ ] Label **y** and benchmark share one horizon
 - [ ] Units unconditional (no `|x|≤1 ⇒ fraction` heuristics)
 - [ ] Capture rule: NCP / decision clock / bound context preferred over “largest / latest table row”
-- [ ] WIN still requires `min_folds_for_win ≥ 2` (provisional single-fold = INCONCLUSIVE)
+- [ ] WIN **and** LOSE require `min_folds_for_verdict ≥ 2` (thin single-fold either way = INCONCLUSIVE)
 - [ ] No curriculum-only math as product features without field-meaning re-derivation
 - [ ] Row added/updated in `data_contract.md` extract-contracts table when path is new
 - [ ] `./scripts/check_challenge_contracts.sh` passes locally
@@ -67,7 +67,7 @@ pytest tests/test_challenge_live_smoke.py -q -m live_db
 `check_challenge_contracts.sh` runs:
 
 1. **Pattern bans** (known regressions: IEV/IEP ratio assignment, old pct heuristic)
-2. **Protocol gate** (`min_folds_for_win ≥ 2`)
+2. **Protocol gate** (`min_folds_for_verdict ≥ 2`, symmetric WIN/LOSE)
 3. **Golden presence** under `tests/fixtures/golden/`
 4. **pytest** `test_challenge_payload_contracts.py` + `test_challenge_verdict_folds.py`
 

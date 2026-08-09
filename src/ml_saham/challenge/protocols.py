@@ -13,12 +13,12 @@ from ml_saham.challenge.types import (
 _ACCUM_GEOM = recommend_geometry_minima(
     n_folds=3,
     embargo_sessions=20,
-    min_folds_for_win=2,
+    min_folds_for_verdict=2,
 )
 _PRE_OPEN_GEOM = recommend_geometry_minima(
     n_folds=3,
     embargo_sessions=1,
-    min_folds_for_win=2,
+    min_folds_for_verdict=2,
 )
 
 # Accum path: primary H=10 (ai-saham accum_10d); report tactical 3d + accum 20d.
@@ -35,7 +35,7 @@ ACCUM_PATH_V1 = Protocol(
     min_fold_agree=2 / 3,
     label="excess_vs_ihsg",
     costs="gross_banner",
-    min_folds_for_win=2,  # single post-embargo fold cannot be promotion WIN
+    min_folds_for_verdict=2,  # WIN and LOSE both need multi-fold evidence
     geometry_min_train_sessions=_ACCUM_GEOM.geometry_min_train_sessions,
     geometry_min_test_sessions=_ACCUM_GEOM.geometry_min_test_sessions,
     min_train_rows=15,
@@ -56,7 +56,7 @@ PRE_OPEN_SESSION_V1 = Protocol(
     min_fold_agree=2 / 3,
     label="open_to_close_excess_vs_ihsg",
     costs="gross_banner",
-    min_folds_for_win=2,
+    min_folds_for_verdict=2,
     geometry_min_train_sessions=_PRE_OPEN_GEOM.geometry_min_train_sessions,
     geometry_min_test_sessions=_PRE_OPEN_GEOM.geometry_min_test_sessions,
     min_train_rows=15,

@@ -683,11 +683,15 @@ def _verdict(
     baseline_id: str,
     against_id: str,
 ) -> tuple[ChallengeStatus, float | None, float | None, list[str]]:
-    """Policy tournament outcome.
+    """Policy tournament outcome (VERDICT_SEMANTICS.symmetric_directional.v1).
 
-    WIN is promotion-oriented: requires multi-fold agreement. A single OOS fold
-    with an IC edge is **INCONCLUSIVE** (“promising but provisional”), never WIN —
-    thin calendars after embargo often yield only one usable fold.
+    Directional WIN **and** LOSE both require:
+      - ≥ ``min_folds_for_verdict`` valid OOS folds with IC, and
+      - fold agreement ≥ ``min_fold_agree`` in that direction.
+
+    Thin calendars (fewer valid folds than the minimum) are **INCONCLUSIVE**
+    either way — expressed as insufficient case to replace production, never a
+    statistical LOSE on a single post-embargo fold.
     """
     del baseline_id, against_id  # reserved for future baseline-specific gates
     notes: list[str] = []
@@ -704,14 +708,23 @@ def _verdict(
     mean_b = sum(base_ics) / len(base_ics)
     mean_a = sum(ag_ics) / len(ag_ics)
 
-    fold_wins = sum(
-        1 for f in valid if float(f["ic_against"]) > float(f["ic_baseline"]) + 1e-12
+    eps = 1e-12
+    fold_challenger_better = sum(
+        1
+        for f in valid
+        if float(f["ic_against"]) > float(f["ic_baseline"]) + eps
     )
-    agree = fold_wins / len(valid)
+    fold_baseline_better = sum(
+        1
+        for f in valid
+        if float(f["ic_against"]) < float(f["ic_baseline"]) - eps
+    )
     n_valid = len(valid)
-    min_folds = max(1, int(getattr(protocol, "min_folds_for_win", 2) or 2))
+    win_agree = fold_challenger_better / n_valid
+    lose_agree = fold_baseline_better / n_valid
+    min_folds = max(1, int(protocol.min_folds_for_verdict))
 
-    # tail: against should not be much worse on bottom-decile mean excess
+    # tail: against should not be much worse on bottom-decile mean excess (WIN gate)
     tail_ok = True
     for f in valid:
         tb = f.get("tail_baseline")
@@ -721,27 +734,52 @@ def _verdict(
             notes.append("tail proxy worse on at least one fold")
             break
 
-    edge = mean_a > mean_b + protocol.win_margin
-    if edge and n_valid < min_folds:
-        notes.append(
-            f"promising but provisional: only {n_valid} valid OOS fold(s); "
-            f"need ≥{min_folds} for WIN (promotion-ready multi-fold evidence)"
-        )
+    positive_edge = mean_a > mean_b + protocol.win_margin
+    negative_edge = mean_a < mean_b - protocol.win_margin
+
+    if n_valid < min_folds:
+        if positive_edge:
+            notes.append(
+                f"insufficient case to replace production: only {n_valid} valid "
+                f"OOS fold(s) with positive edge; need ≥{min_folds} for directional "
+                "WIN (multi-fold evidence)"
+            )
+        elif negative_edge:
+            notes.append(
+                f"insufficient case to replace production: only {n_valid} valid "
+                f"OOS fold(s) with negative edge; need ≥{min_folds} for directional "
+                "LOSE (not a statistical LOSE on a thin calendar)"
+            )
+        else:
+            notes.append(
+                f"insufficient case to replace production: only {n_valid} valid "
+                f"OOS fold(s); need ≥{min_folds} for directional verdict"
+            )
         return ChallengeStatus.INCONCLUSIVE, mean_b, mean_a, notes
-    if edge and agree >= protocol.min_fold_agree and tail_ok:
-        return ChallengeStatus.WIN, mean_b, mean_a, notes
-    if edge and agree < protocol.min_fold_agree:
-        notes.append(
-            f"IC edge but fold agree {agree:.0%} < {protocol.min_fold_agree:.0%}"
-        )
-        return ChallengeStatus.INCONCLUSIVE, mean_b, mean_a, notes
-    if edge and not tail_ok:
+
+    if positive_edge:
+        if win_agree >= protocol.min_fold_agree and tail_ok:
+            return ChallengeStatus.WIN, mean_b, mean_a, notes
+        if win_agree < protocol.min_fold_agree:
+            notes.append(
+                f"IC edge but fold agree {win_agree:.0%} < "
+                f"{protocol.min_fold_agree:.0%} (WIN requires fold agreement)"
+            )
+            return ChallengeStatus.INCONCLUSIVE, mean_b, mean_a, notes
         notes.append("IC edge but tail gate failed")
         return ChallengeStatus.INCONCLUSIVE, mean_b, mean_a, notes
-    if abs(mean_a - mean_b) <= protocol.win_margin:
-        notes.append("primary IC within margin")
+
+    if negative_edge:
+        if lose_agree >= protocol.min_fold_agree:
+            return ChallengeStatus.LOSE, mean_b, mean_a, notes
+        notes.append(
+            f"baseline edge but fold agree {lose_agree:.0%} < "
+            f"{protocol.min_fold_agree:.0%} (LOSE requires fold agreement)"
+        )
         return ChallengeStatus.INCONCLUSIVE, mean_b, mean_a, notes
-    return ChallengeStatus.LOSE, mean_b, mean_a, notes
+
+    notes.append("primary IC within margin")
+    return ChallengeStatus.INCONCLUSIVE, mean_b, mean_a, notes
 
 
 def run_policy_challenge(
@@ -790,6 +828,12 @@ def run_policy_challenge(
                 else ""
             )
             or "",
+            "verdict_semantics_contract_id": (
+                getattr(protocol, "verdict_semantics_contract_id", "")
+                if protocol is not None
+                else ""
+            )
+            or "verdict_semantics.symmetric_directional.v1",
         }
         if policy is not None and policy.production_snapshot_id:
             # Verified production-policy path (cohort-bound snapshots + adapter).

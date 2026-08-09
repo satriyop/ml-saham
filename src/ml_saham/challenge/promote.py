@@ -12,6 +12,7 @@ from ml_saham.challenge.artifacts import (
     CHALLENGE_ARTIFACT_SCHEMA_VERSION,
     FOLD_GEOMETRY_CONTRACT_ID,
     HISTORICAL_CHALLENGE_ARTIFACT_SCHEMA_VERSIONS,
+    VERDICT_SEMANTICS_CONTRACT_ID,
     challenge_artifact_id,
     challenge_content_digest,
     file_sha256_hex,
@@ -125,6 +126,28 @@ def validate_policy_grade_eligibility(data: dict[str, Any]) -> str | None:
             "not policy-grade eligible: policy_confirmation_contract_id="
             f"{contract!r} is not a registered confirmation contract "
             f"(registry empty/unsupported until ML-OOS-02 confirmation study)"
+        )
+    return None
+
+
+def validate_verdict_semantics_contract(data: dict[str, Any]) -> str | None:
+    """Require sealed VERDICT_SEMANTICS contract on promote-evidence reopen."""
+    if "verdict_semantics_contract_id" not in data or data["verdict_semantics_contract_id"] is None:
+        return (
+            "challenge evidence invalid: verdict_semantics_contract_id missing "
+            f"(require {VERDICT_SEMANTICS_CONTRACT_ID!r}; "
+            "pre-symmetric-verdict artifacts are historical/display-only)"
+        )
+    raw = data["verdict_semantics_contract_id"]
+    if type(raw) is not str or not raw or raw != raw.strip():
+        return (
+            "challenge evidence invalid: verdict_semantics_contract_id must be "
+            f"exact non-empty str, got {type(raw).__name__}={raw!r}"
+        )
+    if raw != VERDICT_SEMANTICS_CONTRACT_ID:
+        return (
+            "challenge evidence invalid: verdict_semantics_contract_id="
+            f"{raw!r} (require {VERDICT_SEMANTICS_CONTRACT_ID!r})"
         )
     return None
 
@@ -542,6 +565,9 @@ def validate_production_identity_format(
     fold_geom_err = validate_fold_geometry_evidence(data, protocol=protocol)
     if fold_geom_err is not None:
         return fold_geom_err
+    verdict_sem_err = validate_verdict_semantics_contract(data)
+    if verdict_sem_err is not None:
+        return verdict_sem_err
 
     # v5 sealed evidence digests — recompute before reopen.
     stored_digest, err = _exact_identity_str(data, "content_digest")
@@ -851,6 +877,9 @@ def load_evidence_artifact(
             "notes": metrics.get("notes"),
             "mode": manifest.get("mode"),
             "fold_geometry_contract_id": manifest.get("fold_geometry_contract_id"),
+            "verdict_semantics_contract_id": manifest.get(
+                "verdict_semantics_contract_id"
+            ),
             "evidence_grade": manifest.get("evidence_grade"),
             "policy_confirmation_contract_id": manifest.get(
                 "policy_confirmation_contract_id"

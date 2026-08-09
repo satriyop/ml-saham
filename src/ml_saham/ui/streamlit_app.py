@@ -654,7 +654,7 @@ def render_run_challenge(service: ChallengeWorkbenchService) -> None:
                     "primary_horizon": proto.primary_horizon,
                     "horizons_report": list(proto.horizons_report),
                     "n_folds": proto.n_folds,
-                    "min_folds_for_win": proto.min_folds_for_win,
+                    "min_folds_for_verdict": proto.min_folds_for_verdict,
                     "embargo_sessions": proto.embargo_sessions,
                     "min_n_total": proto.min_n_total,
                     "label": proto.label,
@@ -760,7 +760,7 @@ def render_result_inspector(view: ChallengeRunView) -> None:
         st.metric("Primary horizon", view.primary_horizon)
     with c3:
         st.metric("Folds reported", view.n_folds_reported)
-        st.metric("min_folds_for_win", view.min_folds_for_win or "—")
+        st.metric("min_folds_for_verdict", view.min_folds_for_verdict or "—")
 
     st.markdown("**Identities**")
     st.json(

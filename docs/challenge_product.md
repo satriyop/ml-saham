@@ -201,7 +201,7 @@ Live judgment inventory (ai-saham): `docs/evidence_diagnostic_factor_accum.md`.
 
 | Status / verdict | Meaning |
 |------------------|---------|
-| `WIN` / `LOSE` / `INCONCLUSIVE` | Challenger vs production under protocol rules. **WIN requires ≥2 valid OOS folds** (+ fold-agree / margin / tail). A single post-embargo fold with an IC edge is **INCONCLUSIVE** (“promising but provisional”), not promotion-ready. |
+| `WIN` / `LOSE` / `INCONCLUSIVE` | Challenger vs production under protocol rules. **Both WIN and LOSE require ≥ `min_folds_for_verdict` valid OOS folds** (+ fold-agree / margin; WIN also tail). Thin calendars are **INCONCLUSIVE** either direction (“insufficient case to replace production”), not a statistical LOSE. Contract: `verdict_semantics.symmetric_directional.v1`. |
 | `BLOCKED_DATA` | Insufficient / unextractable panel (honest; product may still be complete) |
 | `BLOCKED_POLICY` | Unknown policy, wrong track, or unsupported combination |
 | Factor `KEEP` / `DEMOTE` / `DROP_CANDIDATE` / `INCONCLUSIVE` | Sleeve validity (accum factor track only today) |

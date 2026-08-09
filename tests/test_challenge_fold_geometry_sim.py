@@ -27,7 +27,7 @@ def test_simulate_matches_time_purged_session_counts():
         embargo_sessions=20,
         win_margin=0.01,
         min_fold_agree=2 / 3,
-        min_folds_for_win=2,
+        min_folds_for_verdict=2,
         geometry_min_train_sessions=1,
         geometry_min_test_sessions=1,
         min_train_rows=15,
@@ -43,12 +43,12 @@ def test_simulate_matches_time_purged_session_counts():
 
 def test_recommend_accum_geometry_minima_from_first_one_fold_calendar():
     rec = recommend_geometry_minima(
-        n_folds=3, embargo_sessions=20, min_folds_for_win=2
+        n_folds=3, embargo_sessions=20, min_folds_for_verdict=2
     )
     assert rec.geometry_min_train_sessions == 1
     assert rec.geometry_min_test_sessions == 7
     assert rec.first_n_sessions_one_fold == 28
-    assert rec.first_n_sessions_min_folds_for_win == 44
+    assert rec.first_n_sessions_min_folds_for_verdict == 44
     assert rec.multi_fold_geometry_min_train_sessions == 2
     assert rec.multi_fold_geometry_min_test_sessions == 11
     assert ACCUM_PATH_V1.geometry_min_train_sessions == rec.geometry_min_train_sessions
@@ -59,7 +59,7 @@ def test_recommend_accum_geometry_minima_from_first_one_fold_calendar():
 
 def test_recommend_pre_open_geometry_minima():
     rec = recommend_geometry_minima(
-        n_folds=3, embargo_sessions=1, min_folds_for_win=2
+        n_folds=3, embargo_sessions=1, min_folds_for_verdict=2
     )
     assert rec.geometry_min_train_sessions == 1
     assert rec.geometry_min_test_sessions == 1

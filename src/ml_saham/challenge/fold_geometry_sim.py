@@ -4,8 +4,8 @@ Pure session-index simulation of the same chunking / embargo rules as
 ``time_purged_folds``, without panel rows or free-parameter thresholds.
 
 ``geometry_min_*_sessions`` are **derived** from existing protocol knobs
-(``n_folds``, ``embargo_sessions``, ``min_folds_for_win``) by inspecting the
-first calendar that forms ≥1 fold. They are structural geometry minima only —
+(``n_folds``, ``embargo_sessions``, ``min_folds_for_verdict``) by inspecting
+the first calendar that forms ≥1 fold. They are structural geometry minima only —
 not policy-grade sample floors (IC power, dependence, regime coverage ignored).
 """
 
@@ -53,8 +53,8 @@ class GeometryMinimaRecommendation:
     geometry_min_train_sessions: int
     geometry_min_test_sessions: int
     first_n_sessions_one_fold: int | None
-    first_n_sessions_min_folds_for_win: int | None
-    min_folds_for_win: int
+    first_n_sessions_min_folds_for_verdict: int | None
+    min_folds_for_verdict: int
     # Multi-fold readiness mins (informational only).
     multi_fold_geometry_min_train_sessions: int | None
     multi_fold_geometry_min_test_sessions: int | None
@@ -138,7 +138,7 @@ def recommend_geometry_minima(
     *,
     n_folds: int,
     embargo_sessions: int,
-    min_folds_for_win: int,
+    min_folds_for_verdict: int,
     max_sessions: int = 400,
 ) -> GeometryMinimaRecommendation:
     """Derive structural geometry minima from protocol knobs only.
@@ -149,19 +149,21 @@ def recommend_geometry_minima(
     2. **Geometry minima** come from the smallest calendar that forms **≥ 1**
        fold. Take min train and min test session counts among folds there.
     3. **Informational multi-fold readiness** uses the first calendar that
-       forms ≥ ``min_folds_for_win`` folds — reported, not policy-grade floors.
+       forms ≥ ``min_folds_for_verdict`` folds — reported, not policy-grade floors.
 
     These minima are not statistical sample-size requirements. Policy-grade
     session floors require a separate confirmation contract (ML-OOS-02 open).
     """
-    win_bar = max(1, int(min_folds_for_win))
+    verdict_bar = max(1, int(min_folds_for_verdict))
     points = sweep_session_geometry(
         n_folds=n_folds,
         embargo_sessions=embargo_sessions,
         session_counts=range(1, max_sessions + 1),
     )
     first_one = next((p for p in points if p.n_folds_formed >= 1), None)
-    first_win = next((p for p in points if p.n_folds_formed >= win_bar), None)
+    first_verdict = next(
+        (p for p in points if p.n_folds_formed >= verdict_bar), None
+    )
 
     if first_one is None or first_one.geometry_min_train_sessions is None:
         rationale = (
@@ -173,8 +175,8 @@ def recommend_geometry_minima(
             geometry_min_train_sessions=1,
             geometry_min_test_sessions=1,
             first_n_sessions_one_fold=None,
-            first_n_sessions_min_folds_for_win=None,
-            min_folds_for_win=win_bar,
+            first_n_sessions_min_folds_for_verdict=None,
+            min_folds_for_verdict=verdict_bar,
             multi_fold_geometry_min_train_sessions=None,
             multi_fold_geometry_min_test_sessions=None,
             embargo_sessions=embargo_sessions,
@@ -185,13 +187,15 @@ def recommend_geometry_minima(
     min_train = max(1, int(first_one.geometry_min_train_sessions))
     min_test = max(1, int(first_one.geometry_min_test_sessions or 1))
     multi_tr = (
-        int(first_win.geometry_min_train_sessions)
-        if first_win is not None and first_win.geometry_min_train_sessions is not None
+        int(first_verdict.geometry_min_train_sessions)
+        if first_verdict is not None
+        and first_verdict.geometry_min_train_sessions is not None
         else None
     )
     multi_te = (
-        int(first_win.geometry_min_test_sessions)
-        if first_win is not None and first_win.geometry_min_test_sessions is not None
+        int(first_verdict.geometry_min_test_sessions)
+        if first_verdict is not None
+        and first_verdict.geometry_min_test_sessions is not None
         else None
     )
 
@@ -201,8 +205,8 @@ def recommend_geometry_minima(
         f"embargo={embargo_sessions}): "
         f"geometry_min_train_sessions={min_train}, "
         f"geometry_min_test_sessions={min_test}; "
-        f"multi-fold readiness (≥{win_bar} folds) first at "
-        f"n_sessions={first_win.n_sessions if first_win else None} "
+        f"multi-fold readiness (≥{verdict_bar} folds) first at "
+        f"n_sessions={first_verdict.n_sessions if first_verdict else None} "
         f"(geometry_min_train={multi_tr}, geometry_min_test={multi_te}) — "
         "informational only; not policy-grade sample floors"
     )
@@ -210,10 +214,10 @@ def recommend_geometry_minima(
         geometry_min_train_sessions=min_train,
         geometry_min_test_sessions=min_test,
         first_n_sessions_one_fold=first_one.n_sessions,
-        first_n_sessions_min_folds_for_win=(
-            first_win.n_sessions if first_win is not None else None
+        first_n_sessions_min_folds_for_verdict=(
+            first_verdict.n_sessions if first_verdict is not None else None
         ),
-        min_folds_for_win=win_bar,
+        min_folds_for_verdict=verdict_bar,
         multi_fold_geometry_min_train_sessions=multi_tr,
         multi_fold_geometry_min_test_sessions=multi_te,
         embargo_sessions=embargo_sessions,

@@ -22,7 +22,7 @@ Diagnostic validity also fell back to a **full-sample** train=test fold.
   fold metrics.
 
 **Unchanged:** `accum_path_v1` / `pre_open_session_v1` thresholds
-(`n_folds`, `embargo_sessions`, `min_n_*`, `min_folds_for_win`).
+(`n_folds`, `embargo_sessions`, `min_n_*`, `min_folds_for_verdict`).
 
 ## Protocol identity
 

@@ -43,14 +43,14 @@ else
 fi
 
 # --- 2) Protocol: multi-fold WIN ---
-echo "-- min_folds_for_win --"
+echo "-- min_folds_for_verdict --"
 PYTHONPATH=src python - <<'PY'
 from ml_saham.challenge.protocols import ACCUM_PATH_V1, PRE_OPEN_SESSION_V1
 
 for p in (ACCUM_PATH_V1, PRE_OPEN_SESSION_V1):
-    n = int(getattr(p, "min_folds_for_win", 0) or 0)
-    assert n >= 2, f"{p.protocol_id} min_folds_for_win={n} (need >= 2)"
-print("ok: min_folds_for_win >= 2 on product protocols")
+    n = int(getattr(p, "min_folds_for_verdict", 0) or 0)
+    assert n >= 2, f"{p.protocol_id} min_folds_for_verdict={n} (need >= 2)"
+print("ok: min_folds_for_verdict >= 2 on product protocols")
 PY
 
 # --- 3) Golden fixtures present ---

@@ -217,7 +217,7 @@ class ProtocolSummary:
     min_n_test: int
     n_folds: int
     embargo_sessions: int
-    min_folds_for_win: int
+    min_folds_for_verdict: int
     win_margin: float
     min_fold_agree: float
     label: str
@@ -260,7 +260,7 @@ class ChallengeRunView:
     primary_ic_against: float | None
     horizon_metrics: dict[str, Any]
     fold_metrics: tuple[dict[str, Any], ...]
-    min_folds_for_win: int | None
+    min_folds_for_verdict: int | None
     n_folds_reported: int
     weights: dict[str, Any]
     lines: tuple[str, ...]
@@ -747,7 +747,7 @@ class ChallengeWorkbenchService:
             min_n_test=p.min_n_test,
             n_folds=p.n_folds,
             embargo_sessions=p.embargo_sessions,
-            min_folds_for_win=p.min_folds_for_win,
+            min_folds_for_verdict=p.min_folds_for_verdict,
             win_margin=p.win_margin,
             min_fold_agree=p.min_fold_agree,
             label=p.label,
@@ -868,7 +868,7 @@ class ChallengeWorkbenchService:
                 primary_ic_against=None,
                 horizon_metrics={},
                 fold_metrics=(),
-                min_folds_for_win=None,
+                min_folds_for_verdict=None,
                 n_folds_reported=0,
                 weights={},
                 lines=(
@@ -932,7 +932,7 @@ class ChallengeWorkbenchService:
                 primary_ic_against=None,
                 horizon_metrics={},
                 fold_metrics=(),
-                min_folds_for_win=None,
+                min_folds_for_verdict=None,
                 n_folds_reported=0,
                 weights={},
                 lines=(
@@ -1904,7 +1904,7 @@ def _view_from_challenge_result(
     folds = tuple(dict(f) for f in (result.fold_metrics or []))
     protocol_summary_min_folds: int | None = None
     try:
-        protocol_summary_min_folds = get_protocol(result.protocol_id).min_folds_for_win
+        protocol_summary_min_folds = get_protocol(result.protocol_id).min_folds_for_verdict
     except KeyError:
         protocol_summary_min_folds = None
 
@@ -1945,7 +1945,7 @@ def _view_from_challenge_result(
         primary_ic_against=result.primary_ic_against,
         horizon_metrics=dict(result.horizon_metrics or {}),
         fold_metrics=folds,
-        min_folds_for_win=protocol_summary_min_folds,
+        min_folds_for_verdict=protocol_summary_min_folds,
         n_folds_reported=len(folds),
         weights=dict(result.weights or {}),
         lines=tuple(result.lines or []),

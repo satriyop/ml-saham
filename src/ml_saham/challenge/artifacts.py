@@ -42,6 +42,8 @@ DIAGNOSTIC_ARTIFACT_CONTRACT_ID = "diagnostic_result_artifact.v4"
 
 # Material identity for purged fold construction (sealed into content_digest).
 FOLD_GEOMETRY_CONTRACT_ID = "session_native_purged.v1"
+# Directional WIN/LOSE both require multi-fold agreement (VERDICT_SEMANTICS).
+VERDICT_SEMANTICS_CONTRACT_ID = "verdict_semantics.symmetric_directional.v1"
 
 
 def _seal_diagnostic_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -101,6 +103,7 @@ _CONTENT_DIGEST_KEYS: tuple[str, ...] = (
     "population_identity_id",
     "population_identity_detail",
     "fold_geometry_contract_id",
+    "verdict_semantics_contract_id",
     "evidence_grade",
     "policy_confirmation_contract_id",
     "n_rows",
@@ -152,6 +155,7 @@ def stamp_challenge_evidence_digests(payload: dict[str, Any]) -> dict[str, Any]:
     out = dict(payload)
     out["schema_version"] = CHALLENGE_ARTIFACT_SCHEMA_VERSION
     out["fold_geometry_contract_id"] = FOLD_GEOMETRY_CONTRACT_ID
+    out["verdict_semantics_contract_id"] = VERDICT_SEMANTICS_CONTRACT_ID
     # Authority: default exploratory unless a registered confirmation contract
     # is explicitly present (cannot invent POLICY_GRADE here).
     if not out.get("evidence_grade"):
@@ -215,6 +219,9 @@ def challenge_result_export_payload(
         "population_identity_id": result.population_identity_id,
         "population_identity_detail": result.population_identity_detail,
         "fold_geometry_contract_id": FOLD_GEOMETRY_CONTRACT_ID,
+        "verdict_semantics_contract_id": (
+            result.verdict_semantics_contract_id or VERDICT_SEMANTICS_CONTRACT_ID
+        ),
         "evidence_grade": result.evidence_grade or EVIDENCE_GRADE_EXPLORATORY,
         "policy_confirmation_contract_id": (
             result.policy_confirmation_contract_id or ""
@@ -305,6 +312,9 @@ def write_challenge_artifact(
         "population_identity_id": result.population_identity_id,
         "population_identity_detail": result.population_identity_detail,
         "fold_geometry_contract_id": FOLD_GEOMETRY_CONTRACT_ID,
+        "verdict_semantics_contract_id": (
+            result.verdict_semantics_contract_id or VERDICT_SEMANTICS_CONTRACT_ID
+        ),
         "evidence_grade": result.evidence_grade or EVIDENCE_GRADE_EXPLORATORY,
         "policy_confirmation_contract_id": (
             result.policy_confirmation_contract_id or ""

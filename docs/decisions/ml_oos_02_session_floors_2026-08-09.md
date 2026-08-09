@@ -10,7 +10,7 @@ Module: `ml_saham.challenge.fold_geometry_sim`.
 1. Simulate the same session chunking / full-embargo rules as `time_purged_folds`.
 2. **Structural geometry minima** = min train/test unique-session counts on the
    first calendar that forms ≥1 fold.
-3. Multi-fold readiness (≥ `min_folds_for_win`) is **informational only**.
+3. Multi-fold readiness (≥ `min_folds_for_verdict`) is **informational only**.
 
 | Protocol | Structural geometry min train / test | Meaning |
 |---|---|---|

@@ -185,7 +185,7 @@ def test_protocol_summary_read_only():
     service = build_challenge_workbench()
     summary = service.describe_protocol("accum_path_v1")
     assert summary is not None
-    assert summary.min_folds_for_win >= 2
+    assert summary.min_folds_for_verdict >= 2
     assert summary.primary_horizon == 10
     assert service.describe_protocol("nope.protocol") is None
 
