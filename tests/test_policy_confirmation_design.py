@@ -98,14 +98,21 @@ def test_holdout_placement_candidates():
         120,
         n_folds=3,
         embargo_sessions=20,
+        min_folds_for_verdict=2,
         holdout_sessions_candidate=20,
     )
     assert ok.n_sessions_for_folds == 100
     assert ok.folds_formed >= 1
     assert ok.holdout_after_all_fold_tests is True
+    assert ok.meets_min_folds_for_verdict is True
+    assert ok.candidate_geometry_ready is True
 
     zero = holdout_geometry_candidate(
-        120, n_folds=3, embargo_sessions=20, holdout_sessions_candidate=0
+        120,
+        n_folds=3,
+        embargo_sessions=20,
+        min_folds_for_verdict=2,
+        holdout_sessions_candidate=0,
     )
     assert zero.holdout_after_all_fold_tests is False
 

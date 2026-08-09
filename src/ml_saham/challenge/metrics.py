@@ -257,28 +257,27 @@ def time_purged_folds(rows: Sequence[PanelRow], protocol: Protocol) -> list[Fold
 def ic_safe(scores: Sequence[float], returns: Sequence[float]) -> float | None:
     """Rank IC or None if undefined (constant scores, empty, non-finite).
 
-    Only **finite** score/return pairs participate. Infinity or NaN pairs are
-    dropped; fewer than 2 finite pairs → None. This prevents valid-looking IC
-    from inputs that contain ``inf`` (blast radius: all challenge fold IC
-    paths using ``ic_safe``; curriculum ``rank_ic`` is unchanged).
+    Every score/return pair must be finite. A non-finite or non-numeric value
+    invalidates the metric instead of silently shrinking the denominator.
+    Callers that intentionally study a finite subset must filter explicitly,
+    report both denominators, and re-apply their minimum-N rule before calling
+    this function.
     """
+    if len(scores) < 2 or len(scores) != len(returns):
+        return None
+    s: list[float] = []
+    r: list[float] = []
+    for a, b in zip(scores, returns, strict=True):
+        try:
+            fa = float(a)
+            fb = float(b)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(fa) or not math.isfinite(fb):
+            return None
+        s.append(fa)
+        r.append(fb)
     try:
-        if len(scores) != len(returns):
-            return None
-        s: list[float] = []
-        r: list[float] = []
-        for a, b in zip(scores, returns, strict=True):
-            try:
-                fa = float(a)
-                fb = float(b)
-            except (TypeError, ValueError):
-                continue
-            if not math.isfinite(fa) or not math.isfinite(fb):
-                continue
-            s.append(fa)
-            r.append(fb)
-        if len(s) < 2:
-            return None
         if max(s) - min(s) < 1e-12:
             return None
         if max(r) - min(r) < 1e-12:
@@ -287,7 +286,7 @@ def ic_safe(scores: Sequence[float], returns: Sequence[float]) -> float | None:
         if not math.isfinite(v):
             return None
         return v
-    except Exception:
+    except (ArithmeticError, TypeError, ValueError):
         return None
 
 

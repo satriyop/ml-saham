@@ -356,9 +356,11 @@ class HoldoutGeometryCandidate:
     # Holdout occupies the final H sessions of the full calendar.
     holdout_start_i: int
     holdout_end_i: int  # exclusive
-    # True only when holdout fits the calendar, ≥1 fold formed, and holdout
-    # sits strictly after every fold test block.
+    min_folds_for_verdict: int
+    # Placement and evidence-depth facts stay separate.
     holdout_after_all_fold_tests: bool
+    meets_min_folds_for_verdict: bool
+    candidate_geometry_ready: bool
     notes: str
 
 
@@ -367,21 +369,33 @@ def holdout_geometry_candidate(
     *,
     n_folds: int,
     embargo_sessions: int,
+    min_folds_for_verdict: int,
     holdout_sessions_candidate: int,
 ) -> HoldoutGeometryCandidate:
     """Pure placement study for a *candidate* holdout length.
 
     Does not choose the holdout length for Protocol. Negative inputs raise
-    ValueError (fail closed). ``holdout_after_all_fold_tests`` is True only
-    for a fully valid placement: 0 < H ≤ N, folds formed ≥ 1, and holdout
-    strictly after all fold tests.
+    ValueError (fail closed). Temporal placement and sufficient fold depth are
+    reported separately; ``candidate_geometry_ready`` requires both.
     """
     n = _require_nonneg_int("n_sessions_total", n_sessions_total)
     h = _require_nonneg_int("holdout_sessions_candidate", holdout_sessions_candidate)
     n_folds_i = _require_nonneg_int("n_folds", n_folds)
     embargo_i = _require_nonneg_int("embargo_sessions", embargo_sessions)
+    min_folds_i = _require_nonneg_int(
+        "min_folds_for_verdict", min_folds_for_verdict
+    )
     if n_folds_i < 1:
         raise ValueError(f"n_folds must be >= 1, got {n_folds_i}")
+    if min_folds_i < 1:
+        raise ValueError(
+            f"min_folds_for_verdict must be >= 1, got {min_folds_i}"
+        )
+    if min_folds_i > n_folds_i:
+        raise ValueError(
+            "min_folds_for_verdict cannot exceed n_folds "
+            f"({min_folds_i} > {n_folds_i})"
+        )
 
     if h > n:
         return HoldoutGeometryCandidate(
@@ -392,7 +406,10 @@ def holdout_geometry_candidate(
             last_test_end_i=None,
             holdout_start_i=0,
             holdout_end_i=n,
+            min_folds_for_verdict=min_folds_i,
             holdout_after_all_fold_tests=False,
+            meets_min_folds_for_verdict=False,
+            candidate_geometry_ready=False,
             notes="holdout exceeds calendar (invalid placement)",
         )
 
@@ -404,6 +421,7 @@ def holdout_geometry_candidate(
     holdout_start = n_fold_region
     holdout_end = n
 
+    meets_min_folds = len(folds) >= min_folds_i
     if h <= 0:
         after = False
         note = "candidate holdout_sessions=0 (no final holdout)"
@@ -418,7 +436,15 @@ def holdout_geometry_candidate(
         note = "holdout overlaps fold test region (invalid placement)"
     else:
         after = True
-        note = "holdout strictly after all fold test blocks (geometry OK for study)"
+        note = "holdout strictly after all fold test blocks"
+
+    ready = after and meets_min_folds
+    if after and not meets_min_folds:
+        note += (
+            f"; insufficient folds {len(folds)} < required {min_folds_i}"
+        )
+    elif ready:
+        note += "; fold depth meets verdict minimum (geometry ready for study)"
 
     return HoldoutGeometryCandidate(
         n_sessions_total=n,
@@ -428,7 +454,10 @@ def holdout_geometry_candidate(
         last_test_end_i=last_end,
         holdout_start_i=holdout_start,
         holdout_end_i=holdout_end,
+        min_folds_for_verdict=min_folds_i,
         holdout_after_all_fold_tests=after,
+        meets_min_folds_for_verdict=meets_min_folds,
+        candidate_geometry_ready=ready,
         notes=note,
     )
 
@@ -438,6 +467,7 @@ def sweep_holdout_candidates(
     *,
     n_folds: int,
     embargo_sessions: int,
+    min_folds_for_verdict: int,
     holdout_candidates: Sequence[int],
 ) -> list[HoldoutGeometryCandidate]:
     return [
@@ -445,6 +475,7 @@ def sweep_holdout_candidates(
             n_sessions_total,
             n_folds=n_folds,
             embargo_sessions=embargo_sessions,
+            min_folds_for_verdict=min_folds_for_verdict,
             holdout_sessions_candidate=h,
         )
         for h in holdout_candidates
@@ -480,19 +511,29 @@ class MultiplicitySearchRecord:
     notes: str = ""
 
     def __post_init__(self) -> None:
+        _require_nonempty_str("search_id", self.search_id)
+        _require_nonempty_str("selection_rule", self.selection_rule)
+        _require_nonempty_str("primary_metric", self.primary_metric)
+        if type(self.notes) is not str:
+            raise ValueError(
+                f"notes must be exact str, got {type(self.notes).__name__}={self.notes!r}"
+            )
+        if type(self.challenger_ids) is not tuple:
+            raise ValueError("challenger_ids must be an exact tuple")
+        if type(self.n_comparisons) is not int or self.n_comparisons < 1:
+            raise ValueError(
+                "n_comparisons must be an exact int >= 1, "
+                f"got {type(self.n_comparisons).__name__}={self.n_comparisons!r}"
+            )
         if len(self.challenger_ids) != self.n_comparisons:
             raise ValueError(
                 "n_comparisons must equal len(challenger_ids) "
                 f"({self.n_comparisons} vs {len(self.challenger_ids)})"
             )
-        if not self.search_id or self.search_id != self.search_id.strip():
-            raise ValueError(f"search_id must be non-empty, got {self.search_id!r}")
-        if not self.selection_rule or self.selection_rule != self.selection_rule.strip():
-            raise ValueError(
-                f"selection_rule must be non-empty, got {self.selection_rule!r}"
-            )
         if not self.challenger_ids:
             raise ValueError("challenger_ids must be non-empty")
+        for challenger_id in self.challenger_ids:
+            _require_nonempty_str("challenger_ids entry", challenger_id)
         if len(set(self.challenger_ids)) != len(self.challenger_ids):
             raise ValueError(
                 f"challenger_ids must be unique, got {self.challenger_ids!r}"
@@ -510,11 +551,13 @@ def multiplicity_search_record(
     sid = _require_nonempty_str("search_id", search_id)
     rule = _require_nonempty_str("selection_rule", selection_rule)
     metric = _require_nonempty_str("primary_metric", primary_metric)
-    ids = tuple(str(c) for c in challenger_ids)
+    if isinstance(challenger_ids, (str, bytes)):
+        raise ValueError("challenger_ids must be a sequence of ids, not a string")
+    ids = tuple(challenger_ids)
     if not ids:
         raise ValueError("challenger_ids must be non-empty")
-    if any(not c or c != c.strip() for c in ids):
-        raise ValueError(f"challenger_ids entries must be non-empty str, got {ids!r}")
+    for challenger_id in ids:
+        _require_nonempty_str("challenger_ids entry", challenger_id)
     if len(set(ids)) != len(ids):
         raise ValueError(f"challenger_ids must be unique, got {ids!r}")
     return MultiplicitySearchRecord(
@@ -587,6 +630,7 @@ def build_ml_oos_02_design_study(
             n_sessions_total_for_holdout,
             n_folds=n_folds,
             embargo_sessions=embargo_sessions,
+            min_folds_for_verdict=min_folds_for_verdict,
             holdout_candidates=holdouts,
         )
     )
@@ -657,6 +701,8 @@ def format_design_study_report(bundle: MLOOS02DesignStudyBundle) -> str:
             f"- holdout={h.holdout_sessions_candidate}: "
             f"folds_formed={h.folds_formed} "
             f"after_tests={h.holdout_after_all_fold_tests} "
+            f"meets_min_folds={h.meets_min_folds_for_verdict} "
+            f"geometry_ready={h.candidate_geometry_ready} "
             f"({h.notes})"
         )
     lines.extend(["", "== Open decisions =="])

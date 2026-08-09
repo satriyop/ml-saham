@@ -113,12 +113,15 @@ PYTHONPATH=src python scripts/report_ml_oos_02_design.py \
 
 Fail-closed primitives (no silent clamp / false-valid geometry):
 
-- Holdout: `holdout > n_sessions` or no folds ⇒ `holdout_after_all_fold_tests=False`
+- Holdout reports temporal placement separately from
+  `meets_min_folds_for_verdict`; only their conjunction is
+  `candidate_geometry_ready`
 - Negative ints rejected (`ValueError`), not clamped to 0
 - Multiplicity: empty `search_id` / `selection_rule`, empty or **duplicate**
   challenger ids rejected
 - Session IC: `n_valid_pairs` = finite pairs only; `n_input_pairs` = raw length
-- Shared `ic_safe`: non-finite (inf/nan) pairs dropped; need ≥2 finite pairs
+- Shared `ic_safe`: any non-finite/non-numeric pair invalidates the metric;
+  no silent denominator shrink
 
 Blast radius for `ic_safe`: all challenge fold IC paths; curriculum `rank_ic`
 unchanged. Adversarial tests:
