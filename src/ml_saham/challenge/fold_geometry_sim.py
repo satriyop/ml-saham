@@ -1,12 +1,12 @@
-"""Fold-geometry simulation for ML-OOS-02 session floors.
+"""Fold-geometry simulation for structural geometry minima (ML-OOS-02 open).
 
 Pure session-index simulation of the same chunking / embargo rules as
 ``time_purged_folds``, without panel rows or free-parameter thresholds.
 
-Session floors are **derived** from existing protocol knobs
+``geometry_min_*_sessions`` are **derived** from existing protocol knobs
 (``n_folds``, ``embargo_sessions``, ``min_folds_for_win``) by inspecting the
-first calendar that yields enough folds under that geometry. No statistical
-minima (IC power, daily IC, etc.) are invented here.
+first calendar that forms ≥1 fold. They are structural geometry minima only —
+not policy-grade sample floors (IC power, dependence, regime coverage ignored).
 """
 
 from __future__ import annotations
@@ -33,10 +33,11 @@ class GeometrySweepPoint:
     n_sessions: int
     n_folds_formed: int
     folds: tuple[SimulatedFold, ...]
-    min_train_sessions: int | None
-    min_test_sessions: int | None
-    max_train_sessions: int | None
-    max_test_sessions: int | None
+    # Min/max unique-session block sizes among formed folds (geometry only).
+    geometry_min_train_sessions: int | None
+    geometry_min_test_sessions: int | None
+    geometry_max_train_sessions: int | None
+    geometry_max_test_sessions: int | None
 
 
 @dataclass(frozen=True)
@@ -55,15 +56,11 @@ class GeometryMinimaRecommendation:
     first_n_sessions_min_folds_for_win: int | None
     min_folds_for_win: int
     # Multi-fold readiness mins (informational only).
-    multi_fold_min_train_sessions: int | None
-    multi_fold_min_test_sessions: int | None
+    multi_fold_geometry_min_train_sessions: int | None
+    multi_fold_geometry_min_test_sessions: int | None
     embargo_sessions: int
     n_folds: int
     rationale: str
-
-
-# Backward-compatible alias (name was too strong for authority).
-SessionFloorRecommendation = GeometryMinimaRecommendation
 
 
 def simulate_session_folds(
@@ -128,10 +125,10 @@ def sweep_session_geometry(
                 n_sessions=int(n),
                 n_folds_formed=len(folds),
                 folds=tuple(folds),
-                min_train_sessions=min(trains) if trains else None,
-                min_test_sessions=min(tests) if tests else None,
-                max_train_sessions=max(trains) if trains else None,
-                max_test_sessions=max(tests) if tests else None,
+                geometry_min_train_sessions=min(trains) if trains else None,
+                geometry_min_test_sessions=min(tests) if tests else None,
+                geometry_max_train_sessions=max(trains) if trains else None,
+                geometry_max_test_sessions=max(tests) if tests else None,
             )
         )
     return out
@@ -166,7 +163,7 @@ def recommend_geometry_minima(
     first_one = next((p for p in points if p.n_folds_formed >= 1), None)
     first_win = next((p for p in points if p.n_folds_formed >= win_bar), None)
 
-    if first_one is None or first_one.min_train_sessions is None:
+    if first_one is None or first_one.geometry_min_train_sessions is None:
         rationale = (
             f"no calendar ≤ {max_sessions} sessions formed any fold "
             f"(n_folds={n_folds}, embargo={embargo_sessions}); "
@@ -178,23 +175,23 @@ def recommend_geometry_minima(
             first_n_sessions_one_fold=None,
             first_n_sessions_min_folds_for_win=None,
             min_folds_for_win=win_bar,
-            multi_fold_min_train_sessions=None,
-            multi_fold_min_test_sessions=None,
+            multi_fold_geometry_min_train_sessions=None,
+            multi_fold_geometry_min_test_sessions=None,
             embargo_sessions=embargo_sessions,
             n_folds=n_folds,
             rationale=rationale,
         )
 
-    min_train = max(1, int(first_one.min_train_sessions))
-    min_test = max(1, int(first_one.min_test_sessions or 1))
+    min_train = max(1, int(first_one.geometry_min_train_sessions))
+    min_test = max(1, int(first_one.geometry_min_test_sessions or 1))
     multi_tr = (
-        int(first_win.min_train_sessions)
-        if first_win is not None and first_win.min_train_sessions is not None
+        int(first_win.geometry_min_train_sessions)
+        if first_win is not None and first_win.geometry_min_train_sessions is not None
         else None
     )
     multi_te = (
-        int(first_win.min_test_sessions)
-        if first_win is not None and first_win.min_test_sessions is not None
+        int(first_win.geometry_min_test_sessions)
+        if first_win is not None and first_win.geometry_min_test_sessions is not None
         else None
     )
 
@@ -206,8 +203,8 @@ def recommend_geometry_minima(
         f"geometry_min_test_sessions={min_test}; "
         f"multi-fold readiness (≥{win_bar} folds) first at "
         f"n_sessions={first_win.n_sessions if first_win else None} "
-        f"(min_train={multi_tr}, min_test={multi_te}) — informational only; "
-        "not policy-grade sample floors"
+        f"(geometry_min_train={multi_tr}, geometry_min_test={multi_te}) — "
+        "informational only; not policy-grade sample floors"
     )
     return GeometryMinimaRecommendation(
         geometry_min_train_sessions=min_train,
@@ -217,16 +214,12 @@ def recommend_geometry_minima(
             first_win.n_sessions if first_win is not None else None
         ),
         min_folds_for_win=win_bar,
-        multi_fold_min_train_sessions=multi_tr,
-        multi_fold_min_test_sessions=multi_te,
+        multi_fold_geometry_min_train_sessions=multi_tr,
+        multi_fold_geometry_min_test_sessions=multi_te,
         embargo_sessions=embargo_sessions,
         n_folds=n_folds,
         rationale=rationale,
     )
-
-
-# Backward-compatible name.
-recommend_session_floors = recommend_geometry_minima
 
 
 def format_sweep_table(points: Sequence[GeometrySweepPoint], *, limit: int = 30) -> str:
@@ -245,7 +238,9 @@ def format_sweep_table(points: Sequence[GeometrySweepPoint], *, limit: int = 30)
     for p in interesting[:limit]:
         lines.append(
             f"{p.n_sessions:7d}  {p.n_folds_formed:5d}  "
-            f"{p.min_train_sessions or 0:6d}  {p.min_test_sessions or 0:6d}  "
-            f"{p.max_train_sessions or 0:6d}  {p.max_test_sessions or 0:6d}"
+            f"{p.geometry_min_train_sessions or 0:6d}  "
+            f"{p.geometry_min_test_sessions or 0:6d}  "
+            f"{p.geometry_max_train_sessions or 0:6d}  "
+            f"{p.geometry_max_test_sessions or 0:6d}"
         )
     return "\n".join(lines)

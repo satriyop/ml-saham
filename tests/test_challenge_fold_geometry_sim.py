@@ -49,8 +49,8 @@ def test_recommend_accum_geometry_minima_from_first_one_fold_calendar():
     assert rec.geometry_min_test_sessions == 7
     assert rec.first_n_sessions_one_fold == 28
     assert rec.first_n_sessions_min_folds_for_win == 44
-    assert rec.multi_fold_min_train_sessions == 2
-    assert rec.multi_fold_min_test_sessions == 11
+    assert rec.multi_fold_geometry_min_train_sessions == 2
+    assert rec.multi_fold_geometry_min_test_sessions == 11
     assert ACCUM_PATH_V1.geometry_min_train_sessions == rec.geometry_min_train_sessions
     assert ACCUM_PATH_V1.geometry_min_test_sessions == rec.geometry_min_test_sessions
     assert ACCUM_PATH_V1.evidence_grade == "EXPLORATORY"
@@ -91,3 +91,37 @@ def test_sweep_includes_pathological_zeros():
         n_folds=3, embargo_sessions=20, session_counts=[1, 3, 10, 20]
     )
     assert all(p.n_folds_formed == 0 for p in pts)
+
+
+def test_obsolete_session_floor_names_are_absent():
+    """Clean break: no statistical-sounding aliases or Protocol fields."""
+    import ml_saham.challenge.fold_geometry_sim as sim
+    import ml_saham.challenge.metrics as metrics_mod
+    import ml_saham.challenge.promote as promote_mod
+    import ml_saham.challenge.types as types_mod
+
+    # Module-level aliases removed.
+    assert not hasattr(sim, "SessionFloorRecommendation")
+    assert not hasattr(sim, "recommend_session_floors")
+
+    # Protocol has geometry_* only for session minima.
+    assert hasattr(types_mod.Protocol, "__dataclass_fields__")
+    fields = types_mod.Protocol.__dataclass_fields__
+    assert "geometry_min_train_sessions" in fields
+    assert "geometry_min_test_sessions" in fields
+    assert "min_train_sessions" not in fields
+    assert "min_test_sessions" not in fields
+
+    # No fallback readers of obsolete field names in product code.
+    for mod in (metrics_mod, promote_mod, sim):
+        src = open(mod.__file__, encoding="utf-8").read()
+        assert 'getattr(protocol, "min_train_sessions"' not in src
+        assert 'getattr(protocol, "min_test_sessions"' not in src
+        assert "recommend_session_floors" not in src or mod is not sim
+        assert "SessionFloorRecommendation" not in src
+
+    # GeometrySweepPoint uses geometry_* names only.
+    sweep_fields = sim.GeometrySweepPoint.__dataclass_fields__
+    assert "geometry_min_train_sessions" in sweep_fields
+    assert "min_train_sessions" not in sweep_fields
+    assert "min_test_sessions" not in sweep_fields

@@ -167,17 +167,9 @@ def _build_fold(
     test_idx = _indices_for_sessions(rows, order, test_sessions)
     n_train_sess = len(train_sessions)
     n_test_sess = len(test_sessions)
-    # Structural geometry minima (not policy-grade sample floors).
-    min_train_sess = int(
-        getattr(protocol, "geometry_min_train_sessions", None)
-        or getattr(protocol, "min_train_sessions", 1)
-        or 1
-    )
-    min_test_sess = int(
-        getattr(protocol, "geometry_min_test_sessions", None)
-        or getattr(protocol, "min_test_sessions", 1)
-        or 1
-    )
+    # Structural geometry minima only (not policy-grade sample floors).
+    min_train_sess = int(protocol.geometry_min_train_sessions)
+    min_test_sess = int(protocol.geometry_min_test_sessions)
     if n_train_sess < min_train_sess or n_test_sess < min_test_sess:
         return None
     if len(test_idx) < protocol.min_n_test or len(train_idx) < min_train_rows:
