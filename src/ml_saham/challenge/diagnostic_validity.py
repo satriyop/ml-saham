@@ -234,6 +234,9 @@ def _run_one_feature(
             {
                 "fold": i,
                 "n_test": len(test),
+                "n_train_sessions": fold.n_train_sessions,
+                "n_test_sessions": fold.n_test_sessions,
+                "embargo_sessions_actual": fold.embargo_sessions_actual,
                 "univariate_ic": u,
                 "residual_ic": r,
             }
@@ -487,11 +490,19 @@ def run_diagnostic_challenge(
     fold_rows = _as_panel_rows(rows)
     folds = time_purged_folds(fold_rows, protocol)
     if not folds:
-        # single full-sample evaluation
-        folds = [
-            Fold(train_idx=list(range(len(rows))), test_idx=list(range(len(rows))))
-        ]
-        notes = list(notes) + ["fold fallback: full sample (thin date span)"]
+        msg = "could not form session-native time folds (no row-index fallback)"
+        return DiagnosticChallengeResult(
+            verdict=DiagnosticVerdict.BLOCKED_DATA,
+            diagnostic_id=spec.diagnostic_id,
+            protocol_id=protocol.protocol_id,
+            diagnostic_hash=spec.hash,
+            feature=canon,
+            n_rows=len(rows),
+            primary_horizon=protocol.primary_horizon,
+            lines=["BLOCKED_DATA:", f"  - {msg}"],
+            summary_md=f"# Diagnostic challenge BLOCKED_DATA\n\n{msg}\n",
+            notes=list(notes) + [msg],
+        )
 
     result = _run_one_feature(rows, folds, spec, protocol, canon)
     result.notes = list(notes) + list(result.notes)
@@ -539,10 +550,18 @@ def run_diagnostic_challenge_batch(
     fold_rows = _as_panel_rows(rows)
     folds = time_purged_folds(fold_rows, protocol)
     if not folds:
-        folds = [
-            Fold(train_idx=list(range(len(rows))), test_idx=list(range(len(rows))))
-        ]
-        notes = list(notes) + ["fold fallback: full sample (thin date span)"]
+        msg = "could not form session-native time folds (no row-index fallback)"
+        return BatchDiagnosticResult(
+            diagnostic_id=diagnostic_id,
+            protocol_id=protocol.protocol_id,
+            diagnostic_hash=spec.hash,
+            n_rows=len(rows),
+            primary_horizon=protocol.primary_horizon,
+            blocked=DiagnosticVerdict.BLOCKED_DATA,
+            lines=["BLOCKED_DATA:", f"  - {msg}"],
+            summary_md=f"# Diagnostic batch BLOCKED_DATA\n\n{msg}\n",
+            notes=list(notes) + [msg],
+        )
 
     results: list[DiagnosticChallengeResult] = []
     for feat in spec.enabled_features():

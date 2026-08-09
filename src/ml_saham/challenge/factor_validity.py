@@ -313,12 +313,17 @@ def _score_factor_on_folds(
                 {
                     "fold": fi,
                     "n_test": len(test),
+                    "n_train_sessions": fold.n_train_sessions,
+                    "n_test_sessions": fold.n_test_sessions,
+                    "embargo_sessions_actual": fold.embargo_sessions_actual,
+                    "embargo_sessions_required": protocol.embargo_sessions,
                     "ic_full": None,
                     "ic_drop": None,
                     "delta_ic": None,
                     "univariate_ic": None,
-                    "date_min": test[0].date if test else None,
-                    "date_max": test[-1].date if test else None,
+                    "date_min": fold.test_date_min or (test[0].date if test else None),
+                    "date_max": fold.test_date_max or (test[-1].date if test else None),
+                    "train_date_max": fold.train_date_max,
                 }
             )
             continue
@@ -335,12 +340,17 @@ def _score_factor_on_folds(
             {
                 "fold": fi,
                 "n_test": len(test),
+                "n_train_sessions": fold.n_train_sessions,
+                "n_test_sessions": fold.n_test_sessions,
+                "embargo_sessions_actual": fold.embargo_sessions_actual,
+                "embargo_sessions_required": protocol.embargo_sessions,
                 "ic_full": ic_full,
                 "ic_drop": ic_drop,
                 "delta_ic": delta,
                 "univariate_ic": u_ic,
-                "date_min": test[0].date if test else None,
-                "date_max": test[-1].date if test else None,
+                "date_min": fold.test_date_min or (test[0].date if test else None),
+                "date_max": fold.test_date_max or (test[-1].date if test else None),
+                "train_date_max": fold.train_date_max,
             }
         )
         oos_full.extend(full_s)

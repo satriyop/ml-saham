@@ -981,6 +981,10 @@ def run_policy_challenge(
                     "fold": fi,
                     "n_train": len(train),
                     "n_test": len(test),
+                    "n_train_sessions": fold.n_train_sessions,
+                    "n_test_sessions": fold.n_test_sessions,
+                    "embargo_sessions_actual": fold.embargo_sessions_actual,
+                    "embargo_sessions_required": protocol.embargo_sessions,
                     "metric": "mean_excess_open",
                     "ic_baseline": mean_b,
                     "ic_against": mean_a,
@@ -990,8 +994,9 @@ def run_policy_challenge(
                     "n_open_against": n_open_a,
                     "tail_baseline": None,
                     "tail_against": None,
-                    "date_min": test[0].date if test else None,
-                    "date_max": test[-1].date if test else None,
+                    "date_min": fold.test_date_min or (test[0].date if test else None),
+                    "date_max": fold.test_date_max or (test[-1].date if test else None),
+                    "train_date_max": fold.train_date_max,
                 }
             )
             oos_base_scores.extend(base_s)
@@ -1294,12 +1299,17 @@ def run_policy_challenge(
                 "fold": fi,
                 "n_train": len(train),
                 "n_test": len(test),
+                "n_train_sessions": fold.n_train_sessions,
+                "n_test_sessions": fold.n_test_sessions,
+                "embargo_sessions_actual": fold.embargo_sessions_actual,
+                "embargo_sessions_required": protocol.embargo_sessions,
                 "ic_baseline": ic_b,
                 "ic_against": ic_a,
                 "tail_baseline": bottom_decile_mean(base_s, y),
                 "tail_against": bottom_decile_mean(ag_s, y),
-                "date_min": test[0].date if test else None,
-                "date_max": test[-1].date if test else None,
+                "date_min": fold.test_date_min or (test[0].date if test else None),
+                "date_max": fold.test_date_max or (test[-1].date if test else None),
+                "train_date_max": fold.train_date_max,
             }
         )
         oos_base_scores.extend(base_s)
@@ -1487,11 +1497,19 @@ def _format_lines(
                 f"  block_rate_base={float(f['block_rate_baseline']):.0%}"
                 f"  block_rate_ag={float(f.get('block_rate_against') or 0):.0%}"
             )
+        sess = ""
+        if f.get("n_train_sessions") is not None or f.get("n_test_sessions") is not None:
+            sess = (
+                f"  sessions_train={f.get('n_train_sessions')}"
+                f"  sessions_test={f.get('n_test_sessions')}"
+                f"  embargo={f.get('embargo_sessions_actual')}"
+                f"/{f.get('embargo_sessions_required')}"
+            )
         lines.append(
             f"  fold {f['fold']}: n_test={f['n_test']}  "
             f"{fold_lab}_base={fmt(f.get('ic_baseline'))}  "
             f"{fold_lab}_ag={fmt(f.get('ic_against'))}  "
-            f"dates={f.get('date_min')}..{f.get('date_max')}{extra}"
+            f"dates={f.get('date_min')}..{f.get('date_max')}{sess}{extra}"
         )
     lines.append("")
     lines.append("Costs: gross (not including fees) · Not investment advice")
