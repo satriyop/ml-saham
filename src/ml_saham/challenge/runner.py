@@ -770,11 +770,26 @@ def run_policy_challenge(
     )
 
     def make_result(**kwargs: object) -> ChallengeResult:
+        from ml_saham.challenge.types import EVIDENCE_GRADE_EXPLORATORY
+
         policy = prep.policy
+        protocol = prep.protocol
         identity: dict[str, object] = {
             "population_identity_kind": prep.population_identity_kind,
             "population_identity_id": prep.population_identity_id,
             "population_identity_detail": dict(prep.population_identity_detail or {}),
+            "evidence_grade": (
+                getattr(protocol, "evidence_grade", None)
+                if protocol is not None
+                else None
+            )
+            or EVIDENCE_GRADE_EXPLORATORY,
+            "policy_confirmation_contract_id": (
+                getattr(protocol, "policy_confirmation_contract_id", "")
+                if protocol is not None
+                else ""
+            )
+            or "",
         }
         if policy is not None and policy.production_snapshot_id:
             # Verified production-policy path (cohort-bound snapshots + adapter).

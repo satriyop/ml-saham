@@ -40,20 +40,30 @@ class GeometrySweepPoint:
 
 
 @dataclass(frozen=True)
-class SessionFloorRecommendation:
-    """Floors derived from pure geometry (not free hyperparameters)."""
+class GeometryMinimaRecommendation:
+    """Structural geometry minima only — not policy-grade ML sample sizes.
 
-    min_train_sessions: int
-    min_test_sessions: int
+    Values are the thinnest train/test unique-session blocks the splitter can
+    emit on the first calendar that forms ≥1 fold. They prevent impossible
+    geometry; they do **not** certify statistical power, dependence control,
+    regime coverage, or policy-grade promote eligibility (ML-OOS-02 incomplete).
+    """
+
+    geometry_min_train_sessions: int
+    geometry_min_test_sessions: int
     first_n_sessions_one_fold: int | None
     first_n_sessions_min_folds_for_win: int | None
     min_folds_for_win: int
-    # Multi-fold readiness mins (informational; not used as hard floors).
+    # Multi-fold readiness mins (informational only).
     multi_fold_min_train_sessions: int | None
     multi_fold_min_test_sessions: int | None
     embargo_sessions: int
     n_folds: int
     rationale: str
+
+
+# Backward-compatible alias (name was too strong for authority).
+SessionFloorRecommendation = GeometryMinimaRecommendation
 
 
 def simulate_session_folds(
@@ -127,26 +137,25 @@ def sweep_session_geometry(
     return out
 
 
-def recommend_session_floors(
+def recommend_geometry_minima(
     *,
     n_folds: int,
     embargo_sessions: int,
     min_folds_for_win: int,
     max_sessions: int = 400,
-) -> SessionFloorRecommendation:
-    """Derive min train/test session floors from protocol geometry knobs only.
+) -> GeometryMinimaRecommendation:
+    """Derive structural geometry minima from protocol knobs only.
 
     Procedure:
     1. Sweep unique-session calendars 1..max_sessions under the live chunking
        and full-embargo rules.
-    2. **Hard floors** come from the smallest calendar that forms **≥ 1** fold
-       (single-fold OOS remains a valid provisional path). Take min train and
-       min test session counts among folds on that calendar.
+    2. **Geometry minima** come from the smallest calendar that forms **≥ 1**
+       fold. Take min train and min test session counts among folds there.
     3. **Informational multi-fold readiness** uses the first calendar that
-       forms ≥ ``min_folds_for_win`` folds (promotion WIN bar) — reported but
-       not used as hard floors, so single-fold INCONCLUSIVE is not redefined.
+       forms ≥ ``min_folds_for_win`` folds — reported, not policy-grade floors.
 
-    Identity lower bound is always ≥ 1. No IC/power constants are introduced.
+    These minima are not statistical sample-size requirements. Policy-grade
+    session floors require a separate confirmation contract (ML-OOS-02 open).
     """
     win_bar = max(1, int(min_folds_for_win))
     points = sweep_session_geometry(
@@ -161,11 +170,11 @@ def recommend_session_floors(
         rationale = (
             f"no calendar ≤ {max_sessions} sessions formed any fold "
             f"(n_folds={n_folds}, embargo={embargo_sessions}); "
-            "using identity floors min_train_sessions=1, min_test_sessions=1"
+            "using identity geometry minima train=1, test=1"
         )
-        return SessionFloorRecommendation(
-            min_train_sessions=1,
-            min_test_sessions=1,
+        return GeometryMinimaRecommendation(
+            geometry_min_train_sessions=1,
+            geometry_min_test_sessions=1,
             first_n_sessions_one_fold=None,
             first_n_sessions_min_folds_for_win=None,
             min_folds_for_win=win_bar,
@@ -190,17 +199,19 @@ def recommend_session_floors(
     )
 
     rationale = (
-        f"hard floors from first 1-fold calendar "
+        f"structural geometry minima from first 1-fold calendar "
         f"(n_sessions={first_one.n_sessions}, n_folds={n_folds}, "
         f"embargo={embargo_sessions}): "
-        f"min_train_sessions={min_train}, min_test_sessions={min_test}; "
+        f"geometry_min_train_sessions={min_train}, "
+        f"geometry_min_test_sessions={min_test}; "
         f"multi-fold readiness (≥{win_bar} folds) first at "
         f"n_sessions={first_win.n_sessions if first_win else None} "
-        f"(min_train={multi_tr}, min_test={multi_te}) — informational only"
+        f"(min_train={multi_tr}, min_test={multi_te}) — informational only; "
+        "not policy-grade sample floors"
     )
-    return SessionFloorRecommendation(
-        min_train_sessions=min_train,
-        min_test_sessions=min_test,
+    return GeometryMinimaRecommendation(
+        geometry_min_train_sessions=min_train,
+        geometry_min_test_sessions=min_test,
         first_n_sessions_one_fold=first_one.n_sessions,
         first_n_sessions_min_folds_for_win=(
             first_win.n_sessions if first_win is not None else None
@@ -212,6 +223,10 @@ def recommend_session_floors(
         n_folds=n_folds,
         rationale=rationale,
     )
+
+
+# Backward-compatible name.
+recommend_session_floors = recommend_geometry_minima
 
 
 def format_sweep_table(points: Sequence[GeometrySweepPoint], *, limit: int = 30) -> str:

@@ -17,6 +17,10 @@ from ml_saham.challenge.artifacts import (
     file_sha256_hex,
     write_promote_packet,
 )
+from ml_saham.challenge.types import (
+    EVIDENCE_GRADE_EXPLORATORY,
+    EVIDENCE_GRADE_POLICY,
+)
 from ml_saham.challenge.challengers import resolve_named_gate_key
 from ml_saham.challenge.champion import CHAMPION_AGAINST_IDS, is_champion_against
 from ml_saham.challenge.policies.registry import load_policy_adapter
@@ -61,10 +65,68 @@ _ACCUM_POPULATION_KIND = "accum_compat"
 # Exact integer contract; writers stamp CHALLENGE_ARTIFACT_SCHEMA_VERSION.
 SUPPORTED_ARTIFACT_SCHEMA_VERSIONS = frozenset({CHALLENGE_ARTIFACT_SCHEMA_VERSION})
 
+# Registered policy-grade confirmation contracts (ML-OOS-02 study outputs).
+# Empty until a confirmation design is adopted — nothing is policy-grade yet.
+POLICY_CONFIRMATION_CONTRACTS: frozenset[str] = frozenset()
+
 # production_snapshot_id and production_snapshot_digest are raw sha256 hex digests.
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 # Observation cohorts are free-form but must not be trivial placeholders.
 _MIN_COMPAT_LEN = 8
+
+
+def validate_policy_grade_eligibility(data: dict[str, Any]) -> str | None:
+    """Fail closed unless evidence is explicitly policy-grade with a registered contract.
+
+    Geometry-valid exploratory challenge results remain runnable and sealable,
+    but must not produce a policy-grade promote packet or unblock task-06-style
+    policy confirmation without a confirmation contract.
+    """
+    if "evidence_grade" not in data or data["evidence_grade"] is None:
+        return (
+            "not policy-grade eligible: evidence_grade missing "
+            f"(exploratory geometry-valid evidence must stamp "
+            f"{EVIDENCE_GRADE_EXPLORATORY!r}; policy-grade requires "
+            f"{EVIDENCE_GRADE_POLICY!r} + registered "
+            "policy_confirmation_contract_id)"
+        )
+    grade = data["evidence_grade"]
+    if type(grade) is not str or not grade or grade != grade.strip():
+        return (
+            "not policy-grade eligible: evidence_grade must be exact non-empty str, "
+            f"got {type(grade).__name__}={grade!r}"
+        )
+    if grade == EVIDENCE_GRADE_EXPLORATORY:
+        return (
+            "not policy-grade eligible: evidence_grade=EXPLORATORY "
+            "(structural geometry minima only; not statistical sample floors; "
+            "policy-grade promote / task-06 confirmation blocked until "
+            "policy_confirmation_contract_id is registered and stamped)"
+        )
+    if grade != EVIDENCE_GRADE_POLICY:
+        return (
+            "not policy-grade eligible: evidence_grade="
+            f"{grade!r} (supported: {EVIDENCE_GRADE_EXPLORATORY!r}, "
+            f"{EVIDENCE_GRADE_POLICY!r})"
+        )
+    if "policy_confirmation_contract_id" not in data:
+        return (
+            "not policy-grade eligible: policy_confirmation_contract_id missing "
+            f"(required when evidence_grade={EVIDENCE_GRADE_POLICY!r})"
+        )
+    contract = data["policy_confirmation_contract_id"]
+    if type(contract) is not str or not contract or contract != contract.strip():
+        return (
+            "not policy-grade eligible: policy_confirmation_contract_id must be "
+            f"exact non-empty str, got {type(contract).__name__}={contract!r}"
+        )
+    if contract not in POLICY_CONFIRMATION_CONTRACTS:
+        return (
+            "not policy-grade eligible: policy_confirmation_contract_id="
+            f"{contract!r} is not a registered confirmation contract "
+            f"(registry empty/unsupported until ML-OOS-02 confirmation study)"
+        )
+    return None
 
 
 def validate_artifact_schema_version(data: dict[str, Any]) -> str | None:
@@ -207,19 +269,27 @@ def validate_fold_geometry_evidence(
                 f"challenge evidence invalid: fold_metrics[{i}]."
                 f"embargo_sessions_actual={actual} < required={required}"
             )
-        min_train_sess = int(getattr(protocol, "min_train_sessions", 1) or 1)
-        min_test_sess = int(getattr(protocol, "min_test_sessions", 1) or 1)
+        min_train_sess = int(
+            getattr(protocol, "geometry_min_train_sessions", None)
+            or getattr(protocol, "min_train_sessions", 1)
+            or 1
+        )
+        min_test_sess = int(
+            getattr(protocol, "geometry_min_test_sessions", None)
+            or getattr(protocol, "min_test_sessions", 1)
+            or 1
+        )
         if fold["n_train_sessions"] < min_train_sess:
             return (
                 f"challenge evidence invalid: fold_metrics[{i}]."
                 f"n_train_sessions={fold['n_train_sessions']} < protocol "
-                f"min_train_sessions={min_train_sess}"
+                f"geometry_min_train_sessions={min_train_sess}"
             )
         if fold["n_test_sessions"] < min_test_sess:
             return (
                 f"challenge evidence invalid: fold_metrics[{i}]."
                 f"n_test_sessions={fold['n_test_sessions']} < protocol "
-                f"min_test_sessions={min_test_sess}"
+                f"geometry_min_test_sessions={min_test_sess}"
             )
         train_max = fold["train_date_max"]
         test_min = fold["date_min"]
@@ -636,6 +706,10 @@ def _after_presence_checks(
     )
     if validity_err is not None:
         return None, validity_err
+    # Authority separation: geometry-valid exploratory evidence is not enough.
+    grade_err = validate_policy_grade_eligibility(data)
+    if grade_err is not None:
+        return None, grade_err
     return data, None
 
 
@@ -785,6 +859,10 @@ def load_evidence_artifact(
             "notes": metrics.get("notes"),
             "mode": manifest.get("mode"),
             "fold_geometry_contract_id": manifest.get("fold_geometry_contract_id"),
+            "evidence_grade": manifest.get("evidence_grade"),
+            "policy_confirmation_contract_id": manifest.get(
+                "policy_confirmation_contract_id"
+            ),
             "content_digest": manifest.get("content_digest"),
             "artifact_id": manifest.get("artifact_id"),
         }

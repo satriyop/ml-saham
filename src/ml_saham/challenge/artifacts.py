@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from ml_saham.artifacts.writer import resolve_artifacts_root
 from ml_saham.challenge.champion import is_champion_against
 from ml_saham.challenge.types import (
+    EVIDENCE_GRADE_EXPLORATORY,
     BatchDiagnosticResult,
     BatchFactorResult,
     ChallengeResult,
@@ -100,6 +101,8 @@ _CONTENT_DIGEST_KEYS: tuple[str, ...] = (
     "population_identity_id",
     "population_identity_detail",
     "fold_geometry_contract_id",
+    "evidence_grade",
+    "policy_confirmation_contract_id",
     "n_rows",
     "primary_horizon",
     "primary_ic_baseline",
@@ -149,6 +152,12 @@ def stamp_challenge_evidence_digests(payload: dict[str, Any]) -> dict[str, Any]:
     out = dict(payload)
     out["schema_version"] = CHALLENGE_ARTIFACT_SCHEMA_VERSION
     out["fold_geometry_contract_id"] = FOLD_GEOMETRY_CONTRACT_ID
+    # Authority: default exploratory unless a registered confirmation contract
+    # is explicitly present (cannot invent POLICY_GRADE here).
+    if not out.get("evidence_grade"):
+        out["evidence_grade"] = EVIDENCE_GRADE_EXPLORATORY
+    if out.get("policy_confirmation_contract_id") is None:
+        out["policy_confirmation_contract_id"] = ""
     digest = challenge_content_digest(out)
     out["content_digest"] = digest
     out["artifact_id"] = challenge_artifact_id(
@@ -206,6 +215,10 @@ def challenge_result_export_payload(
         "population_identity_id": result.population_identity_id,
         "population_identity_detail": result.population_identity_detail,
         "fold_geometry_contract_id": FOLD_GEOMETRY_CONTRACT_ID,
+        "evidence_grade": result.evidence_grade or EVIDENCE_GRADE_EXPLORATORY,
+        "policy_confirmation_contract_id": (
+            result.policy_confirmation_contract_id or ""
+        ),
         "n_rows": result.n_rows,
         "primary_horizon": result.primary_horizon,
         "primary_ic_baseline": result.primary_ic_baseline,
@@ -292,6 +305,10 @@ def write_challenge_artifact(
         "population_identity_id": result.population_identity_id,
         "population_identity_detail": result.population_identity_detail,
         "fold_geometry_contract_id": FOLD_GEOMETRY_CONTRACT_ID,
+        "evidence_grade": result.evidence_grade or EVIDENCE_GRADE_EXPLORATORY,
+        "policy_confirmation_contract_id": (
+            result.policy_confirmation_contract_id or ""
+        ),
         "status": result.status.value,
         "n_rows": result.n_rows,
         "primary_horizon": result.primary_horizon,

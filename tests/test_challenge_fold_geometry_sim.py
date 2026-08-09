@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ml_saham.challenge.fold_geometry_sim import (
-    recommend_session_floors,
+    recommend_geometry_minima,
     simulate_session_folds,
     sweep_session_geometry,
 )
@@ -28,8 +28,8 @@ def test_simulate_matches_time_purged_session_counts():
         win_margin=0.01,
         min_fold_agree=2 / 3,
         min_folds_for_win=2,
-        min_train_sessions=1,
-        min_test_sessions=1,
+        geometry_min_train_sessions=1,
+        geometry_min_test_sessions=1,
         min_train_rows=15,
     )
     live = time_purged_folds(rows, proto)
@@ -41,43 +41,49 @@ def test_simulate_matches_time_purged_session_counts():
         assert lf.embargo_sessions_actual == sf.embargo_sessions_actual
 
 
-def test_recommend_accum_floors_from_first_one_fold_calendar():
-    rec = recommend_session_floors(
+def test_recommend_accum_geometry_minima_from_first_one_fold_calendar():
+    rec = recommend_geometry_minima(
         n_folds=3, embargo_sessions=20, min_folds_for_win=2
     )
-    assert rec.min_train_sessions == 1
-    assert rec.min_test_sessions == 7
+    assert rec.geometry_min_train_sessions == 1
+    assert rec.geometry_min_test_sessions == 7
     assert rec.first_n_sessions_one_fold == 28
     assert rec.first_n_sessions_min_folds_for_win == 44
     assert rec.multi_fold_min_train_sessions == 2
     assert rec.multi_fold_min_test_sessions == 11
-    assert ACCUM_PATH_V1.min_train_sessions == rec.min_train_sessions
-    assert ACCUM_PATH_V1.min_test_sessions == rec.min_test_sessions
+    assert ACCUM_PATH_V1.geometry_min_train_sessions == rec.geometry_min_train_sessions
+    assert ACCUM_PATH_V1.geometry_min_test_sessions == rec.geometry_min_test_sessions
+    assert ACCUM_PATH_V1.evidence_grade == "EXPLORATORY"
+    assert ACCUM_PATH_V1.policy_confirmation_contract_id == ""
 
 
-def test_recommend_pre_open_floors():
-    rec = recommend_session_floors(
+def test_recommend_pre_open_geometry_minima():
+    rec = recommend_geometry_minima(
         n_folds=3, embargo_sessions=1, min_folds_for_win=2
     )
-    assert rec.min_train_sessions == 1
-    assert rec.min_test_sessions == 1
-    assert PRE_OPEN_SESSION_V1.min_train_sessions == 1
-    assert PRE_OPEN_SESSION_V1.min_test_sessions == 1
+    assert rec.geometry_min_train_sessions == 1
+    assert rec.geometry_min_test_sessions == 1
+    assert PRE_OPEN_SESSION_V1.geometry_min_train_sessions == 1
+    assert PRE_OPEN_SESSION_V1.geometry_min_test_sessions == 1
+    assert PRE_OPEN_SESSION_V1.evidence_grade == "EXPLORATORY"
 
 
-def test_hard_floor_rejects_thinner_test_block_than_first_viable():
+def test_geometry_minima_reject_thinner_than_first_viable():
     """Below first 1-fold geometry, no folds; at first 1-fold mins, folds ok."""
     # n=27: no fold under embargo=20 / n_folds=3
     rows_thin = _panel_from_sessions(_dates(27), rows_per_session=20)
     assert time_purged_folds(rows_thin, ACCUM_PATH_V1) == []
 
-    # n=28: first 1-fold calendar → train=1, test=7 meets floors 1/7
-    # rows/session high enough for min_train_rows=15 and min_n_test=20
+    # n=28: first 1-fold calendar → train=1, test=7 meets geometry minima 1/7
     rows_ok = _panel_from_sessions(_dates(28), rows_per_session=20)
     folds = time_purged_folds(rows_ok, ACCUM_PATH_V1)
     assert folds
-    assert all(f.n_test_sessions >= ACCUM_PATH_V1.min_test_sessions for f in folds)
-    assert all(f.n_train_sessions >= ACCUM_PATH_V1.min_train_sessions for f in folds)
+    assert all(
+        f.n_test_sessions >= ACCUM_PATH_V1.geometry_min_test_sessions for f in folds
+    )
+    assert all(
+        f.n_train_sessions >= ACCUM_PATH_V1.geometry_min_train_sessions for f in folds
+    )
 
 
 def test_sweep_includes_pathological_zeros():

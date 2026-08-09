@@ -148,6 +148,12 @@ class ChallengeExecutionPolicy:
         return tuple(c.key for c in self.enabled_components())
 
 
+# Evidence authority: geometry-valid runs are exploratory until a policy
+# confirmation contract is registered and stamped (ML-OOS-02 incomplete).
+EVIDENCE_GRADE_EXPLORATORY = "EXPLORATORY"
+EVIDENCE_GRADE_POLICY = "POLICY_GRADE"
+
+
 @dataclass(frozen=True)
 class Protocol:
     protocol_id: str
@@ -163,13 +169,16 @@ class Protocol:
     costs: str = "gross_banner"
     # WIN requires this many valid OOS folds (single-fold edge = provisional only)
     min_folds_for_win: int = 2
-    # Session floors (ML-OOS-02): unique panel dates per split. Derived from
-    # fold-geometry simulation of n_folds/embargo/min_folds_for_win — not free
-    # statistical knobs. Defaults are identity bounds (≥1).
-    min_train_sessions: int = 1
-    min_test_sessions: int = 1
+    # Structural geometry minima (unique panel dates). Derived from fold-geometry
+    # simulation only — NOT policy-grade ML sample sizes (see ML-OOS-02 decision).
+    geometry_min_train_sessions: int = 1
+    geometry_min_test_sessions: int = 1
     # Row floor for train (historical multi-fold constant); test uses min_n_test.
     min_train_rows: int = 15
+    # Authority: EXPLORATORY until policy_confirmation_contract_id is set and
+    # registered. Promote / task-06 policy-grade path fails closed otherwise.
+    evidence_grade: str = EVIDENCE_GRADE_EXPLORATORY
+    policy_confirmation_contract_id: str = ""
 
 
 @dataclass
@@ -204,6 +213,9 @@ class ChallengeResult:
     population_identity_kind: str = ""
     population_identity_id: str = ""
     population_identity_detail: dict[str, Any] = field(default_factory=dict)
+    # Authority separation: EXPLORATORY ≠ policy-grade promote / task-06 evidence.
+    evidence_grade: str = EVIDENCE_GRADE_EXPLORATORY
+    policy_confirmation_contract_id: str = ""
 
     def exit_code(self) -> int:
         if self.status in (

@@ -1,57 +1,61 @@
-# ML-OOS-02 — session floors from fold-geometry simulation (2026-08-09)
+# ML-OOS-02 — structural geometry minima vs policy-grade floors (open)
 
-## Goal
+**Status: INCOMPLETE** — geometry simulation and authority separation only.
+Policy-grade minimum train/test sessions are **not** selected yet.
 
-Choose **minimum train/test unique-session counts** for challenge fold
-acceptance without inventing free statistical parameters (IC power, daily IC,
-holdout size, etc.).
-
-## Method
+## What shipped (structural only)
 
 Module: `ml_saham.challenge.fold_geometry_sim`.
 
-1. Simulate the **same** session chunking and full-embargo rules as
-   `time_purged_folds` (no row floors, no scores).
-2. Sweep calendars `n_sessions = 1..400`.
-3. **Hard floors** = min train-session and min test-session counts on the
-   **first calendar that forms ≥ 1 fold**.
-   - Rationale: single-fold OOS remains a valid provisional / INCONCLUSIVE path
-     (`min_folds_for_win` is a WIN bar, not a fold-existence bar).
-4. **Informational multi-fold readiness** = first calendar that forms
-   ≥ `min_folds_for_win` folds, and the min train/test session counts on that
-   calendar. Recorded for operators; **not** wired as hard floors.
+1. Simulate the same session chunking / full-embargo rules as `time_purged_folds`.
+2. **Structural geometry minima** = min train/test unique-session counts on the
+   first calendar that forms ≥1 fold.
+3. Multi-fold readiness (≥ `min_folds_for_win`) is **informational only**.
 
-No free knobs: inputs are only existing Protocol fields
-(`n_folds`, `embargo_sessions`, `min_folds_for_win`).
+| Protocol | Structural geometry min train / test | Meaning |
+|---|---|---|
+| `accum_path_v1` | **1 / 7** | First geometrically possible fold block sizes |
+| `pre_open_session_v1` | **1 / 1** | Same for pre-open embargo=1 |
 
-## Results (live sim at implementation)
-
-| Protocol | embargo | n_folds | first 1-fold n | hard min_train / min_test | multi-fold (≥2) first n | multi min_train / min_test |
-|---|---:|---:|---:|---|---:|---|
-| `accum_path_v1` | 20 | 3 | 28 | **1 / 7** | 44 | 2 / 11 |
-| `pre_open_session_v1` | 1 | 3 | 4 | **1 / 1** | 4 | 1 / 1 |
-
-## Wired into Protocol
+Protocol fields:
 
 ```text
-min_train_sessions
-min_test_sessions
-min_train_rows = 15   # pre-existing multi-fold row floor (unchanged)
+geometry_min_train_sessions
+geometry_min_test_sessions
+evidence_grade = EXPLORATORY
+policy_confirmation_contract_id = ""   # none registered
 ```
 
-Enforced in `time_purged_folds` and promote reopen
-(`validate_fold_geometry_evidence`).
+These minima **prevent impossible geometry**. They are **not** ML sample
+requirements (model complexity, power, dependence, IC uncertainty, regime
+coverage are ignored by the simulator).
 
-## Explicit non-goals (still deferred)
+## Authority separation (required correction)
 
-- Changing `n_folds`, `embargo_sessions`, or `min_folds_for_win`
-- Daily IC / CI / multiplicity
-- Making one-fold LOSE → INCONCLUSIVE
-- Raising hard floors to multi-fold readiness mins (would reclassify many
-  single-fold provisional runs as `BLOCKED_DATA`)
+Geometry-valid folds must not be read as policy-grade promote evidence.
 
-## Protocol identity
+- Challenge runs stay **runnable** under `accum_path_v1` / `pre_open_session_v1`.
+- Sealed artifacts stamp `evidence_grade=EXPLORATORY`.
+- **Policy-grade promote / task-06 validation fails closed** unless:
+  - `evidence_grade=POLICY_GRADE`, and
+  - `policy_confirmation_contract_id` is a **registered** confirmation contract.
 
-Still **`accum_path_v1` / `pre_open_session_v1`**. Session floors are
-geometry-derived constraints on the same splitter, not a new success law.
-Promote-evidence remains schema **v5** + `session_native_purged.v1`.
+`POLICY_CONFIRMATION_CONTRACTS` is currently **empty**. No path can claim
+policy-grade confirmation until the design study lands a contract id.
+
+## Real ML-OOS-02 design study (still open)
+
+Separate work, not free constants in code:
+
+- fixed challengers (e.g. equal_sleeves) vs learned ridge/LightGBM;
+- policy-grade min train/test **sessions**;
+- daily/session-aware IC + uncertainty;
+- final untouched holdout;
+- multiple-challenger selection / multiplicity;
+- regime coverage.
+
+## Explicit non-goals for this slice
+
+- Guessing statistical thresholds in Protocol
+- Marking ML-OOS-02 complete
+- Auto-promoting exploratory WIN into ai-saham

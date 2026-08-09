@@ -20,9 +20,11 @@ from ml_saham.challenge.promote import (
     load_evidence_artifact,
     validate_artifact_schema_version,
     validate_fold_geometry_evidence,
+    validate_policy_grade_eligibility,
     validate_production_identity_format,
     validate_verified_production_identity,
 )
+from ml_saham.challenge.types import EVIDENCE_GRADE_EXPLORATORY
 from ml_saham.challenge.production_policy_snapshots import stable_snapshot_id_for
 from ml_saham.challenge.runner import run_policy_challenge
 from ml_saham.cli.app import app
@@ -57,7 +59,9 @@ def verified_export(fixture_db: Path) -> dict:
     return _export_from_result(result)
 
 
-def test_promote_from_champion_export(fixture_db: Path, tmp_path: Path):
+def test_promote_from_champion_export_blocked_exploratory(
+    fixture_db: Path, tmp_path: Path
+):
     result = run_policy_challenge(
         fixture_db,
         "screener.accum.score_weights",
@@ -67,64 +71,50 @@ def test_promote_from_champion_export(fixture_db: Path, tmp_path: Path):
     )
     # Champion may BLOCKED on missing lightgbm, but prep still stamps verified identity.
     assert result.production_snapshot_id, result.notes
+    assert result.evidence_grade == EVIDENCE_GRADE_EXPLORATORY
     export = tmp_path / "champ.json"
     payload = {
         "mode": "champion",
         **_export_from_result(result),
         "against_id": "lgbm_reweight",
     }
+    # reseal after against override
+    payload = stamp_challenge_evidence_digests(payload)
     export.write_text(json.dumps(payload), encoding="utf-8")
 
     pack = build_promote_packet(
         from_json=export,
-        write_artifact=True,
-        artifacts_dir=tmp_path / "arts",
+        write_artifact=False,
         db_path=fixture_db,
     )
-    assert pack.exit_code() == 0, pack.error
-    assert pack.error is None
-    assert pack.policy_id == "screener.accum.score_weights"
-    assert pack.mode == "champion"
-    assert pack.artifact_dir is not None
-    promote_md = (pack.artifact_dir / "PROMOTE.md").read_text(encoding="utf-8")
-    assert "NOT applied" in promote_md or "NOT APPLIED" in promote_md.upper()
-    assert "never writes" in promote_md.lower() or "never" in promote_md.lower()
-    assert "screener.accum.score_weights" in promote_md
-    assert "lgbm_reweight" in promote_md
-    assert (pack.artifact_dir / "evidence.json").is_file()
-    assert pack.evidence.get("production_snapshot_id") == result.production_snapshot_id
+    assert pack.exit_code() == 2, pack.error
+    assert "exploratory" in (pack.error or "").lower() or "policy-grade" in (
+        pack.error or ""
+    ).lower()
 
 
-def test_promote_from_verified_tune_export(
+def test_promote_from_verified_tune_export_blocked_exploratory(
     verified_export: dict, tmp_path: Path, fixture_db: Path
 ):
-    """Real challenge export with verified identities → human-only promote packet."""
+    """Geometry-valid exploratory export is not policy-grade promote-eligible."""
+    assert verified_export["evidence_grade"] == EVIDENCE_GRADE_EXPLORATORY
+    assert verified_export.get("policy_confirmation_contract_id") in ("", None)
     export = tmp_path / "tune.json"
     export.write_text(json.dumps(verified_export), encoding="utf-8")
     pack = build_promote_packet(
         from_json=export,
-        write_artifact=True,
-        artifacts_dir=tmp_path / "arts",
+        write_artifact=False,
         db_path=fixture_db,
     )
-    assert pack.exit_code() == 0, pack.error
-    assert pack.error is None
-    assert pack.policy_id == verified_export["policy_id"]
-    assert (
-        pack.evidence["production_snapshot_id"]
-        == verified_export["production_snapshot_id"]
-    )
-    assert pack.evidence["observation_compatibility_id"] == FIXTURE_COMPATIBILITY_ID
-    md = pack.summary_md
-    assert "NOT applied" in md
-    assert "never" in md.lower()
-    # recomputed identity matches export (shipped rules)
+    assert pack.exit_code() == 2, pack.error
+    err = (pack.error or "").lower()
+    assert "exploratory" in err or "policy-grade" in err
+    # Snapshot identity is still well-formed on the export itself.
     expected = stable_snapshot_id_for(
         compatibility_id=FIXTURE_COMPATIBILITY_ID,
         policy_id="screener.accum.score_weights",
     )
-    assert pack.evidence["production_snapshot_id"] == expected
-
+    assert verified_export["production_snapshot_id"] == expected
 
 def test_promote_bad_json(tmp_path: Path, fixture_db: Path):
     bad = tmp_path / "bad.json"
@@ -350,18 +340,21 @@ def test_artifact_dir_requires_schema_and_valid_identity(
     assert err is not None
     assert "pack_binding" in err or "schema_version" in err
 
-    # Valid sealed export JSON is the simplest authentic pack path.
+    # Valid sealed exploratory export is not policy-grade promote-eligible.
     export_ok = tmp_path / "sealed_ok.json"
     export_ok.write_text(json.dumps(verified_export), encoding="utf-8")
     pack = build_promote_packet(
         from_json=export_ok, write_artifact=False, db_path=fixture_db
     )
-    assert pack.exit_code() == 0, pack.error
+    assert pack.exit_code() == 2, pack.error
+    assert "exploratory" in (pack.error or "").lower() or "policy-grade" in (
+        pack.error or ""
+    ).lower()
+    assert verified_export["schema_version"] == CHALLENGE_ARTIFACT_SCHEMA_VERSION
     assert (
-        pack.evidence["production_snapshot_id"]
+        verified_export["production_snapshot_id"]
         == verified_export["production_snapshot_id"]
     )
-    assert pack.evidence["schema_version"] == CHALLENGE_ARTIFACT_SCHEMA_VERSION
 
 
 def test_export_json_cannot_bypass_manifest_schema(
@@ -407,15 +400,17 @@ def test_export_json_cannot_bypass_manifest_schema(
     assert err is not None
     assert "pack_binding" in err or "schema_version" in err
 
-    # Standalone export.json (no manifest) with schema works.
+    # Standalone export.json (no manifest) is exploratory → policy-grade blocked.
     solo = tmp_path / "solo_export"
     solo.mkdir()
     (solo / "export.json").write_text(json.dumps(verified_export), encoding="utf-8")
     pack = build_promote_packet(
         from_artifact=solo, write_artifact=False, db_path=fixture_db
     )
-    assert pack.exit_code() == 0, pack.error
-    assert pack.evidence["schema_version"] == CHALLENGE_ARTIFACT_SCHEMA_VERSION
+    assert pack.exit_code() == 2, pack.error
+    assert "exploratory" in (pack.error or "").lower() or "policy-grade" in (
+        pack.error or ""
+    ).lower()
 
     # Standalone export.json without schema fails closed.
     solo_bad = tmp_path / "solo_export_bad"
@@ -507,7 +502,7 @@ def test_v3_population_identity_required_for_promote(
     assert "population_identity_id" in (pack.error or "")
 
 
-def test_promote_cli(fixture_db: Path, tmp_path: Path, verified_export: dict):
+def test_promote_cli_blocks_exploratory(fixture_db: Path, tmp_path: Path, verified_export: dict):
     export = tmp_path / "run.json"
     export.write_text(json.dumps(verified_export), encoding="utf-8")
     r = runner.invoke(
@@ -523,9 +518,9 @@ def test_promote_cli(fixture_db: Path, tmp_path: Path, verified_export: dict):
             str(export),
         ],
     )
-    assert r.exit_code == 0, r.stdout
-    assert "PROMOTE" in r.stdout or "Promote" in r.stdout
-    assert "NOT APPLIED" in r.stdout.upper() or "not applied" in r.stdout.lower()
+    assert r.exit_code == 2, r.stdout
+    out = (r.stdout or "") + (r.stderr or "")
+    assert "exploratory" in out.lower() or "policy-grade" in out.lower() or "BLOCKED" in out
 
 
 def test_promote_cli_rejects_fabricated(tmp_path: Path, verified_export: dict):
@@ -722,11 +717,12 @@ def test_historical_schema_v4_not_promote_eligible(
     assert "4" in (pack.error or "")
 
 
-def test_v5_session_native_export_promote_eligible(
+def test_v5_session_native_export_is_exploratory_not_policy_grade(
     verified_export: dict, tmp_path: Path, fixture_db: Path
 ):
     assert verified_export["schema_version"] == 5
     assert verified_export["fold_geometry_contract_id"] == FOLD_GEOMETRY_CONTRACT_ID
+    assert verified_export["evidence_grade"] == EVIDENCE_GRADE_EXPLORATORY
     folds = verified_export.get("fold_metrics") or []
     assert folds, "fixture must form at least one fold for geometry checks"
     f0 = folds[0]
@@ -740,12 +736,43 @@ def test_v5_session_native_export_promote_eligible(
         "date_max",
     ):
         assert key in f0, key
-    export = tmp_path / "v5_ok.json"
+    # Geometry validation passes; policy-grade authority fails closed.
+    from ml_saham.challenge.protocols import get_protocol
+
+    assert (
+        validate_fold_geometry_evidence(
+            verified_export, protocol=get_protocol(verified_export["protocol_id"])
+        )
+        is None
+    )
+    assert validate_policy_grade_eligibility(verified_export) is not None
+    export = tmp_path / "v5_expl.json"
     export.write_text(json.dumps(verified_export), encoding="utf-8")
     pack = build_promote_packet(
         from_json=export, write_artifact=False, db_path=fixture_db
     )
-    assert pack.exit_code() == 0, pack.error
+    assert pack.exit_code() == 2
+    assert "exploratory" in (pack.error or "").lower() or "policy-grade" in (
+        pack.error or ""
+    ).lower()
+
+
+def test_policy_grade_without_registered_contract_fails_closed(
+    verified_export: dict, tmp_path: Path, fixture_db: Path
+):
+    payload = dict(verified_export)
+    payload["evidence_grade"] = "POLICY_GRADE"
+    payload["policy_confirmation_contract_id"] = "unregistered.contract.v1"
+    payload = stamp_challenge_evidence_digests(payload)
+    err = validate_policy_grade_eligibility(payload)
+    assert err is not None
+    assert "not a registered" in err or "registry" in err.lower()
+    path = tmp_path / "policy_fake.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    pack = build_promote_packet(
+        from_json=path, write_artifact=False, db_path=fixture_db
+    )
+    assert pack.exit_code() == 2
 
 
 def test_missing_or_tampered_fold_geometry_rejected(
@@ -823,11 +850,14 @@ def test_pack_binding_required_and_identity_bound(
     )
     assert (out / "pack_binding.json").is_file()
 
-    # Happy path reopen.
+    # Exploratory sealed pack: geometry/identity load still blocked for policy-grade.
     pack = build_promote_packet(
         from_artifact=out, write_artifact=False, db_path=fixture_db
     )
-    assert pack.exit_code() == 0, pack.error
+    assert pack.exit_code() == 2, pack.error
+    assert "exploratory" in (pack.error or "").lower() or "policy-grade" in (
+        pack.error or ""
+    ).lower()
 
     # Missing binding.
     missing = tmp_path / "missing_bind"

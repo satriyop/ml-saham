@@ -167,8 +167,17 @@ def _build_fold(
     test_idx = _indices_for_sessions(rows, order, test_sessions)
     n_train_sess = len(train_sessions)
     n_test_sess = len(test_sessions)
-    min_train_sess = int(getattr(protocol, "min_train_sessions", 1) or 1)
-    min_test_sess = int(getattr(protocol, "min_test_sessions", 1) or 1)
+    # Structural geometry minima (not policy-grade sample floors).
+    min_train_sess = int(
+        getattr(protocol, "geometry_min_train_sessions", None)
+        or getattr(protocol, "min_train_sessions", 1)
+        or 1
+    )
+    min_test_sess = int(
+        getattr(protocol, "geometry_min_test_sessions", None)
+        or getattr(protocol, "min_test_sessions", 1)
+        or 1
+    )
     if n_train_sess < min_train_sess or n_test_sess < min_test_sess:
         return None
     if len(test_idx) < protocol.min_n_test or len(train_idx) < min_train_rows:
@@ -205,8 +214,8 @@ def time_purged_folds(rows: Sequence[PanelRow], protocol: Protocol) -> list[Fold
       ``embargo_sessions``, ``n_folds`` chunking, and min train/test N.
     - Each returned fold has proven: no session overlap, all train dates
       precede all test dates, and embargo gap ≥ ``protocol.embargo_sessions``.
-    - Session floors ``min_train_sessions`` / ``min_test_sessions`` (ML-OOS-02)
-      are protocol fields derived from fold-geometry simulation.
+    - Structural geometry minima ``geometry_min_*_sessions`` (not policy-grade
+      sample floors) come from fold-geometry simulation.
     """
     if len(rows) < protocol.min_n_total:
         return []
