@@ -1713,13 +1713,18 @@ def _list_item_from_manifest(pack: Path, manifest: dict[str, Any]) -> ArtifactLi
     if historical:
         promo_block = "historical/display-only schema"
     elif schema_version != CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION:
-        promo_block = "schema not promote-evidence v4"
+        promo_block = (
+            f"schema not promote-evidence v{CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION}"
+        )
     elif not manifest.get("baseline_id"):
         promo_block = "missing baseline_id"
     elif str(manifest.get("baseline_id")) != "production":
         promo_block = "baseline is not production"
     elif not (pack / "pack_binding.json").is_file():
-        promo_block = "missing pack_binding.json (not sealed v4 pack)"
+        promo_block = (
+            f"missing pack_binding.json (not sealed "
+            f"v{CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION} pack)"
+        )
     elif not manifest.get("production_snapshot_id"):
         promo_block = "missing production snapshot identity fields"
     else:

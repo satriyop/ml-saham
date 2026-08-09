@@ -27,14 +27,20 @@ JAKARTA = ZoneInfo("Asia/Jakarta")
 # Challenge product artifact / promote-reopen contract (integer, not coerced).
 # Distinct from curriculum pack SCHEMA_VERSION in ml_saham.artifacts.writer.
 #
-# v4 (promote-evidence only): sealed artifact_id + content_digest + pack_binding.
+# v5 (promote-evidence): sealed digests + pack_binding + fold_geometry_contract_id
+#     ``session_native_purged.v1`` with per-fold session geometry fields.
+# v4: sealed digests only — **historical / display-only** (pre ML-OOS-01 geometry
+#     enforcement; may contain broken row-based splits).
 # v3 display artifacts: factor/diagnostic/batch/engine/health/promote-packet
 #     writers stamp this without seals. v2 and earlier remain historical.
-# Promote reopen accepts only schema v4 sealed evidence.
-CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION = 4
+# Promote reopen accepts only schema v5 sealed evidence with geometry contract.
+CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION = 5
 CHALLENGE_DISPLAY_ARTIFACT_SCHEMA_VERSION = 3
 DIAGNOSTIC_ARTIFACT_SCHEMA_VERSION = 4
 DIAGNOSTIC_ARTIFACT_CONTRACT_ID = "diagnostic_result_artifact.v4"
+
+# Material identity for purged fold construction (sealed into content_digest).
+FOLD_GEOMETRY_CONTRACT_ID = "session_native_purged.v1"
 
 
 def _seal_diagnostic_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -69,7 +75,8 @@ def _seal_diagnostic_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
 # Alias used by sealed promote-evidence writers/export path.
 CHALLENGE_ARTIFACT_SCHEMA_VERSION = CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION
 # Historical schemas still readable for display, never for promote reopen.
-HISTORICAL_CHALLENGE_ARTIFACT_SCHEMA_VERSIONS = frozenset({1, 2, 3})
+# v4 sealed packs predate fold_geometry_contract_id enforcement (ML-OOS-01).
+HISTORICAL_CHALLENGE_ARTIFACT_SCHEMA_VERSIONS = frozenset({1, 2, 3, 4})
 
 # Closed payload for content_digest (excludes operational paths and digests).
 _CONTENT_DIGEST_KEYS: tuple[str, ...] = (
@@ -92,6 +99,7 @@ _CONTENT_DIGEST_KEYS: tuple[str, ...] = (
     "population_identity_kind",
     "population_identity_id",
     "population_identity_detail",
+    "fold_geometry_contract_id",
     "n_rows",
     "primary_horizon",
     "primary_ic_baseline",
@@ -137,9 +145,10 @@ def challenge_artifact_id(
 
 
 def stamp_challenge_evidence_digests(payload: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy with content_digest and artifact_id stamped (schema v4)."""
+    """Return a copy with content_digest and artifact_id stamped (schema v5)."""
     out = dict(payload)
     out["schema_version"] = CHALLENGE_ARTIFACT_SCHEMA_VERSION
+    out["fold_geometry_contract_id"] = FOLD_GEOMETRY_CONTRACT_ID
     digest = challenge_content_digest(out)
     out["content_digest"] = digest
     out["artifact_id"] = challenge_artifact_id(
@@ -165,7 +174,8 @@ def challenge_result_export_payload(
     """Build a promote-eligible challenge/champion JSON export (schema stamped).
 
     Used by CLI ``--export-json``, health champion packs, and tests. Always
-    emits integer ``schema_version`` matching writer manifests, plus v4 digests.
+    emits integer ``schema_version`` matching writer manifests, plus v5 digests
+    and ``fold_geometry_contract_id``.
     """
     resolved_mode = mode
     if resolved_mode is None:
@@ -195,6 +205,7 @@ def challenge_result_export_payload(
         "population_identity_kind": result.population_identity_kind,
         "population_identity_id": result.population_identity_id,
         "population_identity_detail": result.population_identity_detail,
+        "fold_geometry_contract_id": FOLD_GEOMETRY_CONTRACT_ID,
         "n_rows": result.n_rows,
         "primary_horizon": result.primary_horizon,
         "primary_ic_baseline": result.primary_ic_baseline,
@@ -217,7 +228,7 @@ def write_challenge_artifact(
     artifacts_root: Path | None = None,
     extra: dict[str, Any] | None = None,
 ) -> Path:
-    """Write a sealed v4 promote-evidence pack via owned temp dir + atomic rename."""
+    """Write a sealed v5 promote-evidence pack via owned temp dir + atomic rename."""
     import errno
     import os
     import shutil
@@ -280,6 +291,7 @@ def write_challenge_artifact(
         "population_identity_kind": result.population_identity_kind,
         "population_identity_id": result.population_identity_id,
         "population_identity_detail": result.population_identity_detail,
+        "fold_geometry_contract_id": FOLD_GEOMETRY_CONTRACT_ID,
         "status": result.status.value,
         "n_rows": result.n_rows,
         "primary_horizon": result.primary_horizon,

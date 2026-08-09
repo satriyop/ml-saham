@@ -34,6 +34,14 @@ Existing challenge / diagnostic **artifacts written under the buggy splitter
 are historical**. Re-run challenges to obtain session-honest folds; do not
 treat pre-fix single-fold artifacts as promotion evidence.
 
+## Enforce historical via promote artifact schema v5 (follow-up)
+
+Documentation alone did not block reopen. Promote-evidence schema is now
+**v5** with material ``fold_geometry_contract_id=session_native_purged.v1``
+sealed into ``content_digest``. Schema **v4 and earlier** are
+display-only / not promote-reopen eligible. Per-fold session geometry fields
+are required and type-checked on reopen.
+
 ## Not changed here (needs separate vetting)
 
 Minimum train/test **session** floors, fold count, embargo value, daily IC,

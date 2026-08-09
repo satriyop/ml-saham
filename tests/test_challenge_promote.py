@@ -10,12 +10,16 @@ from typer.testing import CliRunner
 
 from ml_saham.challenge.artifacts import (
     CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+    FOLD_GEOMETRY_CONTRACT_ID,
+    challenge_content_digest,
     challenge_result_export_payload,
+    stamp_challenge_evidence_digests,
 )
 from ml_saham.challenge.promote import (
     build_promote_packet,
     load_evidence_artifact,
     validate_artifact_schema_version,
+    validate_fold_geometry_evidence,
     validate_production_identity_format,
     validate_verified_production_identity,
 )
@@ -696,6 +700,106 @@ def test_historical_schema_v3_not_promote_eligible(
         "historical" in (pack.error or "").lower()
         or "schema" in (pack.error or "").lower()
     )
+
+
+def test_historical_schema_v4_not_promote_eligible(
+    verified_export: dict, tmp_path: Path, fixture_db: Path
+):
+    """Pre-geometry sealed v4 packs are display-only even if digests look sealed."""
+    payload = dict(verified_export)
+    payload["schema_version"] = 4
+    # Drop geometry contract so this resembles a pre-ML-OOS-01 export, then leave
+    # digests stale — reopen must fail closed on historical schema first.
+    payload.pop("fold_geometry_contract_id", None)
+    export = tmp_path / "v4_hist.json"
+    export.write_text(json.dumps(payload), encoding="utf-8")
+    pack = build_promote_packet(
+        from_json=export, write_artifact=False, db_path=fixture_db
+    )
+    assert pack.exit_code() == 2
+    err = (pack.error or "").lower()
+    assert "historical" in err or "schema" in err
+    assert "4" in (pack.error or "")
+
+
+def test_v5_session_native_export_promote_eligible(
+    verified_export: dict, tmp_path: Path, fixture_db: Path
+):
+    assert verified_export["schema_version"] == 5
+    assert verified_export["fold_geometry_contract_id"] == FOLD_GEOMETRY_CONTRACT_ID
+    folds = verified_export.get("fold_metrics") or []
+    assert folds, "fixture must form at least one fold for geometry checks"
+    f0 = folds[0]
+    for key in (
+        "n_train_sessions",
+        "n_test_sessions",
+        "embargo_sessions_actual",
+        "embargo_sessions_required",
+        "train_date_max",
+        "date_min",
+        "date_max",
+    ):
+        assert key in f0, key
+    export = tmp_path / "v5_ok.json"
+    export.write_text(json.dumps(verified_export), encoding="utf-8")
+    pack = build_promote_packet(
+        from_json=export, write_artifact=False, db_path=fixture_db
+    )
+    assert pack.exit_code() == 0, pack.error
+
+
+def test_missing_or_tampered_fold_geometry_rejected(
+    verified_export: dict, tmp_path: Path, fixture_db: Path
+):
+    from ml_saham.challenge.protocols import get_protocol
+
+    protocol = get_protocol(verified_export["protocol_id"])
+
+    # Missing contract id.
+    missing = dict(verified_export)
+    del missing["fold_geometry_contract_id"]
+    missing = stamp_challenge_evidence_digests(missing)
+    # stamp re-adds contract — simulate hand-edited reseal without contract:
+    missing.pop("fold_geometry_contract_id", None)
+    missing["content_digest"] = challenge_content_digest(missing)
+    from ml_saham.challenge.artifacts import challenge_artifact_id
+
+    missing["artifact_id"] = challenge_artifact_id(
+        content_digest=missing["content_digest"],
+        policy_id=missing["policy_id"],
+        against_id=missing["against_id"],
+    )
+    err = validate_fold_geometry_evidence(missing, protocol=protocol)
+    assert err is not None
+    assert "fold_geometry_contract_id" in err
+
+    # Tamper embargo actual below required, reseal.
+    bad_folds = dict(verified_export)
+    folds = [dict(f) for f in bad_folds["fold_metrics"]]
+    folds[0]["embargo_sessions_actual"] = 0
+    bad_folds["fold_metrics"] = folds
+    bad_folds = stamp_challenge_evidence_digests(bad_folds)
+    path = tmp_path / "geom_tamper.json"
+    path.write_text(json.dumps(bad_folds), encoding="utf-8")
+    pack = build_promote_packet(
+        from_json=path, write_artifact=False, db_path=fixture_db
+    )
+    assert pack.exit_code() == 2
+    assert "embargo" in (pack.error or "").lower()
+
+    # Missing per-fold field, reseal.
+    drop = dict(verified_export)
+    folds2 = [dict(f) for f in drop["fold_metrics"]]
+    del folds2[0]["n_train_sessions"]
+    drop["fold_metrics"] = folds2
+    drop = stamp_challenge_evidence_digests(drop)
+    path2 = tmp_path / "geom_missing_field.json"
+    path2.write_text(json.dumps(drop), encoding="utf-8")
+    pack2 = build_promote_packet(
+        from_json=path2, write_artifact=False, db_path=fixture_db
+    )
+    assert pack2.exit_code() == 2
+    assert "n_train_sessions" in (pack2.error or "")
 
 
 def test_pack_binding_required_and_identity_bound(

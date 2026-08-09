@@ -10,6 +10,7 @@ from typing import Any
 
 from ml_saham.challenge.artifacts import (
     CHALLENGE_ARTIFACT_SCHEMA_VERSION,
+    FOLD_GEOMETRY_CONTRACT_ID,
     HISTORICAL_CHALLENGE_ARTIFACT_SCHEMA_VERSIONS,
     challenge_artifact_id,
     challenge_content_digest,
@@ -95,6 +96,126 @@ def validate_artifact_schema_version(data: dict[str, Any]) -> str | None:
             f"unsupported artifact schema_version={raw_sv} "
             f"(supported: {sorted(SUPPORTED_ARTIFACT_SCHEMA_VERSIONS)})"
         )
+    return None
+
+
+def _exact_positive_int(value: Any, *, field: str, fold_i: int) -> str | None:
+    if type(value) is not int or isinstance(value, bool):
+        return (
+            f"challenge evidence invalid: fold_metrics[{fold_i}].{field} "
+            f"must be exact int, got {type(value).__name__}={value!r}"
+        )
+    if value < 1:
+        return (
+            f"challenge evidence invalid: fold_metrics[{fold_i}].{field} "
+            f"must be >= 1, got {value}"
+        )
+    return None
+
+
+def _exact_nonneg_int(value: Any, *, field: str, fold_i: int) -> str | None:
+    if type(value) is not int or isinstance(value, bool):
+        return (
+            f"challenge evidence invalid: fold_metrics[{fold_i}].{field} "
+            f"must be exact int, got {type(value).__name__}={value!r}"
+        )
+    if value < 0:
+        return (
+            f"challenge evidence invalid: fold_metrics[{fold_i}].{field} "
+            f"must be >= 0, got {value}"
+        )
+    return None
+
+
+def _exact_date_str(value: Any, *, field: str, fold_i: int) -> str | None:
+    if type(value) is not str or not value or value != value.strip():
+        return (
+            f"challenge evidence invalid: fold_metrics[{fold_i}].{field} "
+            f"must be non-empty str, got {type(value).__name__}={value!r}"
+        )
+    return None
+
+
+def validate_fold_geometry_evidence(
+    data: dict[str, Any],
+    *,
+    protocol: Any,
+) -> str | None:
+    """Require material fold geometry contract + per-fold session fields (v5).
+
+    Empty ``fold_metrics`` is allowed (e.g. BLOCKED_DATA with no folds). Every
+    present fold must prove session-native geometry fields with exact types.
+    """
+    contract, err = _exact_identity_str(data, "fold_geometry_contract_id")
+    if err is not None:
+        return (
+            "challenge evidence invalid: fold_geometry_contract_id missing "
+            f"(schema v5 requires {FOLD_GEOMETRY_CONTRACT_ID!r}; "
+            "v4 and earlier are historical/display-only)"
+        )
+    if contract != FOLD_GEOMETRY_CONTRACT_ID:
+        return (
+            "challenge evidence invalid: fold_geometry_contract_id="
+            f"{contract!r} (require {FOLD_GEOMETRY_CONTRACT_ID!r})"
+        )
+
+    fold_metrics = data.get("fold_metrics")
+    if fold_metrics is None:
+        fold_metrics = []
+    if type(fold_metrics) is not list:
+        return (
+            "challenge evidence invalid: fold_metrics must be a list, "
+            f"got {type(fold_metrics).__name__}"
+        )
+
+    required_embargo = int(protocol.embargo_sessions)
+    for i, fold in enumerate(fold_metrics):
+        if type(fold) is not dict:
+            return (
+                f"challenge evidence invalid: fold_metrics[{i}] must be object, "
+                f"got {type(fold).__name__}"
+            )
+        for field in (
+            "n_train_sessions",
+            "n_test_sessions",
+        ):
+            err = _exact_positive_int(fold.get(field), field=field, fold_i=i)
+            if err is not None:
+                return err
+        for field in (
+            "embargo_sessions_actual",
+            "embargo_sessions_required",
+        ):
+            err = _exact_nonneg_int(fold.get(field), field=field, fold_i=i)
+            if err is not None:
+                return err
+        for field in ("train_date_max", "date_min", "date_max"):
+            err = _exact_date_str(fold.get(field), field=field, fold_i=i)
+            if err is not None:
+                return err
+
+        actual = fold["embargo_sessions_actual"]
+        required = fold["embargo_sessions_required"]
+        if required != required_embargo:
+            return (
+                f"challenge evidence invalid: fold_metrics[{i}]."
+                f"embargo_sessions_required={required} does not match protocol "
+                f"{protocol.protocol_id!r} embargo_sessions={required_embargo}"
+            )
+        if actual < required:
+            return (
+                f"challenge evidence invalid: fold_metrics[{i}]."
+                f"embargo_sessions_actual={actual} < required={required}"
+            )
+        train_max = fold["train_date_max"]
+        test_min = fold["date_min"]
+        test_max = fold["date_max"]
+        if not (train_max < test_min <= test_max):
+            return (
+                f"challenge evidence invalid: fold_metrics[{i}] date bounds "
+                f"unordered (train_date_max={train_max!r}, date_min={test_min!r}, "
+                f"date_max={test_max!r}); require train_date_max < date_min <= date_max"
+            )
     return None
 
 
@@ -342,27 +463,24 @@ def validate_production_identity_format(
             f"{protocol_id!r} primary_horizon={protocol.primary_horizon!r}"
         )
 
-    fold_metrics = data.get("fold_metrics")
-    if fold_metrics is None:
-        fold_metrics = []
-    if not isinstance(fold_metrics, list):
-        return (
-            "challenge evidence invalid: fold_metrics must be a list, "
-            f"got {type(fold_metrics).__name__}"
-        )
+    fold_geom_err = validate_fold_geometry_evidence(data, protocol=protocol)
+    if fold_geom_err is not None:
+        return fold_geom_err
 
-    # v4 sealed evidence digests — recompute before reopen.
+    # v5 sealed evidence digests — recompute before reopen.
     stored_digest, err = _exact_identity_str(data, "content_digest")
     if err is not None:
         return (
             "challenge evidence invalid: content_digest missing "
-            "(schema v4 promote requires sealed digests; v3 is historical-only)"
+            "(schema v5 promote requires sealed digests; v4 and earlier are "
+            "historical/display-only)"
         )
     stored_artifact_id, err = _exact_identity_str(data, "artifact_id")
     if err is not None:
         return (
             "challenge evidence invalid: artifact_id missing "
-            "(schema v4 promote requires sealed digests; v3 is historical-only)"
+            "(schema v5 promote requires sealed digests; v4 and earlier are "
+            "historical/display-only)"
         )
     expected_digest = challenge_content_digest(data)
     if stored_digest != expected_digest:
@@ -551,11 +669,12 @@ def load_evidence_artifact(
             return None, "manifest.json root must be a JSON object"
         if metrics and not isinstance(metrics, dict):
             return None, "metrics.json root must be a JSON object"
-        # v4 directory packs require pack_binding.json and exact field equality.
+        # v5 directory packs require pack_binding.json and exact field equality.
         pack_binding_p = dir_path / "pack_binding.json"
         if not pack_binding_p.is_file():
             return None, (
-                "v4 directory pack missing required pack_binding.json "
+                f"v{CHALLENGE_ARTIFACT_SCHEMA_VERSION} directory pack missing "
+                "required pack_binding.json "
                 "(sealed promote-evidence packs must bind members)"
             )
         try:
@@ -651,6 +770,7 @@ def load_evidence_artifact(
             "weights": weights,
             "notes": metrics.get("notes"),
             "mode": manifest.get("mode"),
+            "fold_geometry_contract_id": manifest.get("fold_geometry_contract_id"),
             "content_digest": manifest.get("content_digest"),
             "artifact_id": manifest.get("artifact_id"),
         }

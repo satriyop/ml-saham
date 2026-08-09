@@ -54,19 +54,32 @@ def _write_pack(
         manifest["production_semantic_engine_contract_id"] = "accum_score_policy.v1"
         manifest["challenge_adapter_id"] = "ml-saham.adapter"
         manifest["challenge_adapter_version"] = "v1"
+    if schema_version >= 5:
+        manifest["fold_geometry_contract_id"] = "session_native_purged.v1"
+    fold0: dict = {
+        "fold": 0,
+        "ic_baseline": 0.12,
+        "ic_against": ic_against,
+        "n_test": 20,
+    }
+    if schema_version >= 5:
+        fold0.update(
+            {
+                "n_train_sessions": 10,
+                "n_test_sessions": 10,
+                "embargo_sessions_actual": 20,
+                "embargo_sessions_required": 20,
+                "train_date_max": "2024-01-31",
+                "date_min": "2024-02-21",
+                "date_max": "2024-03-01",
+            }
+        )
     metrics = {
         "status": status,
         "primary_ic_baseline": 0.12,
         "primary_ic_against": ic_against,
         "horizon_metrics": {"baseline": {"10": 0.12}, "against": {"10": ic_against}},
-        "fold_metrics": [
-            {
-                "fold": 0,
-                "ic_baseline": 0.12,
-                "ic_against": ic_against,
-                "n_test": 20,
-            }
-        ],
+        "fold_metrics": [fold0],
     }
     (pack / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
@@ -80,7 +93,7 @@ def _write_pack(
         (pack / "pack_binding.json").write_text(
             json.dumps(
                 {
-                    "schema_version": 4,
+                    "schema_version": schema_version,
                     "artifact_id": "x" * 16,
                     "content_digest": "c" * 64,
                     "members": ["manifest.json", "metrics.json", "weights.json"],
@@ -126,9 +139,9 @@ def test_list_and_open_historical_display_only(tmp_path: Path):
 def test_open_missing_baseline_not_promotion_eligible(tmp_path: Path):
     art = tmp_path / "artifacts"
     pack = _write_pack(
-        art, "nobase", schema_version=4, baseline_id=None, sealed=True
+        art, "nobase", schema_version=5, baseline_id=None, sealed=True
     )
-    # remove baseline after write for v4 shape without baseline
+    # remove baseline after write for v5 sealed shape without baseline
     manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
     manifest.pop("baseline_id", None)
     (pack / "manifest.json").write_text(
@@ -142,6 +155,19 @@ def test_open_missing_baseline_not_promotion_eligible(tmp_path: Path):
     assert opened.ok is True
     assert opened.promotion_eligible is False
     assert "baseline" in (opened.promotion_block_reason or "").lower()
+
+
+def test_open_schema_v4_historical_not_promotion_eligible(tmp_path: Path):
+    art = tmp_path / "artifacts"
+    pack = _write_pack(art, "v4hist", schema_version=4, sealed=True)
+    service = build_challenge_workbench(
+        db_path=tmp_path / "missing.db",
+        artifacts_root=art,
+    )
+    opened = service.open_challenge_artifact(pack)
+    assert opened.ok is True
+    assert opened.promotion_eligible is False
+    assert "historical" in (opened.promotion_block_reason or "").lower()
 
 
 def test_compare_compatible_has_delta_incompatible_no_winner(tmp_path: Path):
