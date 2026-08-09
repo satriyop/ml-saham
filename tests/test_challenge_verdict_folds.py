@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-from ml_saham.challenge.artifacts import VERDICT_SEMANTICS_CONTRACT_ID
+from ml_saham.challenge.artifacts import (
+    VERDICT_SEMANTICS_CONTRACT_ID as ARTIFACTS_VERDICT_ID,
+)
 from ml_saham.challenge.protocols import ACCUM_PATH_V1
+from ml_saham.challenge.promote import validate_verdict_semantics_contract
 from ml_saham.challenge.runner import _verdict
-from ml_saham.challenge.types import ChallengeStatus, Protocol
+from ml_saham.challenge.types import (
+    VERDICT_SEMANTICS_CONTRACT_ID,
+    ChallengeStatus,
+    Protocol,
+)
 
 
 def _fold(ic_b: float, ic_a: float, *, tail_b: float = 0.0, tail_a: float = 0.0) -> dict:
@@ -148,3 +155,56 @@ def test_min_folds_for_verdict_override_allows_single_fold_both_directions():
 def test_product_protocols_use_symmetric_verdict_contract():
     assert ACCUM_PATH_V1.min_folds_for_verdict >= 2
     assert ACCUM_PATH_V1.verdict_semantics_contract_id == VERDICT_SEMANTICS_CONTRACT_ID
+    # Single source of truth: types owns the literal; artifacts re-exports.
+    assert ARTIFACTS_VERDICT_ID is VERDICT_SEMANTICS_CONTRACT_ID or (
+        ARTIFACTS_VERDICT_ID == VERDICT_SEMANTICS_CONTRACT_ID
+    )
+
+
+def test_verdict_semantics_contract_missing_fails_closed():
+    payload = {"status": "WIN"}
+    err = validate_verdict_semantics_contract(payload)
+    assert err is not None
+    assert "missing" in err.lower()
+
+
+def test_verdict_semantics_contract_mismatch_fails_closed():
+    payload = {
+        "verdict_semantics_contract_id": "verdict_semantics.legacy_asymmetric.v0",
+    }
+    err = validate_verdict_semantics_contract(payload)
+    assert err is not None
+    assert "require" in err.lower() or VERDICT_SEMANTICS_CONTRACT_ID in err
+
+
+def test_verdict_semantics_contract_empty_string_fails_closed():
+    err = validate_verdict_semantics_contract({"verdict_semantics_contract_id": ""})
+    assert err is not None
+
+
+def test_export_does_not_invent_verdict_contract_when_result_blank():
+    """Writer must not patch a missing verdict contract at seal time."""
+    from ml_saham.challenge.artifacts import (
+        challenge_result_export_payload,
+        stamp_challenge_evidence_digests,
+    )
+    from ml_saham.challenge.types import ChallengeResult, ChallengeStatus
+
+    result = ChallengeResult(
+        status=ChallengeStatus.INCONCLUSIVE,
+        policy_id="screener.accum.score_weights",
+        protocol_id="accum_path_v1",
+        baseline_id="production",
+        against_id="equal_sleeves",
+        policy_hash="h",
+        n_rows=10,
+        primary_horizon=10,
+        verdict_semantics_contract_id="",  # missing identity
+    )
+    payload = challenge_result_export_payload(result)
+    assert payload.get("verdict_semantics_contract_id") in ("", None)
+    # Even after stamp, do not invent the canonical id.
+    sealed = stamp_challenge_evidence_digests(payload)
+    assert sealed.get("verdict_semantics_contract_id") in ("", None)
+    err = validate_verdict_semantics_contract(sealed)
+    assert err is not None

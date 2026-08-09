@@ -683,7 +683,7 @@ def _verdict(
     baseline_id: str,
     against_id: str,
 ) -> tuple[ChallengeStatus, float | None, float | None, list[str]]:
-    """Policy tournament outcome (VERDICT_SEMANTICS.symmetric_directional.v1).
+    """Policy tournament outcome (see types.VERDICT_SEMANTICS_CONTRACT_ID).
 
     Directional WIN **and** LOSE both require:
       - ≥ ``min_folds_for_verdict`` valid OOS folds with IC, and
@@ -828,12 +828,12 @@ def run_policy_challenge(
                 else ""
             )
             or "",
+            # Fail closed later if missing — do not invent a canonical contract.
             "verdict_semantics_contract_id": (
-                getattr(protocol, "verdict_semantics_contract_id", "")
+                protocol.verdict_semantics_contract_id
                 if protocol is not None
                 else ""
-            )
-            or "verdict_semantics.symmetric_directional.v1",
+            ),
         }
         if policy is not None and policy.production_snapshot_id:
             # Verified production-policy path (cohort-bound snapshots + adapter).

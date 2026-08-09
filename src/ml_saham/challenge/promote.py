@@ -12,7 +12,6 @@ from ml_saham.challenge.artifacts import (
     CHALLENGE_ARTIFACT_SCHEMA_VERSION,
     FOLD_GEOMETRY_CONTRACT_ID,
     HISTORICAL_CHALLENGE_ARTIFACT_SCHEMA_VERSIONS,
-    VERDICT_SEMANTICS_CONTRACT_ID,
     challenge_artifact_id,
     challenge_content_digest,
     file_sha256_hex,
@@ -21,6 +20,7 @@ from ml_saham.challenge.artifacts import (
 from ml_saham.challenge.types import (
     EVIDENCE_GRADE_EXPLORATORY,
     EVIDENCE_GRADE_POLICY,
+    VERDICT_SEMANTICS_CONTRACT_ID,
 )
 from ml_saham.challenge.challengers import resolve_named_gate_key
 from ml_saham.challenge.champion import CHAMPION_AGAINST_IDS, is_champion_against

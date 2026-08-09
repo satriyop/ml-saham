@@ -153,6 +153,10 @@ class ChallengeExecutionPolicy:
 EVIDENCE_GRADE_EXPLORATORY = "EXPLORATORY"
 EVIDENCE_GRADE_POLICY = "POLICY_GRADE"
 
+# Canonical VERDICT_SEMANTICS contract (single source of truth).
+# Sealed into promote-evidence content_digest as verdict_semantics_contract_id.
+VERDICT_SEMANTICS_CONTRACT_ID = "verdict_semantics.symmetric_directional.v1"
+
 
 @dataclass(frozen=True)
 class Protocol:
@@ -181,7 +185,7 @@ class Protocol:
     evidence_grade: str = EVIDENCE_GRADE_EXPLORATORY
     policy_confirmation_contract_id: str = ""
     # Bound into sealed promote-evidence identity (VERDICT_SEMANTICS contract).
-    verdict_semantics_contract_id: str = "verdict_semantics.symmetric_directional.v1"
+    verdict_semantics_contract_id: str = VERDICT_SEMANTICS_CONTRACT_ID
 
 
 @dataclass
@@ -219,7 +223,8 @@ class ChallengeResult:
     # Authority separation: EXPLORATORY ≠ policy-grade promote / task-06 evidence.
     evidence_grade: str = EVIDENCE_GRADE_EXPLORATORY
     policy_confirmation_contract_id: str = ""
-    verdict_semantics_contract_id: str = "verdict_semantics.symmetric_directional.v1"
+    # Empty means missing identity — writers must not invent a contract id.
+    verdict_semantics_contract_id: str = ""
 
     def exit_code(self) -> int:
         if self.status in (

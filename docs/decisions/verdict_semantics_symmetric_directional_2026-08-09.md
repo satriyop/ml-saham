@@ -15,7 +15,7 @@ Sealed into promote-evidence `content_digest` as `verdict_semantics_contract_id`
 | WIN | multi-fold + fold agree | unchanged bar, renamed field |
 | LOSE | any baseline mean edge after thin pass | multi-fold + fold agree for baseline wins |
 
-Protocol field: `min_folds_for_verdict` (replaces `min_folds_for_verdict`).
+Protocol field: `min_folds_for_verdict` (replaces `min_folds_for_win`).
 
 ## Why
 
