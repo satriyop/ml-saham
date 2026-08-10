@@ -28,6 +28,9 @@ from ml_saham.challenge.panel_screen_filters import (
     sufficiency_verdict,
 )
 from ml_saham.challenge.panel_signal import extract_signal_components
+from ml_saham.challenge.policy_confirmation_feasibility import (
+    audit_accum_cohort_feasibility,
+)
 from ml_saham.challenge.policies.registry import load_policy
 from ml_saham.data.aisaham_read import connect
 from ml_saham.data.connection import resolve_db_path
@@ -80,6 +83,18 @@ def test_live_signal_extract_hit_rate(live_db: Path):
     assert n >= 50, f"too few ACCUM rows: {n}"
     assert hit == n, (
         f"signal extract miss {hit}/{n} (likely root-level path regression)"
+    )
+
+
+def test_live_policy_confirmation_feasibility_is_read_only(live_db: Path):
+    audit = audit_accum_cohort_feasibility(live_db)
+    assert audit.before == audit.after
+    assert audit.db_unchanged is True
+    assert audit.outcomes_inspected is False
+    assert audit.policy_grade_authorized is False
+    assert audit.cohorts
+    assert len({cohort.compatibility_id for cohort in audit.cohorts}) == len(
+        audit.cohorts
     )
 
 
