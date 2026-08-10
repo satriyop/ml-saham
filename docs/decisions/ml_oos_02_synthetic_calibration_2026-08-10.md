@@ -11,7 +11,7 @@ PYTHONPATH=src python scripts/report_ml_oos_02_fit_calibration.py
 PYTHONPATH=src python scripts/report_ml_oos_02_fit_calibration.py --json
 ```
 
-Measurement contract: `policy_confirmation_calibration.synthetic.v3`.
+Measurement contract: `policy_confirmation_calibration.synthetic.v4`.
 Fit-pipeline measurement contract:
 `policy_confirmation_fit_calibration.synthetic.v1`.
 Evidence grade: `MEASUREMENT_ONLY`.
@@ -26,6 +26,12 @@ the v2 one-sided rate.
 Version 3 adds an identified automatic stationary-bootstrap block selector and
 records the mean/minimum/maximum block actually used across replications. It
 does not reinterpret v1/v2 output or make the selector authoritative.
+
+Version 4 is a clean break for missing-calendar honesty. It removes
+complete-case bootstrap and pairwise-deletion HAC behavior, distinguishes
+explicit unavailable calendar positions from invalid numerics, and records
+typed method-failure counts. No missingness threshold or imputation model is
+adopted.
 
 ## What it measures
 
@@ -57,9 +63,10 @@ settings are stress inputs, not adopted policy.
 - No current time, network, upstream SQLite, live cohort, or live outcome is
   read.
 
-## Illustrative stress evidence
+## Historical illustrative stress evidence
 
-The higher-replication check used:
+The following higher-replication check was generated under historical v2,
+before the v4 missing-calendar clean break:
 
 ```bash
 PYTHONPATH=src python scripts/report_ml_oos_02_calibration.py \
@@ -83,6 +90,10 @@ short dependent scenarios, and that unadjusted search materially increased
 selection bias and false positives. More sessions improved some stress cells
 but did not make one method uniformly calibrated across dependence, search,
 missingness, and regime scenarios.
+
+The thin/missing rows are retained only as historical evidence of why deletion
+was unsafe. Under v4 they are uniformly `METHOD_NOT_MEASURABLE`; they must not
+be interpreted or regenerated as current calibration output.
 
 ## Exact shipped-fit follow-up
 
@@ -122,9 +133,10 @@ or hard problem and require a wider preregistered stress grid before adoption.
   verified production snapshot or production baseline.
 - Best-of-search is intentionally unadjusted. The reported inflation is a
   warning measurement, not an SPA or Romano-Wolf implementation.
-- Missing sessions keep their calendar positions. The candidate HAC calculation
-  uses finite lag pairs and may report partial invalid replications rather than
-  silently forcing a variance estimate.
+- Missing sessions keep their calendar positions. Every current interval
+  candidate fails closed rather than deleting, compacting, or imputing them.
+  Invalid non-finite numerics remain distinct from explicit unavailable
+  sessions.
 - A stationary bootstrap remains unsuitable as authority when a scenario has
   an unhandled regime break merely because it emits a numerical interval.
 
@@ -143,3 +155,6 @@ the future confirmation cohort.
 
 Implemented candidate follow-up (not adopted):
 [`ml_oos_02_candidate_acceptance_law_2026-08-10.md`](./ml_oos_02_candidate_acceptance_law_2026-08-10.md).
+
+Missing-calendar contract vet:
+[`ml_oos_02_missing_calendar_vet_2026-08-10.md`](./ml_oos_02_missing_calendar_vet_2026-08-10.md).

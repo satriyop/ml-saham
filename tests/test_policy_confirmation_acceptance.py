@@ -46,7 +46,7 @@ def _scenario(*, role="null", **overrides) -> AcceptanceScenario:
 
 def _result(spec: AcceptanceScenario, **overrides) -> CalibrationResult:
     values = dict(
-        contract_id="policy_confirmation_calibration.synthetic.v3",
+        contract_id="policy_confirmation_calibration.synthetic.v4",
         evidence_grade="MEASUREMENT_ONLY",
         scenario_id=spec.scenario.scenario_id,
         challenger_class="fixed",
@@ -70,7 +70,7 @@ def _result(spec: AcceptanceScenario, **overrides) -> CalibrationResult:
         mean_selected_block_length=None,
         min_selected_block_length=None,
         max_selected_block_length=None,
-        block_selection_failure_counts=(),
+        method_failure_counts=(),
         fit_capacity_mode="NOT_APPLICABLE_FIXED",
         policy_grade_authorized=False,
         status="MEASURED",
@@ -130,14 +130,21 @@ def test_candidate_null_and_alternative_can_pass_explicit_law():
 
 def test_candidate_null_uses_directional_false_superiority_not_two_sided_rate():
     spec = _scenario()
+    failure_counts = (("MISSING_CALENDAR_SESSION_UNSUPPORTED", 4),)
     cell = evaluate_calibration_cell(
         spec,
-        _result(spec, false_superiority_rate=0.04, false_positive_rate=0.20),
+        _result(
+            spec,
+            false_superiority_rate=0.04,
+            false_positive_rate=0.20,
+            method_failure_counts=failure_counts,
+        ),
         CandidateAcceptanceLaw(),
     )
     assert cell.status == "PASS_CANDIDATE_CELL"
     assert cell.false_superiority is not None
     assert cell.false_superiority.estimate == 0.04
+    assert cell.method_failure_counts == failure_counts
 
 
 def test_search_and_regime_probes_fail_closed_even_with_good_numbers():

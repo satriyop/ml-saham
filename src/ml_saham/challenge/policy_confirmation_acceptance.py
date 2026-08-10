@@ -27,7 +27,7 @@ from ml_saham.challenge.policy_confirmation_calibration import (
     calibrate_scenario,
 )
 
-ACCEPTANCE_STUDY_ID = "policy_confirmation_acceptance.synthetic.v2"
+ACCEPTANCE_STUDY_ID = "policy_confirmation_acceptance.synthetic.v3"
 
 ScenarioRole = Literal[
     "null",
@@ -210,7 +210,7 @@ class AcceptanceCellResult:
     mean_selected_block_length: float | None
     min_selected_block_length: int | None
     max_selected_block_length: int | None
-    block_selection_failure_counts: tuple[tuple[str, int], ...]
+    method_failure_counts: tuple[tuple[str, int], ...]
     status: str
     reasons: tuple[str, ...]
     policy_grade_authorized: bool = False
@@ -428,7 +428,7 @@ def evaluate_calibration_cell(
         mean_selected_block_length=result.mean_selected_block_length,
         min_selected_block_length=result.min_selected_block_length,
         max_selected_block_length=result.max_selected_block_length,
-        block_selection_failure_counts=result.block_selection_failure_counts,
+        method_failure_counts=result.method_failure_counts,
         status=status,
         reasons=tuple(reasons),
         policy_grade_authorized=False,
@@ -693,6 +693,7 @@ def run_acceptance_study(
         explicit_non_selections=(
             "Candidate tolerances are research inputs, not accepted product law.",
             "No passing synthetic candidate selects a session floor or method.",
+            "No missing-calendar deletion, imputation, or coverage floor is adopted.",
             "Learned-model capacity and nested tuning are outside this fixed-challenger slice.",
             "Unadjusted search is ineligible; no multiplicity correction is implemented here.",
             "An explicit regime break blocks confirmation rather than becoming a precise interval.",

@@ -50,9 +50,10 @@ runtime and no new dependency was added.
 
 ## Fail-closed behavior
 
-- Missing/non-finite session positions are not deleted or compressed. The
-  selector returns `NONFINITE_CALENDAR_SERIES`; calibration becomes partial or
-  `METHOD_NOT_MEASURABLE`.
+- Direct selector calls reject non-finite positions as
+  `NONFINITE_CALENDAR_SERIES`. At the application boundary, expected
+  unavailable sessions are classified separately as
+  `MISSING_CALENDAR_SESSION_UNSUPPORTED` before selection.
 - Constant series return `DEGENERATE_VARIANCE`.
 - Unusable corrected long-run variance returns
   `DEGENERATE_LONG_RUN_VARIANCE`.
@@ -91,7 +92,7 @@ seeded synthetic paths. All candidates passed **0 of 6** required stationary
 cells at each calendar. Thin/missing null and alternative cells were
 unmeasurable in all 100 replications because the selector correctly refused to
 erase calendar gaps. Aggregate calibration and acceptance artifacts preserve
-the typed selector-failure counts, so this reason is not collapsed into the
+typed method-failure counts, so this reason is not collapsed into the
 generic `METHOD_NOT_MEASURABLE` status.
 
 ## Objective conclusion
@@ -105,7 +106,7 @@ low power under strong dependence, or gapped-session semantics. Therefore:
 - no historical result is upgraded;
 - the confirmation registry remains empty and Task 06 remains blocked.
 
-The next methodology question is not “which of these calendars wins.” It is
-whether to vet a different interval construction (for example, studentized or
-calibrated bootstrap) and an explicit missing-calendar law while preserving the
-same predeclared acceptance criteria.
+The missing-calendar law is now vetted separately in
+[`ml_oos_02_missing_calendar_vet_2026-08-10.md`](./ml_oos_02_missing_calendar_vet_2026-08-10.md).
+The next interval question is whether to vet a studentized or calibrated
+bootstrap while preserving the same predeclared acceptance criteria.

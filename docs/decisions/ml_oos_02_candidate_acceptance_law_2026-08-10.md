@@ -9,8 +9,10 @@ PYTHONPATH=src python scripts/report_ml_oos_02_acceptance.py
 PYTHONPATH=src python scripts/report_ml_oos_02_acceptance.py --json
 ```
 
-Study identity: `policy_confirmation_acceptance.synthetic.v2`. Version 2 adds
-selected-block metadata and the automatic selector candidate. The candidate
+Study identity: `policy_confirmation_acceptance.synthetic.v3`. Version 2 added
+selected-block metadata and the automatic selector candidate. Version 3 adds
+the explicit missing-calendar contract and general typed method-failure counts.
+The candidate
 law has a version plus a SHA-256 digest over every material tolerance and
 policy field. Evidence grade remains `MEASUREMENT_ONLY`.
 
@@ -49,6 +51,12 @@ are not literature-mandated constants and are not adopted product law.
 The 80% sensitivity and width/effect tolerances are product-value choices that
 still require maintainer acceptance. They must not be inferred from live OOS
 effect sizes.
+
+The 90% row is an evaluation tolerance, not permission to delete 10% of the
+calendar and not an adopted floor. None of the current interval methods claims
+valid inference on an incomplete calendar; those cells fail closed. A future
+missing-data method would need its own explicit assumptions and calibration
+before this tolerance could become operational.
 
 Acceptance uses the v2 one-sided false-superiority rate. The v1 base report's
 two-sided false-rejection diagnostic is retained separately and must not be
@@ -141,5 +149,7 @@ measurement stream and therefore requires an explicit contract-version review.
 - Multiplicity correction: not implemented; search remains ineligible.
 - Automatic block-length selection: implemented as measurement-only; no method
   adoption.
+- Missing-calendar compaction/pairwise deletion: retired in v3; all current
+  interval candidates fail closed on explicit unavailable positions.
 - Numerical candidate law: explicit but still requires human vetting.
 - Confirmation registry and Task 06: unchanged and blocked.

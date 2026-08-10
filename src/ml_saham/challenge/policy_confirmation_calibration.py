@@ -14,13 +14,14 @@ import hashlib
 import math
 import statistics
 from dataclasses import asdict, dataclass
+from numbers import Real
 from typing import Any, Literal, Sequence
 
 import numpy as np
 
 from ml_saham.challenge.fold_geometry_sim import simulate_session_folds
 
-CALIBRATION_CONTRACT_ID = "policy_confirmation_calibration.synthetic.v3"
+CALIBRATION_CONTRACT_ID = "policy_confirmation_calibration.synthetic.v4"
 CALIBRATION_EVIDENCE_GRADE = "MEASUREMENT_ONLY"
 AUTO_BLOCK_SELECTOR_ID = "politis_white_patton.stationary_mean.v1"
 
@@ -227,6 +228,71 @@ class BlockLengthSelection:
 
 
 @dataclass(frozen=True)
+class CalendarSeriesAssessment:
+    n_calendar_sessions: int
+    n_observed_sessions: int
+    n_missing_sessions: int
+    n_invalid_sessions: int
+    longest_missing_run: int
+    observed_fraction: float | None
+    status: str
+    reason: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def assess_calendar_estimand_series(
+    values: Sequence[float | None],
+) -> CalendarSeriesAssessment:
+    """Classify a fixed calendar without deleting or imputing positions."""
+    n = len(values)
+    observed = 0
+    missing = 0
+    invalid = 0
+    missing_run = 0
+    longest_missing_run = 0
+    for value in values:
+        if value is None:
+            missing += 1
+            missing_run += 1
+            longest_missing_run = max(longest_missing_run, missing_run)
+            continue
+        missing_run = 0
+        if isinstance(value, bool) or not isinstance(value, Real):
+            invalid += 1
+            continue
+        if not math.isfinite(float(value)):
+            invalid += 1
+            continue
+        observed += 1
+
+    observed_fraction = observed / n if n else None
+    if invalid:
+        status = "INVALID_NONFINITE_ESTIMAND"
+        reason = "calendar estimands must be finite numeric values or explicit None"
+    elif missing:
+        status = "MISSING_CALENDAR_SESSION_UNSUPPORTED"
+        reason = "current interval candidates do not delete or impute calendar gaps"
+    elif n < 2:
+        status = "INSUFFICIENT_CALENDAR_SESSIONS"
+        reason = "interval candidates require at least two calendar sessions"
+    else:
+        status = "COMPLETE"
+        reason = None
+    return CalendarSeriesAssessment(
+        n_calendar_sessions=n,
+        n_observed_sessions=observed,
+        n_missing_sessions=missing,
+        n_invalid_sessions=invalid,
+        longest_missing_run=longest_missing_run,
+        observed_fraction=observed_fraction,
+        status=status,
+        reason=reason,
+    )
+
+
+@dataclass(frozen=True)
 class CalibrationResult:
     contract_id: str
     evidence_grade: str
@@ -252,7 +318,7 @@ class CalibrationResult:
     mean_selected_block_length: float | None
     min_selected_block_length: int | None
     max_selected_block_length: int | None
-    block_selection_failure_counts: tuple[tuple[str, int], ...]
+    method_failure_counts: tuple[tuple[str, int], ...]
     fit_capacity_mode: str
     policy_grade_authorized: bool
     status: str
@@ -468,7 +534,6 @@ def _stationary_bootstrap_interval(
     rng: np.random.Generator,
 ) -> tuple[tuple[float, float] | None, int | None, str | None]:
     n = len(values)
-    finite_n = int(np.isfinite(values).sum())
     if method.method_kind == "stationary_bootstrap_percentile_auto":
         selection = select_stationary_bootstrap_block_length(values)
         block_length = selection.selected_block_length
@@ -476,7 +541,7 @@ def _stationary_bootstrap_interval(
     else:
         block_length = method.block_length
         selection_failure = None
-    if n < 2 or finite_n < 2 or block_length is None:
+    if block_length is None:
         return None, None, selection_failure
     restart_probability = min(1.0, 1.0 / float(block_length))
     means: list[float] = []
@@ -488,10 +553,7 @@ def _stationary_bootstrap_interval(
                 indices[i] = int(rng.integers(0, n))
             else:
                 indices[i] = (indices[i - 1] + 1) % n
-        sample = values[indices]
-        finite = sample[np.isfinite(sample)]
-        if len(finite) >= 2:
-            means.append(float(np.mean(finite)))
+        means.append(float(np.mean(values[indices])))
     if len(means) < max(10, method.n_resamples // 2):
         return None, block_length, selection_failure
     alpha = 1.0 - method.confidence_level
@@ -503,76 +565,73 @@ def _newey_west_interval(
     values: np.ndarray,
     method: CalibrationMethod,
 ) -> tuple[float, float] | None:
-    finite_mask = np.isfinite(values)
-    finite = values[finite_mask]
-    n_finite = len(finite)
-    if n_finite < 2 or method.hac_lag is None:
+    n = len(values)
+    if method.hac_lag is None:
         return None
-    mean = float(np.mean(finite))
+    mean = float(np.mean(values))
     centered = values - mean
 
-    def pairwise_gamma(lag: int) -> float | None:
+    def gamma(lag: int) -> float:
         if lag == 0:
-            pairs = centered[finite_mask]
-            return float(np.dot(pairs, pairs) / len(pairs))
+            return float(np.dot(centered, centered) / n)
         left = centered[lag:]
         right = centered[:-lag]
-        mask = np.isfinite(left) & np.isfinite(right)
-        if int(mask.sum()) < 2:
-            return None
-        return float(np.dot(left[mask], right[mask]) / int(mask.sum()))
+        return float(np.dot(left, right) / len(left))
 
-    gamma0 = pairwise_gamma(0)
-    if gamma0 is None:
-        return None
+    gamma0 = gamma(0)
     max_lag = min(method.hac_lag, len(values) - 1)
     long_run_variance = gamma0
     for lag in range(1, max_lag + 1):
-        gamma = pairwise_gamma(lag)
-        if gamma is None:
-            continue
+        autocovariance = gamma(lag)
         weight = 1.0 - lag / float(max_lag + 1)
-        long_run_variance += 2.0 * weight * gamma
+        long_run_variance += 2.0 * weight * autocovariance
     if long_run_variance < -1e-12 or not math.isfinite(long_run_variance):
         return None
-    standard_error = math.sqrt(max(0.0, long_run_variance) / n_finite)
+    standard_error = math.sqrt(max(0.0, long_run_variance) / n)
     z = statistics.NormalDist().inv_cdf(0.5 + method.confidence_level / 2.0)
     return mean - z * standard_error, mean + z * standard_error
 
 
 def _interval(
-    values: np.ndarray,
+    values: Sequence[float | None],
     method: CalibrationMethod,
     *,
     rng: np.random.Generator,
 ) -> tuple[float, float] | None:
-    if method.method_kind in {
-        "stationary_bootstrap_percentile",
-        "stationary_bootstrap_percentile_auto",
-    }:
-        interval, _block_length, _selection_failure = _stationary_bootstrap_interval(
-            values, method, rng=rng
-        )
-        return interval
-    return _newey_west_interval(values, method)
+    interval, _block_length, _failure, _assessment = _interval_with_block_length(
+        values, method, rng=rng
+    )
+    return interval
 
 
 def _interval_with_block_length(
-    values: np.ndarray,
+    values: Sequence[float | None],
     method: CalibrationMethod,
     *,
     rng: np.random.Generator,
-) -> tuple[tuple[float, float] | None, int | None, str | None]:
+) -> tuple[
+    tuple[float, float] | None,
+    int | None,
+    str | None,
+    CalendarSeriesAssessment,
+]:
+    assessment = assess_calendar_estimand_series(values)
+    if assessment.status != "COMPLETE":
+        return None, None, assessment.status, assessment
+    array = np.asarray(values, dtype=float)
     if method.method_kind in {
         "stationary_bootstrap_percentile",
         "stationary_bootstrap_percentile_auto",
     }:
-        return _stationary_bootstrap_interval(values, method, rng=rng)
-    return _newey_west_interval(values, method), None, None
+        interval, block_length, failure = _stationary_bootstrap_interval(
+            array, method, rng=rng
+        )
+        return interval, block_length, failure, assessment
+    return _newey_west_interval(array, method), None, None, assessment
 
 
 def candidate_interval(
-    values: Sequence[float],
+    values: Sequence[float | None],
     method: CalibrationMethod,
     *,
     seed: int,
@@ -583,9 +642,10 @@ def candidate_interval(
     machinery and does not imply that the method or tuning value is adopted.
     """
     seed_i = _require_exact_int("seed", seed)
-    array = np.asarray(tuple(values), dtype=float)
     return _interval(
-        array, method, rng=_rng(seed_i, _stable_seed_part(method.method_id))
+        tuple(values),
+        method,
+        rng=_rng(seed_i, _stable_seed_part(method.method_id)),
     )
 
 
@@ -649,7 +709,7 @@ def calibrate_scenario(
             mean_selected_block_length=None,
             min_selected_block_length=None,
             max_selected_block_length=None,
-            block_selection_failure_counts=(),
+            method_failure_counts=(),
             fit_capacity_mode=fit_mode,
             policy_grade_authorized=False,
             status="NOT_READY_GEOMETRY",
@@ -665,7 +725,7 @@ def calibrate_scenario(
     directional: list[bool] = []
     widths: list[float] = []
     selected_block_lengths: list[int] = []
-    block_selection_failures: dict[str, int] = {}
+    method_failures: dict[str, int] = {}
     observed_counts: list[int] = []
     estimates: list[float] = []
     targets: list[float] = []
@@ -686,20 +746,24 @@ def calibrate_scenario(
             ]
         )
         if not np.isfinite(candidate_means).any():
+            observed_counts.append(0)
+            method_failures["NO_OBSERVED_CANDIDATE"] = (
+                method_failures.get("NO_OBSERVED_CANDIDATE", 0) + 1
+            )
             continue
         selected = int(np.nanargmax(candidate_means))
         selected_values = eval_values[:, selected]
         finite_selected = selected_values[np.isfinite(selected_values)]
-        if len(finite_selected) < 2:
-            continue
-        interval_rng = _rng(seed_i, scenario_part, method_part, replication)
-        ci, selected_block_length, selection_failure = _interval_with_block_length(
-            selected_values, method, rng=interval_rng
+        calendar_values = tuple(
+            None if np.isnan(value) else float(value) for value in selected_values
         )
-        if selection_failure is not None:
-            block_selection_failures[selection_failure] = (
-                block_selection_failures.get(selection_failure, 0) + 1
-            )
+        interval_rng = _rng(seed_i, scenario_part, method_part, replication)
+        ci, selected_block_length, method_failure, assessment = (
+            _interval_with_block_length(calendar_values, method, rng=interval_rng)
+        )
+        observed_counts.append(assessment.n_observed_sessions)
+        if method_failure is not None:
+            method_failures[method_failure] = method_failures.get(method_failure, 0) + 1
         if ci is None:
             continue
         if selected_block_length is not None:
@@ -716,7 +780,6 @@ def calibrate_scenario(
         elif target < 0.0:
             directional.append(upper < 0.0)
         widths.append(upper - lower)
-        observed_counts.append(len(finite_selected))
         estimates.append(estimate)
         targets.append(target)
 
@@ -774,7 +837,7 @@ def calibrate_scenario(
         max_selected_block_length=(
             max(selected_block_lengths) if selected_block_lengths else None
         ),
-        block_selection_failure_counts=tuple(sorted(block_selection_failures.items())),
+        method_failure_counts=tuple(sorted(method_failures.items())),
         fit_capacity_mode=fit_mode,
         policy_grade_authorized=False,
         status=status,
@@ -941,6 +1004,7 @@ def run_calibration_study(
         explicit_non_selections=(
             "Synthetic effect/noise values are stress inputs, not live estimates.",
             "No candidate interval method, block length, HAC lag, or confidence level is adopted.",
+            "No missing-calendar deletion, imputation, or coverage floor is adopted.",
             "No session floor or final-holdout length is selected.",
             "Best-of-search results are deliberately unadjusted and cannot confirm a policy.",
             (

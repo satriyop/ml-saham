@@ -10,7 +10,9 @@ from ml_saham.challenge.policy_confirmation_calibration import (
     CALIBRATION_CONTRACT_ID,
     CalibrationMethod,
     CalibrationScenario,
+    assess_calendar_estimand_series,
     calibrate_scenario,
+    candidate_interval,
     format_calibration_report,
     run_calibration_study,
     select_stationary_bootstrap_block_length,
@@ -161,6 +163,10 @@ def test_missing_name_width_is_reported_in_session_denominator():
     assert 0.0 < result.mean_observed_fraction < 1.0
     assert result.mean_observed_sessions is not None
     assert result.mean_observed_sessions < result.n_eval_sessions_geometry
+    assert result.status == "METHOD_NOT_MEASURABLE"
+    assert result.method_failure_counts == (
+        ("MISSING_CALENDAR_SESSION_UNSUPPORTED", 20),
+    )
 
 
 def test_automatic_selector_is_deterministic_and_records_used_blocks():
@@ -174,7 +180,7 @@ def test_automatic_selector_is_deterministic_and_records_used_blocks():
     assert result.mean_selected_block_length is not None
     assert result.min_selected_block_length is not None
     assert result.max_selected_block_length is not None
-    assert result.block_selection_failure_counts == ()
+    assert result.method_failure_counts == ()
     assert (
         result.min_selected_block_length
         <= result.mean_selected_block_length
@@ -192,7 +198,7 @@ def test_automatic_selector_fails_closed_on_gaps_short_and_constant_series():
     assert missing.selected_block_length is None
 
 
-def test_automatic_calibration_preserves_selector_failure_counts():
+def test_automatic_calibration_preserves_calendar_failure_counts():
     result = calibrate_scenario(
         _scenario(
             names_per_session=20,
@@ -204,7 +210,27 @@ def test_automatic_calibration_preserves_selector_failure_counts():
         n_replications=8,
     )
     assert result.status == "METHOD_NOT_MEASURABLE"
-    assert result.block_selection_failure_counts == (("NONFINITE_CALENDAR_SERIES", 8),)
+    assert result.method_failure_counts == (
+        ("MISSING_CALENDAR_SESSION_UNSUPPORTED", 8),
+    )
+
+
+def test_calendar_assessment_distinguishes_missing_from_invalid_numeric():
+    missing = assess_calendar_estimand_series([0.1, None, None, 0.2])
+    invalid = assess_calendar_estimand_series([0.1, float("nan"), 0.2])
+    complete = assess_calendar_estimand_series([0.1, 0.2])
+    assert missing.status == "MISSING_CALENDAR_SESSION_UNSUPPORTED"
+    assert missing.n_missing_sessions == 2
+    assert missing.longest_missing_run == 2
+    assert missing.observed_fraction == 0.5
+    assert invalid.status == "INVALID_NONFINITE_ESTIMAND"
+    assert invalid.n_invalid_sessions == 1
+    assert complete.status == "COMPLETE"
+
+
+@pytest.mark.parametrize("method", [_bootstrap(), _auto_bootstrap(), _hac()])
+def test_every_interval_candidate_refuses_calendar_compaction(method):
+    assert candidate_interval([0.1, None, 0.2], method, seed=31) is None
 
 
 def test_automatic_method_identity_is_serialized_without_changing_explicit_payload():
