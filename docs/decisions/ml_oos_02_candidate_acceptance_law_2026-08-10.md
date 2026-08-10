@@ -159,3 +159,12 @@ measurement stream and therefore requires an explicit contract-version review.
   diagnostic higher-session screen.
 - Numerical candidate law: explicit but still requires human vetting.
 - Confirmation registry and Task 06: unchanged and blocked.
+
+## Target-contract follow-up
+
+The code-first DGP, effect, and lifecycle-alignment audit is recorded in
+[`ml_oos_02_target_contract_vet_2026-08-10.md`](./ml_oos_02_target_contract_vet_2026-08-10.md).
+It finds that this acceptance study screens a pooled session-mean interval, not
+the shipped fold-agreement and tail-gated proposal lifecycle. Numerical law
+adoption therefore remains blocked even if a future interval candidate passes
+the current synthetic cells.

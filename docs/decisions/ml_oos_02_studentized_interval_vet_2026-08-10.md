@@ -109,3 +109,8 @@ and every candidate fails the formal law.
 The next methodology question is whether a calibrated/basic stationary
 bootstrap interval should be screened, or whether the acceptance DGP/effect
 definition needs independent scientific review before adding more methods.
+
+That review is now executable and documented in
+[`ml_oos_02_target_contract_vet_2026-08-10.md`](./ml_oos_02_target_contract_vet_2026-08-10.md).
+It blocks further method adoption until the synthetic estimand and acceptance
+law reproduce the decision-specific fold lifecycle.
