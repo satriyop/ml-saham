@@ -88,6 +88,18 @@ def test_calibration_uses_exact_fold_region_and_excludes_holdout():
     assert result.status == "MEASURED"
 
 
+def test_null_separates_directional_false_superiority_from_two_sided_rejection():
+    result = calibrate_scenario(
+        _scenario(),
+        _hac(),
+        seed=13,
+        n_replications=80,
+    )
+    assert result.false_superiority_rate is not None
+    assert result.false_positive_rate is not None
+    assert result.false_superiority_rate <= result.false_positive_rate
+
+
 def test_geometry_failure_is_typed_not_fake_measurement():
     result = calibrate_scenario(
         _scenario(n_sessions_total=40, holdout_sessions=20),

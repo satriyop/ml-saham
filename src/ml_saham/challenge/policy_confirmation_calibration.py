@@ -20,7 +20,7 @@ import numpy as np
 
 from ml_saham.challenge.fold_geometry_sim import simulate_session_folds
 
-CALIBRATION_CONTRACT_ID = "policy_confirmation_calibration.synthetic.v1"
+CALIBRATION_CONTRACT_ID = "policy_confirmation_calibration.synthetic.v2"
 CALIBRATION_EVIDENCE_GRADE = "MEASUREMENT_ONLY"
 
 ChallengerClass = Literal["fixed", "learned_linear", "learned_tree"]
@@ -203,6 +203,7 @@ class CalibrationResult:
     mean_selected_estimate: float | None
     mean_selection_bias: float | None
     coverage_rate: float | None
+    false_superiority_rate: float | None
     false_positive_rate: float | None
     directional_detection_rate: float | None
     mean_interval_width: float | None
@@ -472,6 +473,7 @@ def calibrate_scenario(
             mean_selected_estimate=None,
             mean_selection_bias=None,
             coverage_rate=None,
+            false_superiority_rate=None,
             false_positive_rate=None,
             directional_detection_rate=None,
             mean_interval_width=None,
@@ -486,6 +488,7 @@ def calibrate_scenario(
     eval_array = np.asarray(eval_indices, dtype=int)
     cover: list[bool] = []
     false_positive: list[bool] = []
+    false_superiority: list[bool] = []
     directional: list[bool] = []
     widths: list[float] = []
     observed_counts: list[int] = []
@@ -524,6 +527,7 @@ def calibrate_scenario(
         cover.append(lower <= target <= upper)
         if abs(target) <= 1e-15:
             false_positive.append(lower > 0.0 or upper < 0.0)
+            false_superiority.append(lower > 0.0)
         if target > 0.0:
             directional.append(lower > 0.0)
         elif target < 0.0:
@@ -568,6 +572,9 @@ def calibrate_scenario(
         mean_selected_estimate=mean_estimate,
         mean_selection_bias=mean_bias,
         coverage_rate=statistics.fmean(cover) if cover else None,
+        false_superiority_rate=(
+            statistics.fmean(false_superiority) if false_superiority else None
+        ),
         false_positive_rate=(
             statistics.fmean(false_positive) if false_positive else None
         ),
@@ -759,7 +766,7 @@ def format_calibration_report(study: CalibrationStudy) -> str:
         f"n_folds={study.n_folds} embargo_sessions={study.embargo_sessions}",
         "policy_grade_authorized=False",
         "",
-        "scenario | method | folds/eval | observed | coverage | FP | power | width | bias | fit",
+        "scenario | method | folds/eval | observed | coverage | FP+ | FP2 | power | width | bias | fit",
     ]
     for result in study.results:
         geometry = f"{result.n_folds_formed}/{result.n_eval_sessions_geometry}"
@@ -771,6 +778,7 @@ def format_calibration_report(study: CalibrationStudy) -> str:
                     geometry,
                     _fmt(result.mean_observed_sessions),
                     _fmt(result.coverage_rate),
+                    _fmt(result.false_superiority_rate),
                     _fmt(result.false_positive_rate),
                     _fmt(result.directional_detection_rate),
                     _fmt(result.mean_interval_width),
