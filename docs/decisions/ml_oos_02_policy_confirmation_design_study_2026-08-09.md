@@ -30,6 +30,9 @@ Live cohort feasibility audit:
 Outcome-blind methodology vet:
 [`ml_oos_02_methodology_vet_2026-08-10.md`](./ml_oos_02_methodology_vet_2026-08-10.md).
 
+Synthetic operating-characteristic calibration:
+[`ml_oos_02_synthetic_calibration_2026-08-10.md`](./ml_oos_02_synthetic_calibration_2026-08-10.md).
+
 This draft id is **explicitly excluded** from promote eligibility.
 
 ## Required axes (must be frozen before registration)

@@ -7,6 +7,9 @@ contract would need. It does not select thresholds, inspect the current live
 cohort's outcomes, register `POLICY_CONFIRMATION_CONTRACTS`, or make Task 06
 promotion-eligible.
 
+Executable synthetic calibration follow-up:
+[`ml_oos_02_synthetic_calibration_2026-08-10.md`](./ml_oos_02_synthetic_calibration_2026-08-10.md).
+
 ## Evidence boundary
 
 - Executable truth: `accum_path_v1`, `time_purged_folds`, the ML-OOS-02 geometry
