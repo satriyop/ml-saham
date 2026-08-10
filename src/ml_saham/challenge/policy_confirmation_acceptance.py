@@ -27,7 +27,7 @@ from ml_saham.challenge.policy_confirmation_calibration import (
     calibrate_scenario,
 )
 
-ACCEPTANCE_STUDY_ID = "policy_confirmation_acceptance.synthetic.v3"
+ACCEPTANCE_STUDY_ID = "policy_confirmation_acceptance.synthetic.v4"
 
 ScenarioRole = Literal[
     "null",
@@ -556,6 +556,27 @@ def default_acceptance_methods(
             )
         )
     return tuple(methods)
+
+
+def studentized_acceptance_methods(
+    *,
+    n_resamples: int = 100,
+    studentize_resamples: int = 50,
+) -> tuple[CalibrationMethod, ...]:
+    """Explicit nested-studentized grid; no block length is selected."""
+    return tuple(
+        CalibrationMethod(
+            method_id=(
+                "stationary_bootstrap_studentized_nested."
+                f"block{block}.inner{studentize_resamples}.candidate.v1"
+            ),
+            method_kind="stationary_bootstrap_studentized_nested",
+            block_length=block,
+            n_resamples=n_resamples,
+            studentize_resamples=studentize_resamples,
+        )
+        for block in (3, 5, 10)
+    )
 
 
 def _candidate_results(

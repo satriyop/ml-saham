@@ -11,7 +11,7 @@ PYTHONPATH=src python scripts/report_ml_oos_02_fit_calibration.py
 PYTHONPATH=src python scripts/report_ml_oos_02_fit_calibration.py --json
 ```
 
-Measurement contract: `policy_confirmation_calibration.synthetic.v4`.
+Measurement contract: `policy_confirmation_calibration.synthetic.v5`.
 Fit-pipeline measurement contract:
 `policy_confirmation_fit_calibration.synthetic.v1`.
 Evidence grade: `MEASUREMENT_ONLY`.
@@ -32,6 +32,12 @@ complete-case bootstrap and pairwise-deletion HAC behavior, distinguishes
 explicit unavailable calendar positions from invalid numerics, and records
 typed method-failure counts. No missingness threshold or imputation model is
 adopted.
+
+Version 5 adds a nested studentized stationary-bootstrap candidate. Outer
+resamples form the bootstrap-t root distribution; inner resamples estimate the
+standard error for each outer replicate. Outer count, inner count, and explicit
+block length are serialized. The method remains complete-calendar-only and
+measurement-only.
 
 ## What it measures
 
@@ -158,3 +164,6 @@ Implemented candidate follow-up (not adopted):
 
 Missing-calendar contract vet:
 [`ml_oos_02_missing_calendar_vet_2026-08-10.md`](./ml_oos_02_missing_calendar_vet_2026-08-10.md).
+
+Studentized-interval vet:
+[`ml_oos_02_studentized_interval_vet_2026-08-10.md`](./ml_oos_02_studentized_interval_vet_2026-08-10.md).

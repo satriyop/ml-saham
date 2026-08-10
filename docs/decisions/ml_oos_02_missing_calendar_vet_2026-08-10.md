@@ -11,8 +11,8 @@ register `POLICY_CONFIRMATION_CONTRACTS`, or unblock Task 06.
 
 Clean-break identities:
 
-- calibration: `policy_confirmation_calibration.synthetic.v4`;
-- acceptance study: `policy_confirmation_acceptance.synthetic.v3`.
+- calibration at this decision: `policy_confirmation_calibration.synthetic.v4`;
+- acceptance study at this decision: `policy_confirmation_acceptance.synthetic.v3`.
 
 ## Code-truth finding
 
@@ -83,6 +83,7 @@ and requires its own preregistered DGP and operating-characteristic study.
   scheme is selected.
 - Confirmation registry remains empty and Task 06 remains blocked.
 
-The next independent methodology slice may vet a studentized interval on
-complete calendars. Missing-calendar support should remain a separate research
-track so its assumptions cannot silently enter that interval comparison.
+The studentized interval is vetted separately in
+[`ml_oos_02_studentized_interval_vet_2026-08-10.md`](./ml_oos_02_studentized_interval_vet_2026-08-10.md).
+Missing-calendar support remains a separate research track so its assumptions
+cannot silently enter that interval comparison.

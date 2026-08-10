@@ -21,7 +21,7 @@ import numpy as np
 
 from ml_saham.challenge.fold_geometry_sim import simulate_session_folds
 
-CALIBRATION_CONTRACT_ID = "policy_confirmation_calibration.synthetic.v4"
+CALIBRATION_CONTRACT_ID = "policy_confirmation_calibration.synthetic.v5"
 CALIBRATION_EVIDENCE_GRADE = "MEASUREMENT_ONLY"
 AUTO_BLOCK_SELECTOR_ID = "politis_white_patton.stationary_mean.v1"
 
@@ -29,6 +29,7 @@ ChallengerClass = Literal["fixed", "learned_linear", "learned_tree"]
 MethodKind = Literal[
     "stationary_bootstrap_percentile",
     "stationary_bootstrap_percentile_auto",
+    "stationary_bootstrap_studentized_nested",
     "newey_west_normal",
 ]
 
@@ -162,12 +163,14 @@ class CalibrationMethod:
     hac_lag: int | None = None
     n_resamples: int = 200
     block_length_selector_id: str | None = None
+    studentize_resamples: int | None = None
 
     def __post_init__(self) -> None:
         _require_nonempty_id("method_id", self.method_id)
         if self.method_kind not in {
             "stationary_bootstrap_percentile",
             "stationary_bootstrap_percentile_auto",
+            "stationary_bootstrap_studentized_nested",
             "newey_west_normal",
         }:
             raise ValueError(f"unsupported method_kind={self.method_kind!r}")
@@ -183,6 +186,10 @@ class CalibrationMethod:
                 raise ValueError("stationary bootstrap must not set hac_lag")
             if self.block_length_selector_id is not None:
                 raise ValueError("explicit stationary bootstrap must not set selector")
+            if self.studentize_resamples is not None:
+                raise ValueError(
+                    "percentile bootstrap must not set studentize_resamples"
+                )
         elif self.method_kind == "stationary_bootstrap_percentile_auto":
             if self.block_length is not None or self.hac_lag is not None:
                 raise ValueError(
@@ -192,6 +199,21 @@ class CalibrationMethod:
                 raise ValueError(
                     "automatic stationary bootstrap requires the supported selector id"
                 )
+            if self.studentize_resamples is not None:
+                raise ValueError(
+                    "automatic bootstrap must not set studentize_resamples"
+                )
+        elif self.method_kind == "stationary_bootstrap_studentized_nested":
+            if self.block_length is None:
+                raise ValueError("studentized bootstrap requires explicit block_length")
+            _require_exact_int("block_length", self.block_length, minimum=1)
+            if self.hac_lag is not None or self.block_length_selector_id is not None:
+                raise ValueError("studentized bootstrap must not set lag or selector")
+            if self.studentize_resamples is None:
+                raise ValueError("studentized bootstrap requires studentize_resamples")
+            _require_exact_int(
+                "studentize_resamples", self.studentize_resamples, minimum=20
+            )
         else:
             if self.hac_lag is None:
                 raise ValueError("Newey-West requires explicit hac_lag")
@@ -200,11 +222,15 @@ class CalibrationMethod:
                 raise ValueError("Newey-West must not set block_length")
             if self.block_length_selector_id is not None:
                 raise ValueError("Newey-West must not set block selector")
+            if self.studentize_resamples is not None:
+                raise ValueError("Newey-West must not set studentize_resamples")
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         if self.block_length_selector_id is None:
             payload.pop("block_length_selector_id")
+        if self.studentize_resamples is None:
+            payload.pop("studentize_resamples")
         return payload
 
 
@@ -533,7 +559,6 @@ def _stationary_bootstrap_interval(
     *,
     rng: np.random.Generator,
 ) -> tuple[tuple[float, float] | None, int | None, str | None]:
-    n = len(values)
     if method.method_kind == "stationary_bootstrap_percentile_auto":
         selection = select_stationary_bootstrap_block_length(values)
         block_length = selection.selected_block_length
@@ -543,22 +568,96 @@ def _stationary_bootstrap_interval(
         selection_failure = None
     if block_length is None:
         return None, None, selection_failure
-    restart_probability = min(1.0, 1.0 / float(block_length))
-    means: list[float] = []
-    for _ in range(method.n_resamples):
-        indices = np.empty(n, dtype=int)
-        indices[0] = int(rng.integers(0, n))
-        for i in range(1, n):
-            if float(rng.random()) < restart_probability:
-                indices[i] = int(rng.integers(0, n))
-            else:
-                indices[i] = (indices[i - 1] + 1) % n
-        means.append(float(np.mean(values[indices])))
-    if len(means) < max(10, method.n_resamples // 2):
-        return None, block_length, selection_failure
+    means = _stationary_bootstrap_means(
+        values, block_length=block_length, n_resamples=method.n_resamples, rng=rng
+    )
     alpha = 1.0 - method.confidence_level
     lower, upper = np.quantile(means, [alpha / 2.0, 1.0 - alpha / 2.0])
     return (float(lower), float(upper)), block_length, selection_failure
+
+
+def _stationary_bootstrap_samples(
+    values: np.ndarray,
+    *,
+    block_length: int,
+    n_resamples: int,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    n = len(values)
+    indices = np.empty((n_resamples, n), dtype=int)
+    indices[:, 0] = rng.integers(0, n, size=n_resamples)
+    restart_probability = min(1.0, 1.0 / float(block_length))
+    for i in range(1, n):
+        restart = rng.random(n_resamples) < restart_probability
+        starts = rng.integers(0, n, size=n_resamples)
+        continued = (indices[:, i - 1] + 1) % n
+        indices[:, i] = np.where(restart, starts, continued)
+    return values[indices]
+
+
+def _stationary_bootstrap_means(
+    values: np.ndarray,
+    *,
+    block_length: int,
+    n_resamples: int,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    return np.mean(
+        _stationary_bootstrap_samples(
+            values,
+            block_length=block_length,
+            n_resamples=n_resamples,
+            rng=rng,
+        ),
+        axis=1,
+    )
+
+
+def _stationary_bootstrap_studentized_interval(
+    values: np.ndarray,
+    method: CalibrationMethod,
+    *,
+    rng: np.random.Generator,
+) -> tuple[tuple[float, float] | None, int | None, str | None]:
+    block_length = method.block_length
+    inner_reps = method.studentize_resamples
+    if block_length is None or inner_reps is None:
+        return None, None, "INVALID_STUDENTIZER_CONTRACT"
+    estimate = float(np.mean(values))
+    outer_samples = _stationary_bootstrap_samples(
+        values,
+        block_length=block_length,
+        n_resamples=method.n_resamples,
+        rng=rng,
+    )
+    outer_means = np.mean(outer_samples, axis=1)
+    roots = np.empty(method.n_resamples, dtype=float)
+    epsilon = np.finfo(float).eps
+    for i, sample in enumerate(outer_samples):
+        inner_means = _stationary_bootstrap_means(
+            sample,
+            block_length=block_length,
+            n_resamples=inner_reps,
+            rng=rng,
+        )
+        inner_se = float(np.std(inner_means, ddof=0))
+        error = float(outer_means[i] - estimate)
+        if not math.isfinite(inner_se) or inner_se <= epsilon * max(abs(error), 1.0):
+            return None, block_length, "DEGENERATE_STUDENTIZER"
+        roots[i] = error / inner_se
+    base_se = float(np.std(outer_means, ddof=0))
+    if not math.isfinite(base_se) or base_se <= epsilon:
+        return None, block_length, "DEGENERATE_STUDENTIZER"
+    alpha = 1.0 - method.confidence_level
+    lower_root, upper_root = np.quantile(roots, [alpha / 2.0, 1.0 - alpha / 2.0])
+    return (
+        (
+            estimate - float(upper_root) * base_se,
+            estimate - float(lower_root) * base_se,
+        ),
+        block_length,
+        None,
+    )
 
 
 def _newey_west_interval(
@@ -619,6 +718,11 @@ def _interval_with_block_length(
     if assessment.status != "COMPLETE":
         return None, None, assessment.status, assessment
     array = np.asarray(values, dtype=float)
+    if method.method_kind == "stationary_bootstrap_studentized_nested":
+        interval, block_length, failure = _stationary_bootstrap_studentized_interval(
+            array, method, rng=rng
+        )
+        return interval, block_length, failure, assessment
     if method.method_kind in {
         "stationary_bootstrap_percentile",
         "stationary_bootstrap_percentile_auto",

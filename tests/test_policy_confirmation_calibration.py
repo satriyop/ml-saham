@@ -75,6 +75,19 @@ def _auto_bootstrap(**overrides) -> CalibrationMethod:
     return CalibrationMethod(**values)
 
 
+def _studentized_bootstrap(**overrides) -> CalibrationMethod:
+    values = dict(
+        method_id="sb-t5",
+        method_kind="stationary_bootstrap_studentized_nested",
+        confidence_level=0.95,
+        block_length=5,
+        n_resamples=30,
+        studentize_resamples=20,
+    )
+    values.update(overrides)
+    return CalibrationMethod(**values)
+
+
 def test_calibration_is_deterministic_and_non_authoritative():
     kwargs = dict(
         scenario=_scenario(),
@@ -228,15 +241,54 @@ def test_calendar_assessment_distinguishes_missing_from_invalid_numeric():
     assert complete.status == "COMPLETE"
 
 
-@pytest.mark.parametrize("method", [_bootstrap(), _auto_bootstrap(), _hac()])
+@pytest.mark.parametrize(
+    "method", [_bootstrap(), _auto_bootstrap(), _studentized_bootstrap(), _hac()]
+)
 def test_every_interval_candidate_refuses_calendar_compaction(method):
     assert candidate_interval([0.1, None, 0.2], method, seed=31) is None
+
+
+def test_nested_studentized_interval_is_deterministic_and_finite():
+    values = np.random.default_rng(101).normal(size=80)
+    method = _studentized_bootstrap()
+    first = candidate_interval(values, method, seed=37)
+    second = candidate_interval(values, method, seed=37)
+    assert first == second
+    assert first is not None
+    assert all(np.isfinite(first))
+    assert first[0] < first[1]
+
+
+def test_nested_studentized_calibration_records_block_and_fails_degenerate_scale():
+    result = calibrate_scenario(
+        _scenario(name_missing_rate=0.0),
+        _studentized_bootstrap(n_resamples=20),
+        seed=41,
+        n_replications=4,
+    )
+    assert result.status == "MEASURED"
+    assert result.mean_selected_block_length == 5.0
+    assert result.min_selected_block_length == 5
+    assert result.max_selected_block_length == 5
+    assert result.method_failure_counts == ()
+    assert (
+        candidate_interval([1.0] * 20, _studentized_bootstrap(n_resamples=20), seed=43)
+        is None
+    )
+
+
+def test_studentized_identity_records_outer_block_and_inner_resamples():
+    payload = _studentized_bootstrap().to_dict()
+    assert payload["block_length"] == 5
+    assert payload["n_resamples"] == 30
+    assert payload["studentize_resamples"] == 20
 
 
 def test_automatic_method_identity_is_serialized_without_changing_explicit_payload():
     explicit_payload = _bootstrap().to_dict()
     automatic_payload = _auto_bootstrap().to_dict()
     assert "block_length_selector_id" not in explicit_payload
+    assert "studentize_resamples" not in explicit_payload
     assert automatic_payload["block_length_selector_id"] == AUTO_BLOCK_SELECTOR_ID
     assert automatic_payload["block_length"] is None
 
@@ -350,5 +402,12 @@ def test_method_requires_explicit_tuning_parameter():
         CalibrationMethod(
             method_id="bad-auto",
             method_kind="stationary_bootstrap_percentile_auto",
+            n_resamples=20,
+        )
+    with pytest.raises(ValueError, match="studentize_resamples"):
+        CalibrationMethod(
+            method_id="bad-studentized",
+            method_kind="stationary_bootstrap_studentized_nested",
+            block_length=5,
             n_resamples=20,
         )

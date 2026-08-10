@@ -16,6 +16,7 @@ from ml_saham.challenge.policy_confirmation_acceptance import (  # noqa: E402
     default_acceptance_scenarios,
     format_acceptance_report,
     run_acceptance_study,
+    studentized_acceptance_methods,
 )
 
 
@@ -38,6 +39,16 @@ def main() -> int:
         action="store_true",
         help="Evaluate only the automatic stationary-bootstrap candidate",
     )
+    parser.add_argument(
+        "--studentized-only",
+        action="store_true",
+        help="Evaluate only the nested studentized stationary-bootstrap grid",
+    )
+    parser.add_argument(
+        "--complete-calendar-only",
+        action="store_true",
+        help="Restrict to eligible moderate/strong complete-calendar cells",
+    )
     parser.add_argument("--holdout-sessions", type=int, default=20)
     parser.add_argument("--n-folds", type=int, default=3)
     parser.add_argument("--embargo-sessions", type=int, default=20)
@@ -53,20 +64,42 @@ def main() -> int:
         default=100,
         help="Resamples per stationary-bootstrap interval (default: 100)",
     )
+    parser.add_argument(
+        "--studentize-resamples",
+        type=int,
+        default=50,
+        help="Inner resamples for nested studentization (default: 50)",
+    )
     parser.add_argument("--seed", type=int, default=20260810)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     if args.session_counts and args.higher_grid:
         parser.error("--session-count and --higher-grid are mutually exclusive")
+    if args.automatic_only and args.studentized_only:
+        parser.error("--automatic-only and --studentized-only are mutually exclusive")
     session_counts = tuple(
-        args.session_counts or ((360, 504, 756) if args.higher_grid else (120, 180, 252))
+        args.session_counts
+        or ((360, 504, 756) if args.higher_grid else (120, 180, 252))
     )
     scenarios = default_acceptance_scenarios(
         session_counts=session_counts,
         holdout_sessions=args.holdout_sessions,
     )
-    methods = default_acceptance_methods(n_resamples=args.bootstrap_resamples)
+    if args.complete_calendar_only:
+        scenarios = tuple(
+            item
+            for item in scenarios
+            if item.role in {"null", "alternative"}
+            and item.stress_family in {"moderate", "strong_dependence"}
+        )
+    if args.studentized_only:
+        methods = studentized_acceptance_methods(
+            n_resamples=args.bootstrap_resamples,
+            studentize_resamples=args.studentize_resamples,
+        )
+    else:
+        methods = default_acceptance_methods(n_resamples=args.bootstrap_resamples)
     if args.automatic_only:
         methods = tuple(
             method

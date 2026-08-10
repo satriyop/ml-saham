@@ -16,6 +16,7 @@ from ml_saham.challenge.policy_confirmation_acceptance import (
     evaluate_calibration_cell,
     format_acceptance_report,
     run_acceptance_study,
+    studentized_acceptance_methods,
 )
 from ml_saham.challenge.policy_confirmation_calibration import (
     CalibrationMethod,
@@ -46,7 +47,7 @@ def _scenario(*, role="null", **overrides) -> AcceptanceScenario:
 
 def _result(spec: AcceptanceScenario, **overrides) -> CalibrationResult:
     values = dict(
-        contract_id="policy_confirmation_calibration.synthetic.v4",
+        contract_id="policy_confirmation_calibration.synthetic.v5",
         evidence_grade="MEASUREMENT_ONLY",
         scenario_id=spec.scenario.scenario_id,
         challenger_class="fixed",
@@ -181,6 +182,15 @@ def test_default_grid_is_predeclared_and_capacity_scoped():
     assert methods[0].method_kind == "stationary_bootstrap_percentile_auto"
     assert [item.block_length for item in methods[1:4]] == [3, 5, 10]
     assert [item.hac_lag for item in methods[4:]] == [3, 5, 10]
+    studentized = studentized_acceptance_methods(
+        n_resamples=20, studentize_resamples=20
+    )
+    assert [item.block_length for item in studentized] == [3, 5, 10]
+    assert all(
+        item.method_kind == "stationary_bootstrap_studentized_nested"
+        for item in studentized
+    )
+    assert all(item.studentize_resamples == 20 for item in studentized)
 
 
 def test_study_is_deterministic_non_authoritative_and_groups_required_cells():

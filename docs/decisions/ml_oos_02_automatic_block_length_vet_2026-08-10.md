@@ -108,5 +108,5 @@ low power under strong dependence, or gapped-session semantics. Therefore:
 
 The missing-calendar law is now vetted separately in
 [`ml_oos_02_missing_calendar_vet_2026-08-10.md`](./ml_oos_02_missing_calendar_vet_2026-08-10.md).
-The next interval question is whether to vet a studentized or calibrated
-bootstrap while preserving the same predeclared acceptance criteria.
+The studentized follow-up is in
+[`ml_oos_02_studentized_interval_vet_2026-08-10.md`](./ml_oos_02_studentized_interval_vet_2026-08-10.md).

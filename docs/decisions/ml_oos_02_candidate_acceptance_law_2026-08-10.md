@@ -9,9 +9,12 @@ PYTHONPATH=src python scripts/report_ml_oos_02_acceptance.py
 PYTHONPATH=src python scripts/report_ml_oos_02_acceptance.py --json
 ```
 
-Study identity: `policy_confirmation_acceptance.synthetic.v3`. Version 2 added
+Study identity: `policy_confirmation_acceptance.synthetic.v4`. Version 2 added
 selected-block metadata and the automatic selector candidate. Version 3 adds
 the explicit missing-calendar contract and general typed method-failure counts.
+Version 4 adds an explicitly tuned nested-studentized candidate and a CLI
+complete-calendar research scope; it does not weaken the law or reinterpret
+historical studies.
 The candidate
 law has a version plus a SHA-256 digest over every material tolerance and
 policy field. Evidence grade remains `MEASUREMENT_ONLY`.
@@ -151,5 +154,8 @@ measurement stream and therefore requires an explicit contract-version review.
   adoption.
 - Missing-calendar compaction/pairwise deletion: retired in v3; all current
   interval candidates fail closed on explicit unavailable positions.
+- Nested studentized stationary bootstrap: implemented in v4 for an explicit
+  block grid and complete-calendar evaluation only; no candidate passed the
+  diagnostic higher-session screen.
 - Numerical candidate law: explicit but still requires human vetting.
 - Confirmation registry and Task 06: unchanged and blocked.
