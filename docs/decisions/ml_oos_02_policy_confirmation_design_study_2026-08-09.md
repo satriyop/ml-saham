@@ -27,6 +27,9 @@ Script: `scripts/report_ml_oos_02_design.py`.
 Live cohort feasibility audit:
 [`ml_oos_02_live_cohort_feasibility_2026-08-10.md`](./ml_oos_02_live_cohort_feasibility_2026-08-10.md).
 
+Outcome-blind methodology vet:
+[`ml_oos_02_methodology_vet_2026-08-10.md`](./ml_oos_02_methodology_vet_2026-08-10.md).
+
 This draft id is **explicitly excluded** from promote eligibility.
 
 ## Required axes (must be frozen before registration)
