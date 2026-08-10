@@ -11,17 +11,21 @@ PYTHONPATH=src python scripts/report_ml_oos_02_fit_calibration.py
 PYTHONPATH=src python scripts/report_ml_oos_02_fit_calibration.py --json
 ```
 
-Measurement contract: `policy_confirmation_calibration.synthetic.v2`.
+Measurement contract: `policy_confirmation_calibration.synthetic.v3`.
 Fit-pipeline measurement contract:
 `policy_confirmation_fit_calibration.synthetic.v1`.
 Evidence grade: `MEASUREMENT_ONLY`.
 
-Version 2 is a clean break from the original measurement payload: it separates
+Version 2 was a clean break from the original measurement payload: it separates
 one-sided false-superiority (`lower > 0`) from diagnostic two-sided false
 rejection (the interval excludes zero in either direction). The earlier v1
 illustrative table reported the two-sided diagnostic rate and remains
 historical measurement evidence; candidate superiority acceptance uses only
 the v2 one-sided rate.
+
+Version 3 adds an identified automatic stationary-bootstrap block selector and
+records the mean/minimum/maximum block actually used across replications. It
+does not reinterpret v1/v2 output or make the selector authoritative.
 
 ## What it measures
 

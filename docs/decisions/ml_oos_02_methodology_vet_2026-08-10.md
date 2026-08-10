@@ -10,6 +10,9 @@ promotion-eligible.
 Executable synthetic calibration follow-up:
 [`ml_oos_02_synthetic_calibration_2026-08-10.md`](./ml_oos_02_synthetic_calibration_2026-08-10.md).
 
+Automatic block-length vet and higher-session follow-up:
+[`ml_oos_02_automatic_block_length_vet_2026-08-10.md`](./ml_oos_02_automatic_block_length_vet_2026-08-10.md).
+
 ## Evidence boundary
 
 - Executable truth: `accum_path_v1`, `time_purged_folds`, the ML-OOS-02 geometry

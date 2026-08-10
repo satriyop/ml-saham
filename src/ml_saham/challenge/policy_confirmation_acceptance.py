@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Literal, Sequence
 
 from ml_saham.challenge.policy_confirmation_calibration import (
+    AUTO_BLOCK_SELECTOR_ID,
     CALIBRATION_EVIDENCE_GRADE,
     CalibrationMethod,
     CalibrationResult,
@@ -26,7 +27,7 @@ from ml_saham.challenge.policy_confirmation_calibration import (
     calibrate_scenario,
 )
 
-ACCEPTANCE_STUDY_ID = "policy_confirmation_acceptance.synthetic.v1"
+ACCEPTANCE_STUDY_ID = "policy_confirmation_acceptance.synthetic.v2"
 
 ScenarioRole = Literal[
     "null",
@@ -99,9 +100,7 @@ class CandidateAcceptanceLaw:
         ):
             _finite(name, getattr(self, name), minimum=0.0, maximum=1.0)
         if not 0.5 <= self.monte_carlo_confidence_level < 1.0:
-            raise ValueError(
-                "monte_carlo_confidence_level must be in [0.5, 1.0)"
-            )
+            raise ValueError("monte_carlo_confidence_level must be in [0.5, 1.0)")
         _finite(
             "maximum_interval_width_to_effect",
             self.maximum_interval_width_to_effect,
@@ -160,7 +159,9 @@ class AcceptanceScenario:
         if self.role == "multiplicity_probe" and self.scenario.search_width <= 1:
             raise ValueError("multiplicity probe requires search_width > 1")
         if self.role == "multiplicity_probe" and self.scenario.regime_shift != 0.0:
-            raise ValueError("multiplicity probe must isolate search without regime shift")
+            raise ValueError(
+                "multiplicity probe must isolate search without regime shift"
+            )
         if self.role == "regime_probe" and self.scenario.regime_shift == 0.0:
             raise ValueError("regime probe requires a non-zero regime_shift")
         if self.role == "regime_probe" and self.scenario.search_width != 1:
@@ -206,6 +207,10 @@ class AcceptanceCellResult:
     valid_replication_rate: float
     mean_observed_session_fraction: float | None
     interval_width_to_effect: float | None
+    mean_selected_block_length: float | None
+    min_selected_block_length: int | None
+    max_selected_block_length: int | None
+    block_selection_failure_counts: tuple[tuple[str, int], ...]
     status: str
     reasons: tuple[str, ...]
     policy_grade_authorized: bool = False
@@ -286,8 +291,7 @@ def _proportion_evidence(
     radius = (
         z
         * math.sqrt(
-            estimate * (1.0 - estimate) / trials
-            + z * z / (4.0 * trials * trials)
+            estimate * (1.0 - estimate) / trials + z * z / (4.0 * trials * trials)
         )
         / denominator
     )
@@ -356,14 +360,16 @@ def evaluate_calibration_cell(
             reasons.append("formed folds below candidate minimum")
         if (
             result.mean_observed_fraction is None
-            or result.mean_observed_fraction
-            < law.minimum_observed_session_fraction
+            or result.mean_observed_fraction < law.minimum_observed_session_fraction
         ):
             reasons.append("observed-session fraction below candidate minimum")
         if coverage is None:
             reasons.append("coverage is unavailable")
         else:
-            if coverage.monte_carlo_standard_error > law.maximum_monte_carlo_standard_error:
+            if (
+                coverage.monte_carlo_standard_error
+                > law.maximum_monte_carlo_standard_error
+            ):
                 reasons.append("coverage Monte Carlo error exceeds candidate maximum")
             if coverage.lower_bound < law.minimum_coverage:
                 reasons.append("coverage lower bound below candidate minimum")
@@ -378,10 +384,7 @@ def evaluate_calibration_cell(
                     reasons.append(
                         "false-superiority Monte Carlo error exceeds candidate maximum"
                     )
-                if (
-                    false_superiority.upper_bound
-                    > law.maximum_false_superiority_rate
-                ):
+                if false_superiority.upper_bound > law.maximum_false_superiority_rate:
                     reasons.append(
                         "false-superiority upper bound exceeds candidate maximum"
                     )
@@ -393,7 +396,9 @@ def evaluate_calibration_cell(
                     directional.monte_carlo_standard_error
                     > law.maximum_monte_carlo_standard_error
                 ):
-                    reasons.append("detection Monte Carlo error exceeds candidate maximum")
+                    reasons.append(
+                        "detection Monte Carlo error exceeds candidate maximum"
+                    )
                 if directional.lower_bound < law.minimum_directional_detection_rate:
                     reasons.append("detection lower bound below candidate minimum")
             if width_ratio is None:
@@ -420,6 +425,10 @@ def evaluate_calibration_cell(
         valid_replication_rate=valid_rate,
         mean_observed_session_fraction=result.mean_observed_fraction,
         interval_width_to_effect=width_ratio,
+        mean_selected_block_length=result.mean_selected_block_length,
+        min_selected_block_length=result.min_selected_block_length,
+        max_selected_block_length=result.max_selected_block_length,
+        block_selection_failure_counts=result.block_selection_failure_counts,
         status=status,
         reasons=tuple(reasons),
         policy_grade_authorized=False,
@@ -520,7 +529,14 @@ def default_acceptance_methods(
     *, n_resamples: int = 200
 ) -> tuple[CalibrationMethod, ...]:
     """Sensitivity grid; no member is an adopted uncertainty method."""
-    methods: list[CalibrationMethod] = []
+    methods: list[CalibrationMethod] = [
+        CalibrationMethod(
+            method_id="stationary_bootstrap_percentile.auto_pw2009.candidate.v1",
+            method_kind="stationary_bootstrap_percentile_auto",
+            block_length_selector_id=AUTO_BLOCK_SELECTOR_ID,
+            n_resamples=n_resamples,
+        )
+    ]
     for block in (3, 5, 10):
         methods.append(
             CalibrationMethod(
@@ -576,9 +592,7 @@ def _candidate_results(
                 required_cells=len(items),
                 passed_cells=len(items) - len(failed),
                 status=(
-                    "PASSES_CANDIDATE_LAW"
-                    if not failed
-                    else "FAILS_CANDIDATE_LAW"
+                    "PASSES_CANDIDATE_LAW" if not failed else "FAILS_CANDIDATE_LAW"
                 ),
                 failed_scenarios=failed,
                 policy_grade_authorized=False,
@@ -588,9 +602,7 @@ def _candidate_results(
 
 
 def _validate_scenario_grid(scenarios: Sequence[AcceptanceScenario]) -> None:
-    paired: dict[
-        tuple[str, str, int, int], dict[str, CalibrationScenario]
-    ] = {}
+    paired: dict[tuple[str, str, int, int], dict[str, CalibrationScenario]] = {}
     for item in scenarios:
         if item.role not in {"null", "alternative"}:
             continue

@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from ml_saham.challenge.policy_confirmation_calibration import (
+    AUTO_BLOCK_SELECTOR_ID,
     CALIBRATION_CONTRACT_ID,
     CalibrationMethod,
     CalibrationScenario,
     calibrate_scenario,
     format_calibration_report,
     run_calibration_study,
+    select_stationary_bootstrap_block_length,
 )
 from ml_saham.challenge.promote import POLICY_CONFIRMATION_CONTRACTS
 from ml_saham.challenge.protocols import ACCUM_PATH_V1
@@ -53,6 +56,18 @@ def _hac(**overrides) -> CalibrationMethod:
         confidence_level=0.95,
         hac_lag=5,
         n_resamples=30,
+    )
+    values.update(overrides)
+    return CalibrationMethod(**values)
+
+
+def _auto_bootstrap(**overrides) -> CalibrationMethod:
+    values = dict(
+        method_id="sb-auto",
+        method_kind="stationary_bootstrap_percentile_auto",
+        confidence_level=0.95,
+        n_resamples=30,
+        block_length_selector_id=AUTO_BLOCK_SELECTOR_ID,
     )
     values.update(overrides)
     return CalibrationMethod(**values)
@@ -148,6 +163,78 @@ def test_missing_name_width_is_reported_in_session_denominator():
     assert result.mean_observed_sessions < result.n_eval_sessions_geometry
 
 
+def test_automatic_selector_is_deterministic_and_records_used_blocks():
+    result = calibrate_scenario(
+        _scenario(name_missing_rate=0.0),
+        _auto_bootstrap(),
+        seed=27,
+        n_replications=8,
+    )
+    assert result.status == "MEASURED"
+    assert result.mean_selected_block_length is not None
+    assert result.min_selected_block_length is not None
+    assert result.max_selected_block_length is not None
+    assert result.block_selection_failure_counts == ()
+    assert (
+        result.min_selected_block_length
+        <= result.mean_selected_block_length
+        <= result.max_selected_block_length
+    )
+
+
+def test_automatic_selector_fails_closed_on_gaps_short_and_constant_series():
+    missing = select_stationary_bootstrap_block_length([1.0, float("nan")] * 10)
+    short = select_stationary_bootstrap_block_length(range(9))
+    constant = select_stationary_bootstrap_block_length([1.0] * 20)
+    assert missing.status == "NONFINITE_CALENDAR_SERIES"
+    assert short.status == "INSUFFICIENT_SESSIONS"
+    assert constant.status == "DEGENERATE_VARIANCE"
+    assert missing.selected_block_length is None
+
+
+def test_automatic_calibration_preserves_selector_failure_counts():
+    result = calibrate_scenario(
+        _scenario(
+            names_per_session=20,
+            min_valid_names=20,
+            name_missing_rate=0.05,
+        ),
+        _auto_bootstrap(),
+        seed=29,
+        n_replications=8,
+    )
+    assert result.status == "METHOD_NOT_MEASURABLE"
+    assert result.block_selection_failure_counts == (("NONFINITE_CALENDAR_SERIES", 8),)
+
+
+def test_automatic_method_identity_is_serialized_without_changing_explicit_payload():
+    explicit_payload = _bootstrap().to_dict()
+    automatic_payload = _auto_bootstrap().to_dict()
+    assert "block_length_selector_id" not in explicit_payload
+    assert automatic_payload["block_length_selector_id"] == AUTO_BLOCK_SELECTOR_ID
+    assert automatic_payload["block_length"] is None
+
+
+def test_automatic_selector_uses_longer_block_for_persistent_golden_series():
+    independent = np.random.default_rng(123).normal(size=240)
+    persistent = []
+    value = 0.0
+    for innovation in independent:
+        value = 0.85 * value + innovation
+        persistent.append(value)
+    iid_selection = select_stationary_bootstrap_block_length(independent)
+    persistent_selection = select_stationary_bootstrap_block_length(persistent)
+    assert iid_selection.status == "SELECTED"
+    assert persistent_selection.status == "SELECTED"
+    assert iid_selection.selected_block_length is not None
+    assert persistent_selection.selected_block_length is not None
+    assert iid_selection.raw_block_length == pytest.approx(1.5144375858535348)
+    assert persistent_selection.raw_block_length == pytest.approx(9.585941217865432)
+    assert (
+        persistent_selection.selected_block_length > iid_selection.selected_block_length
+    )
+
+
 @pytest.mark.parametrize("challenger_class", ["learned_linear", "learned_tree"])
 def test_learned_class_never_claims_fit_capacity_calibration(challenger_class):
     result = calibrate_scenario(
@@ -199,9 +286,7 @@ def test_scenario_and_method_rng_streams_do_not_depend_on_execution_order():
         seed=37,
     )
     first_by_key = {(r.scenario_id, r.method_id): r for r in first.results}
-    second_by_key = {
-        (r.scenario_id, r.method_id): r for r in reversed_order.results
-    }
+    second_by_key = {(r.scenario_id, r.method_id): r for r in reversed_order.results}
     assert first_by_key == second_by_key
 
 
@@ -233,5 +318,11 @@ def test_method_requires_explicit_tuning_parameter():
         CalibrationMethod(
             method_id="bad",
             method_kind="newey_west_normal",
+            n_resamples=20,
+        )
+    with pytest.raises(ValueError, match="selector id"):
+        CalibrationMethod(
+            method_id="bad-auto",
+            method_kind="stationary_bootstrap_percentile_auto",
             n_resamples=20,
         )

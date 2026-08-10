@@ -28,6 +28,16 @@ def main() -> int:
         dest="session_counts",
         help="Total synthetic sessions; repeat for a grid (default: 120,180,252)",
     )
+    parser.add_argument(
+        "--higher-grid",
+        action="store_true",
+        help="Use the predeclared 360,504,756 session grid",
+    )
+    parser.add_argument(
+        "--automatic-only",
+        action="store_true",
+        help="Evaluate only the automatic stationary-bootstrap candidate",
+    )
     parser.add_argument("--holdout-sessions", type=int, default=20)
     parser.add_argument("--n-folds", type=int, default=3)
     parser.add_argument("--embargo-sessions", type=int, default=20)
@@ -47,11 +57,22 @@ def main() -> int:
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
+    if args.session_counts and args.higher_grid:
+        parser.error("--session-count and --higher-grid are mutually exclusive")
+    session_counts = tuple(
+        args.session_counts or ((360, 504, 756) if args.higher_grid else (120, 180, 252))
+    )
     scenarios = default_acceptance_scenarios(
-        session_counts=tuple(args.session_counts or (120, 180, 252)),
+        session_counts=session_counts,
         holdout_sessions=args.holdout_sessions,
     )
     methods = default_acceptance_methods(n_resamples=args.bootstrap_resamples)
+    if args.automatic_only:
+        methods = tuple(
+            method
+            for method in methods
+            if method.method_kind == "stationary_bootstrap_percentile_auto"
+        )
     study = run_acceptance_study(
         scenarios=scenarios,
         methods=methods,

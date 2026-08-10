@@ -9,7 +9,8 @@ PYTHONPATH=src python scripts/report_ml_oos_02_acceptance.py
 PYTHONPATH=src python scripts/report_ml_oos_02_acceptance.py --json
 ```
 
-Study identity: `policy_confirmation_acceptance.synthetic.v1`. The candidate
+Study identity: `policy_confirmation_acceptance.synthetic.v2`. Version 2 adds
+selected-block metadata and the automatic selector candidate. The candidate
 law has a version plus a SHA-256 digest over every material tolerance and
 policy field. Evidence grade remains `MEASUREMENT_ONLY`.
 
@@ -106,6 +107,13 @@ These are seeded synthetic measurements, not monotonic sample-size laws or
 market-performance estimates. The non-monotonic cells reinforce why a single
 simulation point must not be converted into a floor.
 
+## Automatic selector and higher grid follow-up
+
+Implemented and vetted in
+[`ml_oos_02_automatic_block_length_vet_2026-08-10.md`](./ml_oos_02_automatic_block_length_vet_2026-08-10.md).
+The report supports `--higher-grid --automatic-only`, which evaluates
+360/504/756 total sessions without making any count a floor.
+
 ## Interpretation and operational limit
 
 The default 100-replication command is a quick diagnostic. The acceptance law
@@ -131,6 +139,7 @@ measurement stream and therefore requires an explicit contract-version review.
 - Learned linear/tree acceptance: still blocked; current fitted study has no
   nested tuning algorithm and cannot share the fixed-challenger law.
 - Multiplicity correction: not implemented; search remains ineligible.
-- Automatic block-length selection: not implemented.
+- Automatic block-length selection: implemented as measurement-only; no method
+  adoption.
 - Numerical candidate law: explicit but still requires human vetting.
 - Confirmation registry and Task 06: unchanged and blocked.

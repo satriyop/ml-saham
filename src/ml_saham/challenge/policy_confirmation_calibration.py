@@ -20,11 +20,16 @@ import numpy as np
 
 from ml_saham.challenge.fold_geometry_sim import simulate_session_folds
 
-CALIBRATION_CONTRACT_ID = "policy_confirmation_calibration.synthetic.v2"
+CALIBRATION_CONTRACT_ID = "policy_confirmation_calibration.synthetic.v3"
 CALIBRATION_EVIDENCE_GRADE = "MEASUREMENT_ONLY"
+AUTO_BLOCK_SELECTOR_ID = "politis_white_patton.stationary_mean.v1"
 
 ChallengerClass = Literal["fixed", "learned_linear", "learned_tree"]
-MethodKind = Literal["stationary_bootstrap_percentile", "newey_west_normal"]
+MethodKind = Literal[
+    "stationary_bootstrap_percentile",
+    "stationary_bootstrap_percentile_auto",
+    "newey_west_normal",
+]
 
 
 def _require_exact_int(name: str, value: object, *, minimum: int = 0) -> int:
@@ -155,11 +160,13 @@ class CalibrationMethod:
     block_length: int | None = None
     hac_lag: int | None = None
     n_resamples: int = 200
+    block_length_selector_id: str | None = None
 
     def __post_init__(self) -> None:
         _require_nonempty_id("method_id", self.method_id)
         if self.method_kind not in {
             "stationary_bootstrap_percentile",
+            "stationary_bootstrap_percentile_auto",
             "newey_west_normal",
         }:
             raise ValueError(f"unsupported method_kind={self.method_kind!r}")
@@ -173,12 +180,47 @@ class CalibrationMethod:
             _require_exact_int("block_length", self.block_length, minimum=1)
             if self.hac_lag is not None:
                 raise ValueError("stationary bootstrap must not set hac_lag")
+            if self.block_length_selector_id is not None:
+                raise ValueError("explicit stationary bootstrap must not set selector")
+        elif self.method_kind == "stationary_bootstrap_percentile_auto":
+            if self.block_length is not None or self.hac_lag is not None:
+                raise ValueError(
+                    "automatic stationary bootstrap must not set block or lag"
+                )
+            if self.block_length_selector_id != AUTO_BLOCK_SELECTOR_ID:
+                raise ValueError(
+                    "automatic stationary bootstrap requires the supported selector id"
+                )
         else:
             if self.hac_lag is None:
                 raise ValueError("Newey-West requires explicit hac_lag")
             _require_exact_int("hac_lag", self.hac_lag)
             if self.block_length is not None:
                 raise ValueError("Newey-West must not set block_length")
+            if self.block_length_selector_id is not None:
+                raise ValueError("Newey-West must not set block selector")
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        if self.block_length_selector_id is None:
+            payload.pop("block_length_selector_id")
+        return payload
+
+
+@dataclass(frozen=True)
+class BlockLengthSelection:
+    selector_id: str
+    n_input_sessions: int
+    correlation_run_length: int
+    maximum_correlation_lag: int
+    maximum_block_length: int
+    correlation_band: float | None
+    first_insignificant_lag: int | None
+    flat_top_lag: int | None
+    raw_block_length: float | None
+    selected_block_length: int | None
+    status: str
+    reason: str | None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -207,6 +249,10 @@ class CalibrationResult:
     false_positive_rate: float | None
     directional_detection_rate: float | None
     mean_interval_width: float | None
+    mean_selected_block_length: float | None
+    min_selected_block_length: int | None
+    max_selected_block_length: int | None
+    block_selection_failure_counts: tuple[tuple[str, int], ...]
     fit_capacity_mode: str
     policy_grade_authorized: bool
     status: str
@@ -305,9 +351,7 @@ def _simulate_session_estimands(
         periodic = 0.5 + 0.5 * math.sin(2.0 * math.pi * (session_i + 1) / 20.0)
         hetero_scale = 1.0 + scenario.heteroskedastic_strength * periodic
         width_scale = math.sqrt(reference_width / max(int(valid_names[session_i]), 1))
-        noise_scale = (
-            scenario.noise_sd_at_reference_width * hetero_scale * width_scale
-        )
+        noise_scale = scenario.noise_sd_at_reference_width * hetero_scale * width_scale
         current = (
             means[session_i]
             + scenario.ar1 * (previous - previous_mean)
@@ -321,17 +365,120 @@ def _simulate_session_estimands(
     return out, means, valid_names
 
 
+def select_stationary_bootstrap_block_length(
+    values: Sequence[float],
+) -> BlockLengthSelection:
+    """Select a stationary-bootstrap mean block using the corrected PW rule."""
+    array = np.asarray(tuple(values), dtype=float)
+    n = len(array)
+    kn = max(5, int(math.ceil(math.log10(n)))) if n > 0 else 5
+    m_max = min(n - 1, int(math.ceil(math.sqrt(n))) + kn) if n > 0 else 0
+    b_max = int(math.ceil(min(3.0 * math.sqrt(n), n / 3.0))) if n > 0 else 0
+
+    def failed(status: str, reason: str) -> BlockLengthSelection:
+        return BlockLengthSelection(
+            selector_id=AUTO_BLOCK_SELECTOR_ID,
+            n_input_sessions=n,
+            correlation_run_length=kn,
+            maximum_correlation_lag=m_max,
+            maximum_block_length=b_max,
+            correlation_band=None,
+            first_insignificant_lag=None,
+            flat_top_lag=None,
+            raw_block_length=None,
+            selected_block_length=None,
+            status=status,
+            reason=reason,
+        )
+
+    if n < 10:
+        return failed("INSUFFICIENT_SESSIONS", "selector requires at least 10 sessions")
+    if not np.isfinite(array).all():
+        return failed(
+            "NONFINITE_CALENDAR_SERIES",
+            "selector does not drop missing or non-finite calendar positions",
+        )
+    centered = array - float(np.mean(array))
+    gamma0 = float(np.dot(centered, centered) / n)
+    if not math.isfinite(gamma0) or gamma0 <= 1e-15:
+        return failed("DEGENERATE_VARIANCE", "selector requires positive variance")
+
+    correlation_band = 2.0 * math.sqrt(math.log10(n) / n)
+    autocovariances = np.zeros(m_max + 1, dtype=float)
+    absolute_correlations = np.full(m_max + 1, float("inf"), dtype=float)
+    first_insignificant: int | None = None
+    for lag in range(m_max + 1):
+        left = centered[lag:]
+        right = centered[: n - lag]
+        cross = float(np.dot(left, right))
+        autocovariances[lag] = cross / n
+        denominator = math.sqrt(float(np.dot(left, left) * np.dot(right, right)))
+        if denominator > 1e-15:
+            absolute_correlations[lag] = abs(cross) / denominator
+        if lag >= kn and first_insignificant is None:
+            start = lag - kn
+            if bool(np.all(absolute_correlations[start:lag] < correlation_band)):
+                first_insignificant = start
+
+    flat_top_lag = (
+        min(2 * max(first_insignificant, 1), m_max)
+        if first_insignificant is not None
+        else m_max
+    )
+    long_run_variance = autocovariances[0]
+    g = 0.0
+    for lag in range(1, flat_top_lag + 1):
+        ratio = lag / flat_top_lag
+        weight = 1.0 if ratio <= 0.5 else 2.0 * (1.0 - ratio)
+        long_run_variance += 2.0 * weight * autocovariances[lag]
+        g += 2.0 * weight * lag * autocovariances[lag]
+    corrected_variance_constant = 2.0 * long_run_variance**2
+    if (
+        not math.isfinite(corrected_variance_constant)
+        or corrected_variance_constant <= 1e-15
+    ):
+        return failed(
+            "DEGENERATE_LONG_RUN_VARIANCE",
+            "corrected stationary-bootstrap variance constant is not usable",
+        )
+    raw = float(((2.0 * g * g / corrected_variance_constant) * n) ** (1.0 / 3.0))
+    if not math.isfinite(raw) or raw < 0.0:
+        return failed("INVALID_BLOCK_LENGTH", "plug-in block length is not finite")
+    selected = min(max(1, int(math.ceil(raw))), b_max)
+    return BlockLengthSelection(
+        selector_id=AUTO_BLOCK_SELECTOR_ID,
+        n_input_sessions=n,
+        correlation_run_length=kn,
+        maximum_correlation_lag=m_max,
+        maximum_block_length=b_max,
+        correlation_band=correlation_band,
+        first_insignificant_lag=first_insignificant,
+        flat_top_lag=flat_top_lag,
+        raw_block_length=raw,
+        selected_block_length=selected,
+        status="SELECTED",
+        reason=None,
+    )
+
+
 def _stationary_bootstrap_interval(
     values: np.ndarray,
     method: CalibrationMethod,
     *,
     rng: np.random.Generator,
-) -> tuple[float, float] | None:
+) -> tuple[tuple[float, float] | None, int | None, str | None]:
     n = len(values)
     finite_n = int(np.isfinite(values).sum())
-    if n < 2 or finite_n < 2 or method.block_length is None:
-        return None
-    restart_probability = min(1.0, 1.0 / float(method.block_length))
+    if method.method_kind == "stationary_bootstrap_percentile_auto":
+        selection = select_stationary_bootstrap_block_length(values)
+        block_length = selection.selected_block_length
+        selection_failure = None if selection.status == "SELECTED" else selection.status
+    else:
+        block_length = method.block_length
+        selection_failure = None
+    if n < 2 or finite_n < 2 or block_length is None:
+        return None, None, selection_failure
+    restart_probability = min(1.0, 1.0 / float(block_length))
     means: list[float] = []
     for _ in range(method.n_resamples):
         indices = np.empty(n, dtype=int)
@@ -346,10 +493,10 @@ def _stationary_bootstrap_interval(
         if len(finite) >= 2:
             means.append(float(np.mean(finite)))
     if len(means) < max(10, method.n_resamples // 2):
-        return None
+        return None, block_length, selection_failure
     alpha = 1.0 - method.confidence_level
     lower, upper = np.quantile(means, [alpha / 2.0, 1.0 - alpha / 2.0])
-    return float(lower), float(upper)
+    return (float(lower), float(upper)), block_length, selection_failure
 
 
 def _newey_west_interval(
@@ -399,9 +546,29 @@ def _interval(
     *,
     rng: np.random.Generator,
 ) -> tuple[float, float] | None:
-    if method.method_kind == "stationary_bootstrap_percentile":
-        return _stationary_bootstrap_interval(values, method, rng=rng)
+    if method.method_kind in {
+        "stationary_bootstrap_percentile",
+        "stationary_bootstrap_percentile_auto",
+    }:
+        interval, _block_length, _selection_failure = _stationary_bootstrap_interval(
+            values, method, rng=rng
+        )
+        return interval
     return _newey_west_interval(values, method)
+
+
+def _interval_with_block_length(
+    values: np.ndarray,
+    method: CalibrationMethod,
+    *,
+    rng: np.random.Generator,
+) -> tuple[tuple[float, float] | None, int | None, str | None]:
+    if method.method_kind in {
+        "stationary_bootstrap_percentile",
+        "stationary_bootstrap_percentile_auto",
+    }:
+        return _stationary_bootstrap_interval(values, method, rng=rng)
+    return _newey_west_interval(values, method), None, None
 
 
 def candidate_interval(
@@ -417,7 +584,9 @@ def candidate_interval(
     """
     seed_i = _require_exact_int("seed", seed)
     array = np.asarray(tuple(values), dtype=float)
-    return _interval(array, method, rng=_rng(seed_i, _stable_seed_part(method.method_id)))
+    return _interval(
+        array, method, rng=_rng(seed_i, _stable_seed_part(method.method_id))
+    )
 
 
 def calibrate_scenario(
@@ -477,6 +646,10 @@ def calibrate_scenario(
             false_positive_rate=None,
             directional_detection_rate=None,
             mean_interval_width=None,
+            mean_selected_block_length=None,
+            min_selected_block_length=None,
+            max_selected_block_length=None,
+            block_selection_failure_counts=(),
             fit_capacity_mode=fit_mode,
             policy_grade_authorized=False,
             status="NOT_READY_GEOMETRY",
@@ -491,6 +664,8 @@ def calibrate_scenario(
     false_superiority: list[bool] = []
     directional: list[bool] = []
     widths: list[float] = []
+    selected_block_lengths: list[int] = []
+    block_selection_failures: dict[str, int] = {}
     observed_counts: list[int] = []
     estimates: list[float] = []
     targets: list[float] = []
@@ -518,9 +693,17 @@ def calibrate_scenario(
         if len(finite_selected) < 2:
             continue
         interval_rng = _rng(seed_i, scenario_part, method_part, replication)
-        ci = _interval(selected_values, method, rng=interval_rng)
+        ci, selected_block_length, selection_failure = _interval_with_block_length(
+            selected_values, method, rng=interval_rng
+        )
+        if selection_failure is not None:
+            block_selection_failures[selection_failure] = (
+                block_selection_failures.get(selection_failure, 0) + 1
+            )
         if ci is None:
             continue
+        if selected_block_length is not None:
+            selected_block_lengths.append(selected_block_length)
         lower, upper = ci
         target = float(np.mean(means[eval_array]))
         estimate = float(np.mean(finite_selected))
@@ -582,6 +765,16 @@ def calibrate_scenario(
             statistics.fmean(directional) if directional else None
         ),
         mean_interval_width=statistics.fmean(widths) if widths else None,
+        mean_selected_block_length=(
+            statistics.fmean(selected_block_lengths) if selected_block_lengths else None
+        ),
+        min_selected_block_length=(
+            min(selected_block_lengths) if selected_block_lengths else None
+        ),
+        max_selected_block_length=(
+            max(selected_block_lengths) if selected_block_lengths else None
+        ),
+        block_selection_failure_counts=tuple(sorted(block_selection_failures.items())),
         fit_capacity_mode=fit_mode,
         policy_grade_authorized=False,
         status=status,
@@ -600,7 +793,9 @@ def default_calibration_scenarios(
         n = _require_exact_int("session_count", n_sessions, minimum=1)
         h = _require_exact_int("holdout_sessions", holdout_sessions)
         if h >= n:
-            raise ValueError("holdout_sessions must be smaller than every session_count")
+            raise ValueError(
+                "holdout_sessions must be smaller than every session_count"
+            )
         suffix = f"n{n}_h{h}"
         common = dict(
             n_sessions_total=n,
@@ -673,7 +868,9 @@ def default_calibration_scenarios(
     return tuple(scenarios)
 
 
-def default_calibration_methods(*, n_resamples: int = 200) -> tuple[CalibrationMethod, ...]:
+def default_calibration_methods(
+    *, n_resamples: int = 200
+) -> tuple[CalibrationMethod, ...]:
     """Explicit candidate settings; neither method nor tuning value is adopted."""
     return (
         CalibrationMethod(
@@ -746,7 +943,10 @@ def run_calibration_study(
             "No candidate interval method, block length, HAC lag, or confidence level is adopted.",
             "No session floor or final-holdout length is selected.",
             "Best-of-search results are deliberately unadjusted and cannot confirm a policy.",
-            "Learned-fit capacity and nested tuning are not modeled by this session-estimand slice.",
+            (
+                "Learned-fit capacity and nested tuning are not modeled by this "
+                "session-estimand slice."
+            ),
             "No policy confirmation contract is registered and Task 06 remains blocked.",
         ),
         policy_grade_authorized=False,
@@ -766,7 +966,10 @@ def format_calibration_report(study: CalibrationStudy) -> str:
         f"n_folds={study.n_folds} embargo_sessions={study.embargo_sessions}",
         "policy_grade_authorized=False",
         "",
-        "scenario | method | folds/eval | observed | coverage | FP+ | FP2 | power | width | bias | fit",
+        (
+            "scenario | method | folds/eval | observed | block | coverage | "
+            "FP+ | FP2 | power | width | bias | fit"
+        ),
     ]
     for result in study.results:
         geometry = f"{result.n_folds_formed}/{result.n_eval_sessions_geometry}"
@@ -777,6 +980,7 @@ def format_calibration_report(study: CalibrationStudy) -> str:
                     result.method_id,
                     geometry,
                     _fmt(result.mean_observed_sessions),
+                    _fmt(result.mean_selected_block_length),
                     _fmt(result.coverage_rate),
                     _fmt(result.false_superiority_rate),
                     _fmt(result.false_positive_rate),

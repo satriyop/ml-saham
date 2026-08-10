@@ -46,7 +46,7 @@ def _scenario(*, role="null", **overrides) -> AcceptanceScenario:
 
 def _result(spec: AcceptanceScenario, **overrides) -> CalibrationResult:
     values = dict(
-        contract_id="policy_confirmation_calibration.synthetic.v2",
+        contract_id="policy_confirmation_calibration.synthetic.v3",
         evidence_grade="MEASUREMENT_ONLY",
         scenario_id=spec.scenario.scenario_id,
         challenger_class="fixed",
@@ -65,10 +65,12 @@ def _result(spec: AcceptanceScenario, **overrides) -> CalibrationResult:
         coverage_rate=0.96,
         false_superiority_rate=0.04 if spec.role == "null" else None,
         false_positive_rate=0.04 if spec.role == "null" else None,
-        directional_detection_rate=(
-            0.90 if spec.role == "alternative" else None
-        ),
+        directional_detection_rate=(0.90 if spec.role == "alternative" else None),
         mean_interval_width=0.08,
+        mean_selected_block_length=None,
+        min_selected_block_length=None,
+        max_selected_block_length=None,
+        block_selection_failure_counts=(),
         fit_capacity_mode="NOT_APPLICABLE_FIXED",
         policy_grade_authorized=False,
         status="MEASURED",
@@ -169,8 +171,9 @@ def test_default_grid_is_predeclared_and_capacity_scoped():
     }
     assert all(item.scenario.challenger_class == "fixed" for item in scenarios)
     methods = default_acceptance_methods(n_resamples=20)
-    assert [item.block_length for item in methods[:3]] == [3, 5, 10]
-    assert [item.hac_lag for item in methods[3:]] == [3, 5, 10]
+    assert methods[0].method_kind == "stationary_bootstrap_percentile_auto"
+    assert [item.block_length for item in methods[1:4]] == [3, 5, 10]
+    assert [item.hac_lag for item in methods[4:]] == [3, 5, 10]
 
 
 def test_study_is_deterministic_non_authoritative_and_groups_required_cells():
