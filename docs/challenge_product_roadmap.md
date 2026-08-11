@@ -68,7 +68,7 @@ permanent acceptance constants.
 | **G0** | Snapshot-bound corpus depth | Historical cohort `sha256:005363…` has 1,890 rows / 42 sessions but 0/7 v2 snapshots, so production comparison correctly returns `BLOCKED_POLICY`. Active v2 cohort `sha256:8ba8fc…` has 304 rows / 1 session / 7 snapshots and yields only one valid OOS fold. | **ai-saham:** accumulate prospective v2-bound observations across enough independent sessions/regimes. **ml-saham:** keep explicit-cohort and snapshot gates. Exit only when the fixed protocol yields at least two valid post-embargo OOS folds; never retrofit snapshots onto the historical cohort. |
 | **G1** | Screen hard-filter tournament | Four-gate extract and pure replay are shipped; v2 policy identity is verified. The local adapter has no conformance evidence, is not in the screener engine portfolio, and execution returns `BLOCKED_POLICY`. | **ml-saham:** lock challenger/grid, population, outcome, false-block/opportunity-cost metrics, folds, and adapter golden conformance; then register the PolicySpec. Defaults being mostly off is not a reason to leave material eligibility logic permanently unvalidated. |
 | **G2 (closed)** | Configured group-breadth authority | ai-saham ADR-062 retires the dormant conglomerate-group score bonus from production policy. ADR-059 v2 correctly excludes it. Producer clean-removal removes residual config/applier/transport; residual historical payload keys are not baseline authority. | **No ml-saham PolicySpec:** do not reconstruct or challenge the retired rule. A future PIT-governed diagnostic would be a new producer contract and remain non-authoritative until separately promoted. |
-| **G3** | Risk gate decision quality | Current lane reports mean H10 excess among allowed rows. On the current v2 slice production blocks 83% OOS and outperforms `gate_off`, but the report does not establish false-block cost, harmful-allow rate, or regime stability. | **ml-saham:** add a versioned gate protocol/report for blocked-book outcomes, opportunity cost, gate-family attribution, and multi-fold stability without weakening safety constraints. |
+| **G3** | Risk gate decision quality | Measurement-only `gate_decision_quality.v1` now reports fold-wise and pooled allowed/blocked books, false blocks, harmful allows, opportunity cost, and audit-order first/overlap attribution. The existing allowed-book verdict law is intentionally unchanged. | **ml-saham:** predeclare and vet a versioned gate verdict law covering material improvement, per-side support, safety regression, fold agreement, regime stability, and named-gate multiplicity before the new metrics can affect WIN/LOSE. |
 | **G4** | Setup readiness and final Action | These paths materially cap/override ENTER, but there is no Action Protocol. Corpus is not ready: historical cohort has only 8 ENTER and 86/1,890 non-null readiness rows; active v2 cohort has 0 ENTER and 11/304 non-null readiness rows. | **ai-saham:** produce dense PIT-bound readiness/Action observations and compatible outcomes. **ml-saham:** define a real Action H0, population, class handling, costs, and walk-forward protocol. Rank IC is not an acceptable substitute. |
 
 Historical/no-snapshot observations remain useful for extract validation,
@@ -90,7 +90,7 @@ Legend: **Product** = ADR-002 `challenge run` / `factor` / `engine` / `champion`
 | Configured group breadth (§4) | **Retired (G2 closed)** | ai-saham ADR-062: no production baseline and no ml-saham PolicySpec; residual fields are not authority |
 | Signal raw score / groups (§5) | **Product (P2 thin)** | `signal.accum.raw_score` — raw_score + group features vs excess@H |
 | Named setups / phase / readiness (§6–7) | **Product gap (G4)** | Material Action cap; sparse readiness corpus and no Action Protocol |
-| Risk hard gates (§8) | **Product, thin (G3)** | `gate_off` ablation shipped; blocked-book cost and stability incomplete |
+| Risk hard gates (§8) | **Measurement shipped; verdict law open (G3)** | `gate_off` ablation and `gate_decision_quality.v1` shipped; confirmatory safety/support/multiplicity law remains open |
 | Diagnostic bags / MCE (§9) | **Diagnostic track** | `challenge diagnostic` display/promote-candidate — **not** Action |
 | TradeSetup Action composition | **Product gap (G4)** | Different decision type; current v2 corpus has zero ENTER rows |
 
@@ -161,7 +161,7 @@ CLI: `challenge engine signal --scenario accum`.
 
 ---
 
-### P3 — Risk hard gates — **shipped thin; deepen open (G3)**
+### P3 — Risk hard gates — **decision-quality measurement shipped; verdict law open (G3)**
 
 | policy_id | Against | Metric (not sleeve IC) |
 |-----------|---------|-------------------------|
@@ -242,7 +242,7 @@ G0 v2 corpus time/fold depth      🚧 producer accumulation required
 P0 Accum sleeves honesty          ✅ group-breadth bonus retired (G2 closed)
 P1 hard filters                   🚧 replay shipped; tournament blocked (G1)
 P2 signal policies                ✅ thin
-P3 risk hard gates                🚧 thin; decision-quality metrics open (G3)
+P3 risk hard gates                🚧 measurement shipped; verdict law open (G3)
 P4 readiness + Action protocol    ⛔ data/protocol blocked (G4)
 diagnostic validity (parallel)    ✅ v1 display authority only
 ```

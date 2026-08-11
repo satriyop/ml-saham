@@ -30,6 +30,9 @@ from ml_saham.challenge.champion import (
     score_champion,
 )
 from ml_saham.challenge.scorers import (
+    GATE_DECISION_QUALITY_CONTRACT_ID,
+    enabled_keys,
+    gate_decision_quality,
     mean_excess_allowed,
     score_classification_shift,
     score_equal_sleeves,
@@ -937,6 +940,10 @@ def run_policy_challenge(
             "decision_type=gate · primary metric=mean_excess_among_allowed "
             "(not sleeve rank IC / KEEP-DEMOTE)"
         )
+        notes.append(
+            f"decision_quality={GATE_DECISION_QUALITY_CONTRACT_ID} "
+            "(descriptive only; does not change verdict law)"
+        )
         # UX: common score challengers map to gate_off ablation
         if against in (
             "ridge_reweight",
@@ -978,9 +985,11 @@ def run_policy_challenge(
         base_s = score_production(test, policy)
 
         if gate_mode:
+            base_gate_keys = enabled_keys(policy)
             if against in ("gate_off", "off", "allow_all"):
                 ag_s = score_gate_off(test, policy)
                 coefs = {c.key: 0.0 for c in policy.enabled_components()}
+                against_gate_keys: list[str] = []
             elif against.startswith("gate_off:") or against.startswith("off:"):
                 from ml_saham.challenge.challengers import resolve_named_gate_key_normalized
 
@@ -1011,10 +1020,12 @@ def run_policy_challenge(
                     c.key: (0.0 if c.key == canon else 1.0)
                     for c in policy.enabled_components()
                 }
+                against_gate_keys = [key for key in base_gate_keys if key != canon]
                 notes.append(f"gate ablation: off {canon!r} only")
             elif against == "production":
                 ag_s = score_production(test, policy)
                 coefs = policy.weight_map()
+                against_gate_keys = base_gate_keys
             else:
                 return make_result(
                     status=ChallengeStatus.BLOCKED_POLICY,
@@ -1034,6 +1045,12 @@ def run_policy_challenge(
             ph = protocol.primary_horizon
             mean_b, br_b, n_open_b = mean_excess_allowed(test, base_s, ph)
             mean_a, br_a, n_open_a = mean_excess_allowed(test, ag_s, ph)
+            quality_b = gate_decision_quality(
+                test, base_s, ph, active_gate_keys=base_gate_keys
+            )
+            quality_a = gate_decision_quality(
+                test, ag_s, ph, active_gate_keys=against_gate_keys
+            )
             # Store mean_excess_open in ic_* slots for shared _verdict (higher better)
             fold_metrics.append(
                 {
@@ -1051,6 +1068,8 @@ def run_policy_challenge(
                     "block_rate_against": br_a,
                     "n_open_baseline": n_open_b,
                     "n_open_against": n_open_a,
+                    "decision_quality_baseline": quality_b,
+                    "decision_quality_against": quality_a,
                     "tail_baseline": None,
                     "tail_against": None,
                     "date_min": fold.test_date_min or (test[0].date if test else None),
@@ -1383,15 +1402,45 @@ def run_policy_challenge(
     if gate_mode:
         hz_base = {}
         hz_ag = {}
+        decision_quality = {}
+        base_gate_keys = enabled_keys(policy)
+        if against in ("gate_off", "off", "allow_all"):
+            against_gate_keys = []
+        elif against.startswith("gate_off:") or against.startswith("off:"):
+            gkey = against.split(":", 1)[1]
+            from ml_saham.challenge.challengers import resolve_named_gate_key_normalized
+
+            canon = resolve_named_gate_key_normalized(
+                gkey, policy.enabled_components()
+            )
+            against_gate_keys = [key for key in base_gate_keys if key != canon]
+        else:
+            against_gate_keys = base_gate_keys
         for h in protocol.horizons_report:
             mb, _, _ = mean_excess_allowed(oos_rows, oos_base_scores, h)
             ma, _, _ = mean_excess_allowed(oos_rows, oos_ag_scores, h)
             hz_base[str(h)] = mb
             hz_ag[str(h)] = ma
+            decision_quality[str(h)] = {
+                "baseline": gate_decision_quality(
+                    oos_rows,
+                    oos_base_scores,
+                    h,
+                    active_gate_keys=base_gate_keys,
+                ),
+                "against": gate_decision_quality(
+                    oos_rows,
+                    oos_ag_scores,
+                    h,
+                    active_gate_keys=against_gate_keys,
+                ),
+            }
         horizon_metrics = {
             "metric": "mean_excess_open",
             "baseline": hz_base,
             "against": hz_ag,
+            "decision_quality_contract_id": GATE_DECISION_QUALITY_CONTRACT_ID,
+            "decision_quality": decision_quality,
         }
     else:
         hz_base = _horizon_ics(oos_rows, oos_base_scores, protocol.horizons_report)
@@ -1547,6 +1596,40 @@ def _format_lines(
             f"  H={hlab:>10}:  {base_lab}={fmt(base_h.get(str(h)))}  "
             f"{against}={fmt(ag_h.get(str(h)))}{mark}"
         )
+    if gate_mode:
+        quality_by_horizon = horizon_metrics.get("decision_quality") or {}
+        primary_quality = quality_by_horizon.get(str(protocol.primary_horizon)) or {}
+        if primary_quality:
+            lines.extend(
+                [
+                    "",
+                    f"Decision quality @ {h_primary_txt} "
+                    "(descriptive only; not used by verdict):",
+                ]
+            )
+
+            def quality_line(label: str, quality: dict) -> str:
+                allowed = quality.get("allowed_book") or {}
+                blocked = quality.get("blocked_book") or {}
+                false_blocks = quality.get("false_blocks") or {}
+                harmful_allows = quality.get("harmful_allows") or {}
+
+                def pct(value: float | None) -> str:
+                    return "n/a" if value is None else f"{value:.0%}"
+
+                return (
+                    f"  {label}: allowed n={allowed.get('n', 0)} "
+                    f"mean={fmt(allowed.get('mean_excess'))} "
+                    f"median={fmt(allowed.get('median_excess'))} "
+                    f"harmful_allow={pct(harmful_allows.get('rate_of_allowed'))}; "
+                    f"blocked n={blocked.get('n', 0)} "
+                    f"mean={fmt(blocked.get('mean_excess'))} "
+                    f"median={fmt(blocked.get('median_excess'))} "
+                    f"false_block={pct(false_blocks.get('rate_of_blocked'))}"
+                )
+
+            lines.append(quality_line(base_lab, primary_quality.get("baseline") or {}))
+            lines.append(quality_line(against, primary_quality.get("against") or {}))
     lines.append("")
     lines.append("Folds:")
     for f in fold_metrics:
@@ -1570,6 +1653,30 @@ def _format_lines(
             f"{fold_lab}_ag={fmt(f.get('ic_against'))}  "
             f"dates={f.get('date_min')}..{f.get('date_max')}{sess}{extra}"
         )
+        if gate_mode:
+            for label, key in (
+                ("base", "decision_quality_baseline"),
+                ("against", "decision_quality_against"),
+            ):
+                quality = f.get(key) or {}
+                allowed = quality.get("allowed_book") or {}
+                blocked = quality.get("blocked_book") or {}
+                false_blocks = quality.get("false_blocks") or {}
+                harmful_allows = quality.get("harmful_allows") or {}
+
+                def fold_pct(value: float | None) -> str:
+                    return "n/a" if value is None else f"{value:.0%}"
+
+                lines.append(
+                    f"    quality_{label}: allowed n={allowed.get('n', 0)} "
+                    f"mean={fmt(allowed.get('mean_excess'))} "
+                    f"median={fmt(allowed.get('median_excess'))} "
+                    f"harmful={fold_pct(harmful_allows.get('rate_of_allowed'))}; "
+                    f"blocked n={blocked.get('n', 0)} "
+                    f"mean={fmt(blocked.get('mean_excess'))} "
+                    f"median={fmt(blocked.get('median_excess'))} "
+                    f"false={fold_pct(false_blocks.get('rate_of_blocked'))}"
+                )
     lines.append("")
     lines.append("Costs: gross (not including fees) · Not investment advice")
     lines.append("Never auto-promotes ai-saham config.")
@@ -1625,6 +1732,45 @@ def _format_summary(
             f"- H={hlab}: {baseline}={fmt(base_h.get(str(h)))}, "
             f"{against}={fmt(ag_h.get(str(h)))}"
         )
+    if gate_mode:
+        quality_by_horizon = horizon_metrics.get("decision_quality") or {}
+        primary_quality = quality_by_horizon.get(str(protocol.primary_horizon)) or {}
+        if primary_quality:
+            lines.extend(
+                [
+                    "",
+                    "## Gate decision quality",
+                    "",
+                    "Descriptive only; these fields do not change the current verdict law.",
+                    "",
+                    "| Book | Allowed n | Allowed mean | Allowed median | "
+                    "Harmful allow | Blocked n | Blocked mean | Blocked median | "
+                    "False block |",
+                    "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+                ]
+            )
+
+            def quality_row(label: str, quality: dict) -> str:
+                allowed = quality.get("allowed_book") or {}
+                blocked = quality.get("blocked_book") or {}
+                false_blocks = quality.get("false_blocks") or {}
+                harmful_allows = quality.get("harmful_allows") or {}
+
+                def pct(value: float | None) -> str:
+                    return "n/a" if value is None else f"{value:.0%}"
+
+                return (
+                    f"| {label} | {allowed.get('n', 0)} | "
+                    f"{fmt(allowed.get('mean_excess'))} | "
+                    f"{fmt(allowed.get('median_excess'))} | "
+                    f"{pct(harmful_allows.get('rate_of_allowed'))} | "
+                    f"{blocked.get('n', 0)} | {fmt(blocked.get('mean_excess'))} | "
+                    f"{fmt(blocked.get('median_excess'))} | "
+                    f"{pct(false_blocks.get('rate_of_blocked'))} |"
+                )
+
+            lines.append(quality_row(baseline, primary_quality.get("baseline") or {}))
+            lines.append(quality_row(against, primary_quality.get("against") or {}))
     lines.extend(["", "## Notes", ""])
     for n in notes[:20]:
         lines.append(f"- {n}")

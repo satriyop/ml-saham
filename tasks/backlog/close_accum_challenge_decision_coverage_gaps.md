@@ -215,6 +215,15 @@ declares the corpus label source.
 
 ### C1 - deepen risk-gate decision quality (first scoring deliverable)
 
+Implementation status (2026-08-11): the measurement-only
+`gate_decision_quality.v1` report is shipped in the working implementation. It
+adds fold-wise and pooled H3/H10/H20 allowed/blocked books, false blocks,
+harmful allows, opportunity cost, and authoritative audit-order first/overlap
+attribution. It deliberately does not change WIN/LOSE. C1 remains open until a
+separately vetted versioned gate verdict law locks material improvement,
+per-side support, safety regression, fold agreement, and named-gate
+multiplicity before confirmatory outcome inspection.
+
 Version a gate-decision protocol derived from `accum_path_v1` with primary H10,
 H3/H20 secondary reporting, 20-session embargo, chronological expanding folds,
 and at least two valid OOS folds for WIN. Lock before outcome inspection:

@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from math import isfinite
+from statistics import median
 from typing import Sequence
 
 import numpy as np
 
 from ml_saham.challenge.panel import PanelRow
 from ml_saham.challenge.types import ChallengeExecutionPolicy
+
+GATE_DECISION_QUALITY_CONTRACT_ID = "gate_decision_quality.v1"
 
 
 def enabled_keys(policy: ChallengeExecutionPolicy) -> list[str]:
@@ -199,6 +203,119 @@ def mean_excess_allowed(
     if len(ys) < 2:
         return None, block_rate, len(ys)
     return float(sum(ys) / len(ys)), block_rate, len(ys)
+
+
+def gate_decision_quality(
+    rows: Sequence[PanelRow],
+    allow_scores: Sequence[float],
+    primary_horizon: int,
+    *,
+    active_gate_keys: Sequence[str],
+) -> dict[str, object]:
+    """Return descriptive gate quality without changing challenge verdicts.
+
+    Rates use their decision-side labeled population as denominator: false
+    blocks among blocked rows, and harmful allows among allowed rows. Missing
+    horizon labels are excluded rather than interpreted as zero.
+    """
+
+    allowed: list[float] = []
+    blocked: list[float] = []
+    active = tuple(dict.fromkeys(active_gate_keys))
+    first_counts = {key: 0 for key in active}
+    overlap_counts = {key: 0 for key in active}
+    first_unavailable = 0
+    multi_gate_blocked = 0
+
+    for row, score in zip(rows, allow_scores, strict=True):
+        if primary_horizon not in row.excess:
+            continue
+        outcome = float(row.excess[primary_horizon])
+        if not isfinite(outcome):
+            raise ValueError("gate decision outcome must be finite")
+        allow_score = float(score)
+        if not isfinite(allow_score):
+            raise ValueError("gate decision score must be finite")
+        if allow_score > 0.5:
+            allowed.append(outcome)
+            continue
+
+        blocked.append(outcome)
+        fired = [key for key in active if float(row.components.get(key, 0.0)) > 0.0]
+        for key in fired:
+            overlap_counts[key] += 1
+        if len(fired) > 1:
+            multi_gate_blocked += 1
+
+        ordered = tuple(getattr(row, "ordered_blockers", ()))
+        first = next((key for key in ordered if key in active), None)
+        if first is None:
+            first_unavailable += 1
+        else:
+            first_counts[first] += 1
+
+    def mean_or_none(values: Sequence[float]) -> float | None:
+        return float(sum(values) / len(values)) if values else None
+
+    def median_or_none(values: Sequence[float]) -> float | None:
+        return float(median(values)) if values else None
+
+    n_allowed = len(allowed)
+    n_blocked = len(blocked)
+    n_labeled = n_allowed + n_blocked
+    false_blocks = sum(value > 0.0 for value in blocked)
+    harmful_allows = sum(value <= 0.0 for value in allowed)
+
+    def rate(count: int, denominator: int) -> float | None:
+        return (count / denominator) if denominator else None
+
+    return {
+        "contract_id": GATE_DECISION_QUALITY_CONTRACT_ID,
+        "horizon": primary_horizon,
+        "n_labeled": n_labeled,
+        "allowed_book": {
+            "n": n_allowed,
+            "mean_excess": mean_or_none(allowed),
+            "median_excess": median_or_none(allowed),
+        },
+        "blocked_book": {
+            "n": n_blocked,
+            "mean_excess": mean_or_none(blocked),
+            "median_excess": median_or_none(blocked),
+        },
+        "block_rate": rate(n_blocked, n_labeled),
+        "false_blocks": {
+            "n": false_blocks,
+            "rate_of_blocked": rate(false_blocks, n_blocked),
+        },
+        "harmful_allows": {
+            "n": harmful_allows,
+            "rate_of_allowed": rate(harmful_allows, n_allowed),
+        },
+        "opportunity_cost": {
+            "n": n_blocked,
+            "mean_blocked_excess": mean_or_none(blocked),
+        },
+        "gate_attribution": {
+            "first_blocker": {
+                key: {
+                    "n": count,
+                    "rate_of_blocked": rate(count, n_blocked),
+                }
+                for key, count in first_counts.items()
+            },
+            "overlapping_blockers": {
+                key: {
+                    "n": count,
+                    "rate_of_blocked": rate(count, n_blocked),
+                }
+                for key, count in overlap_counts.items()
+            },
+            "first_blocker_unavailable_n": first_unavailable,
+            "multi_gate_blocked_n": multi_gate_blocked,
+            "multi_gate_blocked_rate": rate(multi_gate_blocked, n_blocked),
+        },
+    }
 
 
 def score_production_drop(

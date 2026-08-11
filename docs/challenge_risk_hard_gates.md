@@ -4,7 +4,8 @@ Thin P3 **gate** policy. English only.
 
 ## Question
 
-Does production hard-block (Bandar / Liquidity on `trade_setup`) improve the **open book** vs **gate_off** (never block), measured as **mean forward excess among allowed names** (primary H=10)?
+Does production hard-block improve the H10 decision book versus `gate_off`
+without hiding costly false blocks or harmful allows?
 
 ## Commands
 
@@ -27,6 +28,24 @@ Enabled gates: bandar, liquidity, fundamental, free_float, technical (when prese
 | Primary | Mean excess among rows **allowed** (not blocked) |
 | block_rate | Share blocked under production vs gate_off (0) |
 | WIN/LOSE | Same fold/margin rules as other challenges, higher primary better |
+
+The sealed result also carries descriptive `gate_decision_quality.v1` metrics
+for H3/H10/H20 and every primary fold:
+
+| Field | Denominator / meaning |
+|---|---|
+| allowed / blocked books | Labeled rows on each decision side; count, mean, median excess |
+| false-block rate | Blocked rows with excess > 0, divided by labeled blocked rows |
+| harmful-allow rate | Allowed rows with excess <= 0, divided by labeled allowed rows |
+| opportunity cost | Mean excess of the blocked book, with its denominator |
+| first blocker | First blocked enabled audit row in `gate_evaluations` order |
+| overlap attribution | Every enabled gate firing on a blocked row; totals may overlap |
+
+Missing horizon outcomes are excluded, never converted to zero. A side with no
+labeled rows reports a `null` rate rather than a false 0%. These metrics are
+measurement-only: the current verdict still uses the existing allowed-book
+primary law. A new material-improvement/safety law and named-gate multiplicity
+rule must be predeclared and vetted before these fields may affect WIN/LOSE.
 
 ## Baseline
 

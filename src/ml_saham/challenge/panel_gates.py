@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,13 @@ from ml_saham.data.observation_cohort import fetch_accum_observation_raw
 _BLOCKED_OUTCOMES = frozenset({"triggered", "blocked_on_missing"})
 # Outcomes that count as not blocked (0.0).
 _CLEAR_OUTCOMES = frozenset({"pass", "skipped", "not_evaluated"})
+
+
+@dataclass
+class GatePanelRow(PanelRow):
+    """Gate panel row with authoritative blocker order from the risk audit."""
+
+    ordered_blockers: tuple[str, ...] = ()
 
 
 def _alias_to_gate_key(policy: ChallengeExecutionPolicy) -> dict[str, str]:
@@ -58,11 +66,11 @@ def _resolve_risk_audit(payload: dict[str, Any]) -> dict[str, Any] | None:
     return risk
 
 
-def extract_gate_components(
+def extract_gate_decision(
     payload: dict[str, Any],
     policy: ChallengeExecutionPolicy,
-) -> dict[str, float] | None:
-    """Per-gate fire flags from schema-15 ``risk.gate_evaluations``.
+) -> tuple[dict[str, float], tuple[str, ...]] | None:
+    """Per-gate flags and blocker order from schema-15 risk audit rows.
 
     Mapping (adapter/conformance v2):
 
@@ -87,6 +95,7 @@ def extract_gate_components(
         return None
 
     found = {k: 0.0 for k in enabled}
+    ordered_blockers: list[str] = []
     saw_usable_row = False
     for row in evaluations:
         if not isinstance(row, dict):
@@ -102,7 +111,10 @@ def extract_gate_components(
             # Unknown / disabled gate names are ignored for the panel vector.
             continue
         saw_usable_row = True
-        found[key] = 1.0 if outcome in _BLOCKED_OUTCOMES else 0.0
+        blocked = outcome in _BLOCKED_OUTCOMES
+        found[key] = 1.0 if blocked else 0.0
+        if blocked and key not in ordered_blockers:
+            ordered_blockers.append(key)
 
     if not saw_usable_row and evaluations:
         # Evaluations present but none mapped to enabled components — not
@@ -111,8 +123,17 @@ def extract_gate_components(
     if not evaluations:
         # Empty audit list with a risk object means "risk ran, no gates
         # configured/recorded" — treat as all-clear only when risk is present.
-        return found
-    return found
+        return found, ()
+    return found, tuple(ordered_blockers)
+
+
+def extract_gate_components(
+    payload: dict[str, Any],
+    policy: ChallengeExecutionPolicy,
+) -> dict[str, float] | None:
+    """Return gate fire flags while preserving the established public API."""
+    decision = extract_gate_decision(payload, policy)
+    return None if decision is None else decision[0]
 
 
 def build_gate_panel(
@@ -133,7 +154,9 @@ def build_gate_panel(
         )
         notes.extend(cohort_notes)
 
-        candidates: list[tuple[str, str, dict[str, float]]] = []
+        candidates: list[
+            tuple[str, str, dict[str, float], tuple[str, ...]]
+        ] = []
         n_blocked = 0
         n_unextractable = 0
         for row in rows_raw:
@@ -162,13 +185,14 @@ def build_gate_panel(
                 date = date.split("T", 1)[0]
             if not ticker or not date:
                 continue
-            comps = extract_gate_components(payload, policy)
-            if not comps:
+            decision = extract_gate_decision(payload, policy)
+            if decision is None:
                 n_unextractable += 1
                 continue
+            comps, ordered_blockers = decision
             if any(v > 0 for v in comps.values()):
                 n_blocked += 1
-            candidates.append((ticker, date, comps))
+            candidates.append((ticker, date, comps, ordered_blockers))
 
         if n_unextractable:
             notes.append(
@@ -180,19 +204,27 @@ def build_gate_panel(
                 "no accum rows with schema-15 risk.gate_evaluations audit"
             ]
 
-        tickers = sorted({t for t, _, _ in candidates})
+        tickers = sorted({t for t, _, _, _ in candidates})
         excess_map = build_forward_excess(conn, tickers, horizons)
         if not excess_map:
             return [], notes + ["could not build IHSG-aligned forward excess"]
 
         out: list[PanelRow] = []
         dropped = 0
-        for ticker, date, comps in candidates:
+        for ticker, date, comps, ordered_blockers in candidates:
             ex = excess_map.get((ticker, date))
             if not ex or primary_horizon not in ex:
                 dropped += 1
                 continue
-            out.append(PanelRow(ticker=ticker, date=date, components=comps, excess=ex))
+            out.append(
+                GatePanelRow(
+                    ticker=ticker,
+                    date=date,
+                    components=comps,
+                    excess=ex,
+                    ordered_blockers=ordered_blockers,
+                )
+            )
         if dropped:
             notes.append(f"dropped {dropped} rows missing primary H={primary_horizon}")
         br = (n_blocked / len(candidates)) if candidates else 0.0

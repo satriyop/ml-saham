@@ -8,10 +8,16 @@ import pytest
 from typer.testing import CliRunner
 
 from ml_saham.challenge.engines import list_engines
-from ml_saham.challenge.panel_gates import extract_gate_components
+from ml_saham.challenge.panel_gates import (
+    GatePanelRow,
+    extract_gate_components,
+    extract_gate_decision,
+)
 from ml_saham.challenge.policies.registry import load_policy, load_policy_adapter
 from ml_saham.challenge.runner import run_policy_challenge
 from ml_saham.challenge.scorers import (
+    GATE_DECISION_QUALITY_CONTRACT_ID,
+    gate_decision_quality,
     mean_excess_allowed,
     score_gate_off,
     score_production,
@@ -90,6 +96,9 @@ def test_extract_from_gate_evaluations_triggered():
     assert comps is not None
     assert comps["bandar_gate"] == 1.0
     assert comps["liquidity_gate"] == 0.0
+    decision = extract_gate_decision(payload, pol)
+    assert decision is not None
+    assert decision[1] == ("bandar_gate",)
 
 
 def test_extract_gates_from_adr056_features_by_window():
@@ -223,6 +232,79 @@ def test_mean_excess_allowed_and_gate_off():
     assert m_prod == pytest.approx(0.015)
 
 
+def test_gate_decision_quality_books_and_attribution():
+    rows = [
+        GatePanelRow(
+            "A",
+            "2024-01-01",
+            {"bandar_gate": 1.0, "liquidity_gate": 1.0, "fundamental_gate": 0.0},
+            {10: 0.04},
+            ordered_blockers=("liquidity_gate", "bandar_gate"),
+        ),
+        GatePanelRow(
+            "B",
+            "2024-01-02",
+            {"bandar_gate": 0.0, "liquidity_gate": 0.0, "fundamental_gate": 1.0},
+            {10: -0.03},
+            ordered_blockers=("fundamental_gate",),
+        ),
+        GatePanelRow(
+            "C",
+            "2024-01-03",
+            {"bandar_gate": 0.0, "liquidity_gate": 0.0, "fundamental_gate": 0.0},
+            {10: -0.02},
+        ),
+        GatePanelRow(
+            "D",
+            "2024-01-04",
+            {"bandar_gate": 0.0, "liquidity_gate": 0.0, "fundamental_gate": 0.0},
+            {10: 0.05},
+        ),
+        GatePanelRow(
+            "E",
+            "2024-01-05",
+            {"bandar_gate": 1.0, "liquidity_gate": 0.0, "fundamental_gate": 0.0},
+            {},
+            ordered_blockers=("bandar_gate",),
+        ),
+    ]
+    quality = gate_decision_quality(
+        rows,
+        [0.0, 0.0, 1.0, 1.0, 0.0],
+        10,
+        active_gate_keys=("bandar_gate", "liquidity_gate", "fundamental_gate"),
+    )
+    assert quality["contract_id"] == GATE_DECISION_QUALITY_CONTRACT_ID
+    assert quality["n_labeled"] == 4
+    assert quality["allowed_book"] == {
+        "n": 2,
+        "mean_excess": pytest.approx(0.015),
+        "median_excess": pytest.approx(0.015),
+    }
+    assert quality["blocked_book"] == {
+        "n": 2,
+        "mean_excess": pytest.approx(0.005),
+        "median_excess": pytest.approx(0.005),
+    }
+    assert quality["false_blocks"] == {"n": 1, "rate_of_blocked": 0.5}
+    assert quality["harmful_allows"] == {"n": 1, "rate_of_allowed": 0.5}
+    attribution = quality["gate_attribution"]
+    assert attribution["first_blocker"]["liquidity_gate"]["n"] == 1
+    assert attribution["first_blocker"]["fundamental_gate"]["n"] == 1
+    assert attribution["overlapping_blockers"]["bandar_gate"]["n"] == 1
+    assert attribution["multi_gate_blocked_n"] == 1
+
+    gate_off = gate_decision_quality(
+        rows, [1.0] * len(rows), 10, active_gate_keys=()
+    )
+    assert gate_off["blocked_book"]["n"] == 0
+    assert gate_off["false_blocks"]["rate_of_blocked"] is None
+    assert gate_off["harmful_allows"]["rate_of_allowed"] == 0.5
+
+    with pytest.raises(ValueError, match="score must be finite"):
+        gate_decision_quality(rows[:1], [float("nan")], 10, active_gate_keys=())
+
+
 def test_run_gate_on_fixture(fixture_db: Path):
     r = run_policy_challenge(
         fixture_db,
@@ -248,6 +330,32 @@ def test_run_gate_on_fixture(fixture_db: Path):
     assert "Factor validity" not in text
     if r.status not in (ChallengeStatus.BLOCKED_DATA, ChallengeStatus.BLOCKED_POLICY):
         assert r.weights.get("decision_type") == "gate"
+        assert (
+            r.horizon_metrics["decision_quality_contract_id"]
+            == GATE_DECISION_QUALITY_CONTRACT_ID
+        )
+        primary = r.horizon_metrics["decision_quality"]["10"]
+        assert primary["baseline"]["n_labeled"] > 0
+        assert primary["against"]["blocked_book"]["n"] == 0
+        assert all("decision_quality_baseline" in fold for fold in r.fold_metrics)
+        assert "Decision quality" in text
+        assert "quality_base" in text
+        assert "Descriptive only" in r.summary_md
+
+        from ml_saham.challenge.artifacts import (
+            challenge_content_digest,
+            challenge_result_export_payload,
+        )
+
+        export = challenge_result_export_payload(r)
+        assert export["horizon_metrics"]["decision_quality_contract_id"] == (
+            GATE_DECISION_QUALITY_CONTRACT_ID
+        )
+        assert export["content_digest"] == challenge_content_digest(export)
+        export["horizon_metrics"]["decision_quality"]["10"]["baseline"][
+            "false_blocks"
+        ]["n"] += 1
+        assert export["content_digest"] != challenge_content_digest(export)
         assert r.exit_code() == 0
 
 
