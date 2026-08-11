@@ -36,7 +36,7 @@ curriculum                  →  learn explore / demo / compare (never promotion
 |----------|----------------------|
 | Whole material enter stack has explicit validation coverage? | **No — product gaps are tracked below** |
 | What is product-challenged on the **accum** journey? | Accum sleeves, signal policies, and risk gates; diagnostics use a separate display-validity track |
-| Screen hard filters? | Snapshot identity + replay extract shipped; production tournament still `BLOCKED_POLICY` |
+| Screen hard filters? | Snapshot identity, replay extract, and cohort-bound adapter conformance shipped; tournament still `BLOCKED_POLICY` pending its locked challenger/protocol |
 | Can challenge tune “should we ENTER this ticker?” | **No** — Action/readiness protocol and usable corpus are both missing |
 | Pre-open? | Separate lane (2 policies already shipped) |
 
@@ -66,7 +66,7 @@ permanent acceptance constants.
 | Priority | Gap | Current evidence | Owner / exit condition |
 |----------|-----|------------------|------------------------|
 | **G0** | Snapshot-bound corpus depth | Historical cohort `sha256:005363…` has 1,890 rows / 42 sessions but 0/7 v2 snapshots, so production comparison correctly returns `BLOCKED_POLICY`. Active v2 cohort `sha256:8ba8fc…` has 304 rows / 1 session / 7 snapshots and yields only one valid OOS fold. | **ai-saham:** accumulate prospective v2-bound observations across enough independent sessions/regimes. **ml-saham:** keep explicit-cohort and snapshot gates. Exit only when the fixed protocol yields at least two valid post-embargo OOS folds; never retrofit snapshots onto the historical cohort. |
-| **G1** | Screen hard-filter tournament | Four-gate extract and pure replay are shipped; v2 policy identity is verified. The local adapter has no conformance evidence, is not in the screener engine portfolio, and execution returns `BLOCKED_POLICY`. | **ml-saham:** lock challenger/grid, population, outcome, false-block/opportunity-cost metrics, folds, and adapter golden conformance; then register the PolicySpec. Defaults being mostly off is not a reason to leave material eligibility logic permanently unvalidated. |
+| **G1** | Screen hard-filter tournament | Four-gate extract, pure replay, and producer-observed adapter v2 conformance are shipped. Conformance is digest-bound to ai-saham core probes and the exact ADR-068 cohort. No challenger grid/protocol is registered, so execution correctly remains `BLOCKED_POLICY`. | **ml-saham:** lock challenger/grid, population, H10 outcome, per-side support, multiplicity, safety, and fold-wise verdict law; reuse `gate_decision_quality.v1`, then register the PolicySpec. |
 | **G2 (closed)** | Configured group-breadth authority | ai-saham ADR-062 retires the dormant conglomerate-group score bonus from production policy. ADR-059 v2 correctly excludes it. Producer clean-removal removes residual config/applier/transport; residual historical payload keys are not baseline authority. | **No ml-saham PolicySpec:** do not reconstruct or challenge the retired rule. A future PIT-governed diagnostic would be a new producer contract and remain non-authoritative until separately promoted. |
 | **G3** | Risk gate decision quality | Measurement-only `gate_decision_quality.v1` now reports fold-wise and pooled allowed/blocked books, false blocks, harmful allows, opportunity cost, and audit-order first/overlap attribution. The existing allowed-book verdict law is intentionally unchanged. | **ml-saham:** predeclare and vet a versioned gate verdict law covering material improvement, per-side support, safety regression, fold agreement, regime stability, and named-gate multiplicity before the new metrics can affect WIN/LOSE. |
 | **G4** | Setup readiness and final Action | These paths materially cap/override ENTER, but there is no Action Protocol. Corpus is not ready: historical cohort has only 8 ENTER and 86/1,890 non-null readiness rows; active v2 cohort has 0 ENTER and 11/304 non-null readiness rows. | **ai-saham:** produce dense PIT-bound readiness/Action observations and compatible outcomes. **ml-saham:** define a real Action H0, population, class handling, costs, and walk-forward protocol. Rank IC is not an acceptable substitute. |
@@ -83,7 +83,7 @@ Legend: **Product** = ADR-002 `challenge run` / `factor` / `engine` / `champion`
 
 | Inventory area (ai-saham) | Status | Notes |
 |---------------------------|--------|--------|
-| Hard filters (§3) | **Replay shipped; tournament gap (G1)** | Verified v2 identity + pure first-match replay; adapter conformance/verdict not shipped |
+| Hard filters (§3) | **Conformance shipped; tournament gap (G1)** | Verified identity + replay + cohort-bound adapter v2; challenger/protocol/verdict not shipped |
 | Accum sleeves (§4) | **Product, partial full-book coverage** | 6 verified components: cons/streak/vwap/rsi/flow/**bci**; **BB off**; sector breadth excluded (G2) |
 | BB (§4) | Disabled | Matches production BB-off — not inventing BB-on |
 | BCI (§4) | **Product (P0)** | Enabled verified component on `screener.accum.score_weights` |
@@ -137,14 +137,14 @@ Suggested policy evolution:
 
 ---
 
-### P1 — Screen hard filters — **replay shipped; tournament open (G1)**
+### P1 — Screen hard filters — **conformance shipped; tournament open (G1)**
 
 The four-gate extract, missing-state contract, cohort reconciliation, pure
-first-match replay, and v2 production identity are shipped. The production
-tournament is not: adapter conformance, challenger/grid, winner law,
-blocked-book outcomes, and engine registration remain open. Mostly-off default
-floors lower urgency but do not remove the validation obligation for logic that
-can reject candidates when enabled.
+first-match replay, v2 production identity, and cohort-bound producer
+conformance are shipped. The production tournament is not: challenger/grid,
+winner law, blocked-book outcomes, and engine registration remain open.
+Mostly-off default floors lower urgency but do not remove the validation
+obligation for logic that can reject candidates when enabled.
 
 ---
 
@@ -240,7 +240,7 @@ Copy into the PR / decision memo:
 ```text
 G0 v2 corpus time/fold depth      🚧 producer accumulation required
 P0 Accum sleeves honesty          ✅ group-breadth bonus retired (G2 closed)
-P1 hard filters                   🚧 replay shipped; tournament blocked (G1)
+P1 hard filters                   🚧 conformance shipped; tournament blocked (G1)
 P2 signal policies                ✅ thin
 P3 risk hard gates                🚧 measurement shipped; verdict law open (G3)
 P4 readiness + Action protocol    ⛔ data/protocol blocked (G4)

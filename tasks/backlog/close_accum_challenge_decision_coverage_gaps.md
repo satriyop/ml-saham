@@ -23,7 +23,7 @@ blanket readiness state:
 |---|---|
 | C0 | Contract locked below. Implementation waits for the companion producer task to refresh and close its current code-hardening gate; do not bind to stale producer output. |
 | C1 | Ready for protocol/metric implementation and deterministic fixtures. A confirmatory live result still requires multi-session depth. |
-| C2 | Replay extraction and live-shaped goldens are shipped. Production adapter conformance identity and the registered tournament remain open and may build on C1. |
+| C2 | Replay extraction, live-shaped goldens, and cohort-bound production adapter conformance are shipped. The locked tournament remains open and may build on C1. |
 | C3 | Resolved externally by ai-saham ADR-062: the dormant score bonus is retired. No production PolicySpec or challenge implementation is authorized. |
 | C4 | Data-blocked. Do not implement the Action verdict while per-fold ENTER/readiness support remains insufficient. |
 
@@ -244,6 +244,15 @@ material regression in the safety metric. Otherwise return `LOSE` or
 
 ### C2 - complete the screen hard-filter tournament
 
+Implementation status (2026-08-11): adapter v2 production conformance is
+shipped. Its immutable vectors are observed from ai-saham's real deterministic
+core-probe screen path, cover pass plus all four first-match gates, and produce
+a content-derived `conformance_id`. Policy composition additionally binds that
+producer behavioral digest to the selected snapshot-set digest and observation
+schema version through the ADR-068 compatibility formula. A different cohort
+therefore remains `BLOCKED_POLICY`. The tournament is still open: no challenger
+grid, multiplicity/support/safety law, or PolicySpec registration has landed.
+
 Use only verified `screener.accum.hard_filters` v2 cohort snapshots and the
 shipped first-match replay. Existing foundation, already complete:
 
@@ -254,9 +263,9 @@ shipped first-match replay. Existing foundation, already complete:
 
 Remaining before engine registration:
 
-- establish a non-empty versioned production adapter `conformance_id` by
-  proving the adapter/replay reproduces the frozen production result for every
-  accepted vector; extraction goldens alone are not production conformance;
+- [x] establish a non-empty versioned production adapter `conformance_id` by
+  proving the adapter/replay reproduces producer-observed frozen results and
+  binding that evidence to the exact behavioral cohort;
 - predeclare the off/threshold grid, population denominator, H10 target,
   multiplicity law, minimum per-side support, and verdict rule;
 - emit the C1 decision-quality metrics, including rejected/control populations;
@@ -414,8 +423,8 @@ do not claim the checkpoint complete.
       opportunity cost, attribution, and multi-fold stability.
 - [x] C2 foundation has live-shaped extract/replay goldens and shipped pure
       first-match replay.
-- [ ] C2 establishes production adapter conformance authority and a registered
-      locked tournament.
+- [x] C2 establishes cohort-bound production adapter conformance authority.
+- [ ] C2 registers the locked challenger grid, Protocol, and tournament.
 - [x] C3 is closed without a challenge under ai-saham ADR-062; configured dead
       code is never challenged or reconstructed as production.
 - [ ] C4 cannot run before its Action/readiness data gate passes.

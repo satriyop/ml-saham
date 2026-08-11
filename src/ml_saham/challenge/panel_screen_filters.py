@@ -9,6 +9,7 @@ Window lock: features_by_window["7"] only as the replay sample unit.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import sqlite3
@@ -40,6 +41,9 @@ GATE_ORDER: tuple[str, ...] = (
     GATE_PIOTROSKI,
     GATE_ACCUM_SCORE,
     GATE_SIGNAL_SCORE,
+)
+SCREEN_FILTER_CONFORMANCE_CONTRACT_ID = (
+    "screen_accum_hard_filters.production_conformance.v1"
 )
 
 
@@ -148,6 +152,168 @@ class ScreenFilterAuditSummary:
     @property
     def wrong_contract_skipped(self) -> int:
         return self.wrong_contract_excluded
+
+
+def _conformance_policy(value: object) -> ScreenFilterPolicy:
+    if not isinstance(value, Mapping):
+        raise ValueError("conformance policy must be an object")
+    expected = {
+        "min_market_cap_idr",
+        "min_piotroski",
+        "min_accum_score",
+        "min_accum_score_enabled",
+        "min_signal_score",
+        "min_signal_score_enabled",
+    }
+    if set(value) != expected:
+        raise ValueError("conformance policy fields mismatch")
+    if type(value["min_market_cap_idr"]) is not int:
+        raise ValueError("conformance min_market_cap_idr must be int")
+    if type(value["min_piotroski"]) is not int:
+        raise ValueError("conformance min_piotroski must be int")
+    for key in ("min_accum_score_enabled", "min_signal_score_enabled"):
+        if type(value[key]) is not bool:
+            raise ValueError(f"conformance {key} must be bool")
+    for key in ("min_accum_score", "min_signal_score"):
+        if isinstance(value[key], bool) or not isinstance(value[key], int | float):
+            raise ValueError(f"conformance {key} must be numeric")
+        if not math.isfinite(float(value[key])):
+            raise ValueError(f"conformance {key} must be finite")
+    return ScreenFilterPolicy(
+        min_market_cap_idr=value["min_market_cap_idr"],
+        min_piotroski=value["min_piotroski"],
+        min_accum_score=float(value["min_accum_score"]),
+        min_accum_score_enabled=value["min_accum_score_enabled"],
+        min_signal_score=float(value["min_signal_score"]),
+        min_signal_score_enabled=value["min_signal_score_enabled"],
+    )
+
+
+def validate_screen_filter_conformance_artifact(
+    artifact: Mapping[str, Any],
+) -> str:
+    """Validate producer-observed vectors and return their content identity.
+
+    The artifact is a read-only handoff from ai-saham's deterministic core
+    behavioral probes. A local expected result alone is insufficient: every
+    vector must carry and reproduce the producer-observed screen result.
+    """
+
+    expected_top = {"contract_id", "producer", "sample_unit", "cases"}
+    if set(artifact) != expected_top:
+        raise ValueError("screen-filter conformance artifact fields mismatch")
+    if artifact["contract_id"] != SCREEN_FILTER_CONFORMANCE_CONTRACT_ID:
+        raise ValueError("screen-filter conformance contract_id mismatch")
+
+    producer = artifact.get("producer")
+    expected_producer = {
+        "repository",
+        "source_revision",
+        "probe_set_id",
+        "projection_contract",
+        "compatibility_contract_id",
+        "observation_payload_schema_version",
+        "probe_input_digest",
+        "behavioral_probe_digest",
+        "source_paths",
+    }
+    if not isinstance(producer, Mapping) or set(producer) != expected_producer:
+        raise ValueError("screen-filter conformance producer fields mismatch")
+    if producer["repository"] != "ai-saham":
+        raise ValueError("screen-filter conformance producer must be ai-saham")
+    if producer["probe_set_id"] != "accum_core.v1":
+        raise ValueError("screen-filter conformance probe_set_id mismatch")
+    if producer["projection_contract"] != "accum_behavioral_projection.v1":
+        raise ValueError("screen-filter conformance projection contract mismatch")
+    if (
+        producer["compatibility_contract_id"]
+        != "behavioral_accumulation_compatibility.v1"
+    ):
+        raise ValueError("screen-filter conformance compatibility contract mismatch")
+    if producer["observation_payload_schema_version"] != 15:
+        raise ValueError("screen-filter conformance observation schema mismatch")
+    for key in ("source_revision", "probe_input_digest", "behavioral_probe_digest"):
+        value = producer[key]
+        expected_length = 40 if key == "source_revision" else 64
+        if not isinstance(value, str) or len(value) != expected_length:
+            raise ValueError(f"screen-filter conformance {key} malformed")
+        try:
+            int(value, 16)
+        except ValueError as exc:
+            raise ValueError(f"screen-filter conformance {key} malformed") from exc
+    paths = producer["source_paths"]
+    if not isinstance(paths, list) or not paths or not all(
+        isinstance(path, str) and path for path in paths
+    ):
+        raise ValueError("screen-filter conformance source_paths malformed")
+
+    cases = artifact.get("cases")
+    if not isinstance(cases, list) or not cases:
+        raise ValueError("screen-filter conformance requires cases")
+    expected_case_fields = {
+        "id",
+        "producer_probe_id",
+        "policy",
+        "observed_screen_result",
+        "expected_first_gate",
+        "payload",
+    }
+    ids: set[str] = set()
+    covered_gates: set[str] = set()
+    saw_pass = False
+    for case in cases:
+        if not isinstance(case, Mapping) or set(case) != expected_case_fields:
+            raise ValueError("screen-filter conformance case fields mismatch")
+        case_id = case["id"]
+        if not isinstance(case_id, str) or not case_id or case_id in ids:
+            raise ValueError("screen-filter conformance case id invalid or duplicate")
+        ids.add(case_id)
+        if not isinstance(case["producer_probe_id"], str) or not case["producer_probe_id"]:
+            raise ValueError("screen-filter conformance producer_probe_id missing")
+        policy = _conformance_policy(case["policy"])
+        payload = case["payload"]
+        if not isinstance(payload, Mapping):
+            raise ValueError("screen-filter conformance payload must be an object")
+        extracted = extract_screen_filter_inputs(payload)
+        if extracted.is_unextractable:
+            raise ValueError(
+                f"screen-filter conformance case {case_id} is unextractable: "
+                f"{extracted.unextractable_reason}"
+            )
+        classified = classify_screen_filters(extracted, policy)
+        observed = case["observed_screen_result"]
+        if observed not in {"pass", "rejected_flow", "rejected_signal"}:
+            raise ValueError("screen-filter conformance observed result invalid")
+        if classified.result.value != observed:
+            raise ValueError(
+                f"screen-filter conformance result mismatch for {case_id}: "
+                f"producer={observed} replay={classified.result.value}"
+            )
+        expected_gate = case["expected_first_gate"]
+        if expected_gate is not None and expected_gate not in GATE_ORDER:
+            raise ValueError("screen-filter conformance expected gate invalid")
+        if classified.firing_gate != expected_gate:
+            raise ValueError(
+                f"screen-filter conformance first gate mismatch for {case_id}: "
+                f"expected={expected_gate} replay={classified.firing_gate}"
+            )
+        if expected_gate is None:
+            saw_pass = True
+        else:
+            covered_gates.add(expected_gate)
+    if not saw_pass or covered_gates != set(GATE_ORDER):
+        raise ValueError(
+            "screen-filter conformance coverage requires pass plus all four gates"
+        )
+
+    canonical = json.dumps(
+        artifact,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 # ---------------------------------------------------------------------------

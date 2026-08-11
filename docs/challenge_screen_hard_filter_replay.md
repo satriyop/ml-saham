@@ -1,6 +1,7 @@
 # Challenge extract — accumulation screen hard-filter replay
 
-**Status:** audit / extract-contract (not a shipped tournament)  
+**Status:** extract + producer conformance shipped (not a tournament)
+
 **Sibling task:** `ai-saham/tasks/backlog/parked_screen_filter_replay_contract.md`  
 **Module:** `ml_saham.challenge.panel_screen_filters`
 
@@ -12,6 +13,24 @@
 | Capture / SQLite corpus | **ai-saham** |
 | Read-only extract + pure classifier + this report | **ml-saham** |
 | Tournament metrics / WIN·LOSE | **ml-saham** (blocked until decision checkpoint) |
+
+Adapter v2 conformance is a sealed handoff from ai-saham's deterministic
+`accum_core.v1` behavioral probes. Seven producer-observed vectors cover pass,
+all four gates, and market-cap-before-Piotroski first-match behavior. The
+adapter identity is the canonical artifact digest, not a handwritten label.
+Composition also recomputes the ADR-068 cohort identity from the recorded
+behavioral digest, selected snapshot-set digest, and schema version 15; a
+different engine cohort fails `BLOCKED_POLICY` rather than inheriting old
+conformance.
+
+### Conformance authority matrix
+
+| Artifact / boundary | Authority owner/source | Identity and coverage | Missing or invalid state | May contribute when |
+|---|---|---|---|---|
+| Producer behavior | ai-saham `accum_core.v1` probes through `accum_behavioral_projection.v1` | Source revision, probe-input digest, behavioral-output digest; pass + every gate + first-match precedence | Adapter load fails closed | Every shipped vector reproduces the producer-observed result through ml-saham's shipped extractor/classifier |
+| Production policy snapshot | ai-saham `production_policy_snapshot.v4` set | Selected compatibility ID and exact snapshot-set material digest | `BLOCKED_POLICY` | The complete verified snapshot set resolves read-only for the selected cohort |
+| Challenge adapter | Packaged ml-saham adapter v2 and conformance artifact v1 | Canonical conformance artifact digest | Adapter load or composition fails closed | Its digest verifies and ADR-068 recomputation equals the selected cohort ID |
+| Tournament | ml-saham PolicySpec, challenger grid, and Protocol | Not registered in this slice | `BLOCKED_POLICY` | Only after population, support, multiplicity, safety, folds, and verdict law are predeclared and implemented |
 
 Replay interpretation **C** (counterfactual non-zero policies on capture-neutralized ADR-056 rows), grounded in **A** (live ai-saham predicates). Matching capture’s all-pass outcome (**B**) is **not** the research objective.
 
@@ -151,7 +170,10 @@ Numeric null coverage (e.g. missing market_cap) is **not** automatically insuffi
 
 ## Tournament checkpoint (not authorized here)
 
-Still product-**SKIPPED** until exact floors/grid, binary winner definition, folds, and verified production policy snapshots are approved. Completing this audit does **not** unskip the tournament.
+Still product-**SKIPPED** until the exact off/threshold grid, population,
+minimum per-side support, multiplicity, safety rule, and fold-wise verdict law
+are predeclared. Conformance closes adapter authority only; it does not register
+a PolicySpec or create a WIN/LOSE path.
 
 ## Storage
 

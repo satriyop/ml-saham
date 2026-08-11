@@ -69,9 +69,10 @@ non-empty handwritten hash are not sufficient production identity.
 The nine active policy IDs are the v3 eight-row set plus
 `signal.accum.decision_policy`. The unevaluable and decision-policy gate rows
 bind production identity but have no fabricated tournament adapters. The
-hard-filter snapshot is verified with the cohort, but its tournament adapter
-remains `BLOCKED_POLICY` until its separate counterfactual conformance work
-lands. Ordinary baselines use frozen observed
+hard-filter snapshot is verified with the cohort, and adapter v2 now binds
+producer-observed counterfactual conformance to that exact behavioral cohort.
+Its tournament remains `BLOCKED_POLICY` until a challenger grid and Protocol
+are registered. Ordinary baselines use frozen observed
 outputs (not reconstructed production scores); in particular
 `signal.accum.raw_score` reads
 `features_by_window.<canonical_window>.signal.raw_exact_score`.

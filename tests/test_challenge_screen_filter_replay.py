@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 import sqlite3
 from pathlib import Path
 
@@ -15,11 +16,14 @@ from ml_saham.challenge.panel_screen_filters import (
     GATE_SIGNAL_SCORE,
     ScreenFilterPolicy,
     ScreenFilterResult,
+    SCREEN_FILTER_CONFORMANCE_CONTRACT_ID,
     audit_screen_filter_cohort,
     classify_screen_filters,
     extract_screen_filter_inputs,
     sufficiency_verdict,
+    validate_screen_filter_conformance_artifact,
 )
+from ml_saham.challenge.policies.registry import load_policy_adapter
 from ml_saham.data.aisaham_read import connect
 from tests.fixtures.golden import load_golden
 
@@ -34,6 +38,68 @@ def _policy_from_case(case: dict) -> ScreenFilterPolicy:
         min_signal_score=float(p.get("min_signal_score") or 0),
         min_signal_score_enabled=bool(p.get("min_signal_score_enabled") or False),
     )
+
+
+def _conformance_artifact() -> dict:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "ml_saham"
+        / "challenge"
+        / "policies"
+        / "screener_accum_hard_filters.conformance.v1.json"
+    )
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_producer_observed_conformance_artifact_binds_adapter_identity():
+    artifact = _conformance_artifact()
+    assert artifact["contract_id"] == SCREEN_FILTER_CONFORMANCE_CONTRACT_ID
+    conformance_id = validate_screen_filter_conformance_artifact(artifact)
+    adapter = load_policy_adapter("screener.accum.hard_filters")
+    assert adapter.adapter_version == "v2"
+    assert adapter.conformance_id == conformance_id
+    assert {case["expected_first_gate"] for case in artifact["cases"]} == {
+        None,
+        GATE_MARKET_CAP,
+        GATE_PIOTROSKI,
+        GATE_ACCUM_SCORE,
+        GATE_SIGNAL_SCORE,
+    }
+
+
+def test_conformance_artifact_fails_on_result_gate_coverage_or_provenance_drift():
+    artifact = _conformance_artifact()
+
+    wrong_result = deepcopy(artifact)
+    wrong_result["cases"][0]["observed_screen_result"] = "rejected_flow"
+    with pytest.raises(ValueError, match="result mismatch"):
+        validate_screen_filter_conformance_artifact(wrong_result)
+
+    wrong_gate = deepcopy(artifact)
+    wrong_gate["cases"][1]["expected_first_gate"] = GATE_SIGNAL_SCORE
+    with pytest.raises(ValueError, match="first gate mismatch"):
+        validate_screen_filter_conformance_artifact(wrong_gate)
+
+    missing_gate = deepcopy(artifact)
+    missing_gate["cases"] = [
+        case
+        for case in missing_gate["cases"]
+        if case["expected_first_gate"] != GATE_PIOTROSKI
+    ]
+    with pytest.raises(ValueError, match="coverage requires"):
+        validate_screen_filter_conformance_artifact(missing_gate)
+
+    moved_provenance = deepcopy(artifact)
+    moved_provenance["producer"]["behavioral_probe_digest"] = "0" * 64
+    assert validate_screen_filter_conformance_artifact(moved_provenance) != (
+        validate_screen_filter_conformance_artifact(artifact)
+    )
+
+    malformed_provenance = deepcopy(artifact)
+    malformed_provenance["producer"]["probe_input_digest"] = "not-a-digest"
+    with pytest.raises(ValueError, match="probe_input_digest malformed"):
+        validate_screen_filter_conformance_artifact(malformed_provenance)
 
 
 def test_golden_screen_hard_filter_cases():

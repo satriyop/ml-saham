@@ -1,0 +1,239 @@
+{
+  "contract_id": "screen_accum_hard_filters.production_conformance.v1",
+  "producer": {
+    "repository": "ai-saham",
+    "source_revision": "1fe8aa125c7027426519895e6bf98955e0a72245",
+    "probe_set_id": "accum_core.v1",
+    "projection_contract": "accum_behavioral_projection.v1",
+    "compatibility_contract_id": "behavioral_accumulation_compatibility.v1",
+    "observation_payload_schema_version": 15,
+    "probe_input_digest": "7676eec17f62bce9a2f569e9c88a658936a92e9e340573d4b965d7cbb8662c04",
+    "behavioral_probe_digest": "913ab690547eba19e95f509f281ce4d1afe15ffdaaae3d242795b18c2f5b4ad8",
+    "source_paths": [
+      "src/application/services/accumulation_candidate_structural_filter.py",
+      "src/application/services/accumulation_candidate_signal_assessor.py",
+      "src/application/services/behavioral_probe_runner.py",
+      "src/application/services/behavioral_probe_set.py"
+    ]
+  },
+  "sample_unit": "one ticker/session under one frozen hard-filter policy",
+  "cases": [
+    {
+      "id": "producer_accum_pass",
+      "producer_probe_id": "accum_score_threshold_rejection",
+      "policy": {
+        "min_market_cap_idr": 0,
+        "min_piotroski": 0,
+        "min_accum_score": 55.0,
+        "min_accum_score_enabled": true,
+        "min_signal_score": 0.0,
+        "min_signal_score_enabled": false
+      },
+      "observed_screen_result": "pass",
+      "expected_first_gate": null,
+      "payload": {
+        "ticker": "PRBA",
+        "session_date": "2026-06-19",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": 90.3,
+              "fundamentals": {
+                "market_cap_idr": 62000000000000,
+                "piotroski_f_score": 8
+              }
+            },
+            "signal": {"assessment": {"score": 70}}
+          }
+        }
+      }
+    },
+    {
+      "id": "producer_accum_reject",
+      "producer_probe_id": "accum_score_threshold_rejection",
+      "policy": {
+        "min_market_cap_idr": 0,
+        "min_piotroski": 0,
+        "min_accum_score": 55.0,
+        "min_accum_score_enabled": true,
+        "min_signal_score": 0.0,
+        "min_signal_score_enabled": false
+      },
+      "observed_screen_result": "rejected_flow",
+      "expected_first_gate": "screen.accum.accum_score_floor",
+      "payload": {
+        "ticker": "PRBB",
+        "session_date": "2026-06-19",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": 25.1,
+              "fundamentals": {
+                "market_cap_idr": 21000000000000,
+                "piotroski_f_score": 6
+              }
+            },
+            "signal": {"assessment": {"score": 38}}
+          }
+        }
+      }
+    },
+    {
+      "id": "producer_signal_pass",
+      "producer_probe_id": "signal_score_threshold_rejection",
+      "policy": {
+        "min_market_cap_idr": 0,
+        "min_piotroski": 0,
+        "min_accum_score": 0.0,
+        "min_accum_score_enabled": true,
+        "min_signal_score": 55.0,
+        "min_signal_score_enabled": true
+      },
+      "observed_screen_result": "pass",
+      "expected_first_gate": null,
+      "payload": {
+        "ticker": "PRBA",
+        "session_date": "2026-06-19",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": 90.3,
+              "fundamentals": {
+                "market_cap_idr": 62000000000000,
+                "piotroski_f_score": 8
+              }
+            },
+            "signal": {"assessment": {"score": 70}}
+          }
+        }
+      }
+    },
+    {
+      "id": "producer_signal_reject",
+      "producer_probe_id": "signal_score_threshold_rejection",
+      "policy": {
+        "min_market_cap_idr": 0,
+        "min_piotroski": 0,
+        "min_accum_score": 0.0,
+        "min_accum_score_enabled": true,
+        "min_signal_score": 55.0,
+        "min_signal_score_enabled": true
+      },
+      "observed_screen_result": "rejected_signal",
+      "expected_first_gate": "screen.accum.signal_score_floor",
+      "payload": {
+        "ticker": "PRBB",
+        "session_date": "2026-06-19",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": 25.1,
+              "fundamentals": {
+                "market_cap_idr": 21000000000000,
+                "piotroski_f_score": 6
+              }
+            },
+            "signal": {"assessment": {"score": 38}}
+          }
+        }
+      }
+    },
+    {
+      "id": "producer_structural_pass",
+      "producer_probe_id": "structural_filter_market_cap_and_piotroski",
+      "policy": {
+        "min_market_cap_idr": 10000000000000,
+        "min_piotroski": 6,
+        "min_accum_score": 0.0,
+        "min_accum_score_enabled": true,
+        "min_signal_score": 0.0,
+        "min_signal_score_enabled": false
+      },
+      "observed_screen_result": "pass",
+      "expected_first_gate": null,
+      "payload": {
+        "ticker": "PRBA",
+        "session_date": "2026-06-19",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": 90.3,
+              "fundamentals": {
+                "market_cap_idr": 62000000000000,
+                "piotroski_f_score": 8
+              }
+            },
+            "signal": {"assessment": {"score": 70}}
+          }
+        }
+      }
+    },
+    {
+      "id": "producer_market_cap_first_reject",
+      "producer_probe_id": "structural_filter_market_cap_and_piotroski",
+      "policy": {
+        "min_market_cap_idr": 10000000000000,
+        "min_piotroski": 6,
+        "min_accum_score": 0.0,
+        "min_accum_score_enabled": true,
+        "min_signal_score": 0.0,
+        "min_signal_score_enabled": false
+      },
+      "observed_screen_result": "rejected_flow",
+      "expected_first_gate": "screen.accum.market_cap_floor",
+      "payload": {
+        "ticker": "PRBC",
+        "session_date": "2026-06-19",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": null,
+              "fundamentals": {
+                "market_cap_idr": 9000000000000,
+                "piotroski_f_score": 5
+              }
+            },
+            "signal": {"assessment": null}
+          }
+        }
+      }
+    },
+    {
+      "id": "producer_piotroski_second_reject",
+      "producer_probe_id": "structural_filter_market_cap_and_piotroski",
+      "policy": {
+        "min_market_cap_idr": 10000000000000,
+        "min_piotroski": 6,
+        "min_accum_score": 0.0,
+        "min_accum_score_enabled": true,
+        "min_signal_score": 0.0,
+        "min_signal_score_enabled": false
+      },
+      "observed_screen_result": "rejected_flow",
+      "expected_first_gate": "screen.accum.piotroski_floor",
+      "payload": {
+        "ticker": "PRBE",
+        "session_date": "2026-06-19",
+        "canonical_window": 7,
+        "features_by_window": {
+          "7": {
+            "candidate": {
+              "accum_score": null,
+              "fundamentals": {
+                "market_cap_idr": 27000000000000,
+                "piotroski_f_score": 1
+              }
+            },
+            "signal": {"assessment": null}
+          }
+        }
+      }
+    }
+  ]
+}

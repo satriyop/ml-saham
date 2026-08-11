@@ -515,6 +515,39 @@ def compose_execution_policy(
         raise PolicySnapshotError(
             f"adapter {adapter.adapter_id} lacks conformance evidence"
         )
+    if snapshot.policy_id == "screener.accum.hard_filters":
+        probe_digest = adapter.conformance_behavioral_probe_digest
+        compatibility_contract_id = (
+            adapter.conformance_compatibility_contract_id
+        )
+        observation_schema_version = (
+            adapter.conformance_observation_schema_version
+        )
+        if (
+            len(probe_digest) != 64
+            or not compatibility_contract_id
+            or observation_schema_version is None
+        ):
+            raise PolicySnapshotError(
+                "hard-filter adapter lacks behavioral cohort conformance binding"
+            )
+        material = canonical_json(
+            {
+                "contract_id": compatibility_contract_id,
+                "behavioral_probe_digest": probe_digest,
+                "policy_snapshot_payload_digest": snapshot.material_config_hash.removeprefix(
+                    "sha256:"
+                ),
+                "observation_payload_schema_version": observation_schema_version,
+            }
+        )
+        expected_compatibility_id = "sha256:" + hashlib.sha256(
+            material.encode("utf-8")
+        ).hexdigest()
+        if snapshot.compatibility_id != expected_compatibility_id:
+            raise PolicySnapshotError(
+                "hard-filter adapter conformance does not bind selected behavioral cohort"
+            )
 
     payload = snapshot.canonical_payload
     aliases = _aliases(adapter)

@@ -35,7 +35,7 @@ _ADAPTER_FILES: dict[str, str] = {
     "signal.accum.classification": "signal_accum_classification.adapter.v1.json",
     "risk.accum.hard_gates": "risk_accum_hard_gates.adapter.v2.json",
     "signal.accum.raw_score": "signal_accum_raw_score.adapter.v1.json",
-    "screener.accum.hard_filters": "screener_accum_hard_filters.adapter.v1.json",
+    "screener.accum.hard_filters": "screener_accum_hard_filters.adapter.v2.json",
 }
 
 
@@ -102,6 +102,39 @@ def load_policy_adapter(policy_id: str) -> ChallengePolicyAdapter:
     data = _load_json(name)
     if data.get("supported_policy_id") != policy_id:
         raise KeyError(f"Adapter policy identity mismatch for {policy_id!r}")
+    conformance_id = str(data.get("conformance_id") or "")
+    conformance_artifact = data.get("conformance_artifact")
+    conformance_behavioral_probe_digest = ""
+    conformance_compatibility_contract_id = ""
+    conformance_observation_schema_version: int | None = None
+    if conformance_artifact is not None:
+        if policy_id != "screener.accum.hard_filters":
+            raise KeyError(
+                f"Unsupported conformance artifact binding for {policy_id!r}"
+            )
+        if not isinstance(conformance_artifact, str) or not conformance_artifact:
+            raise KeyError(f"Conformance artifact missing for {policy_id!r}")
+        from ml_saham.challenge.panel_screen_filters import (
+            validate_screen_filter_conformance_artifact,
+        )
+
+        artifact = _load_json(conformance_artifact)
+        actual_conformance_id = validate_screen_filter_conformance_artifact(artifact)
+        if conformance_id != actual_conformance_id:
+            raise KeyError(
+                f"Conformance identity mismatch for {policy_id!r}: "
+                f"adapter={conformance_id!r} artifact={actual_conformance_id!r}"
+            )
+        producer = artifact["producer"]
+        conformance_behavioral_probe_digest = str(
+            producer["behavioral_probe_digest"]
+        )
+        conformance_compatibility_contract_id = str(
+            producer["compatibility_contract_id"]
+        )
+        conformance_observation_schema_version = int(
+            producer["observation_payload_schema_version"]
+        )
     return ChallengePolicyAdapter(
         adapter_id=str(data["adapter_id"]),
         adapter_version=str(data["adapter_version"]),
@@ -123,7 +156,14 @@ def load_policy_adapter(policy_id: str) -> ChallengePolicyAdapter:
         supported_challengers=tuple(
             str(value) for value in data["supported_challengers"]
         ),
-        conformance_id=str(data.get("conformance_id") or ""),
+        conformance_id=conformance_id,
+        conformance_behavioral_probe_digest=conformance_behavioral_probe_digest,
+        conformance_compatibility_contract_id=(
+            conformance_compatibility_contract_id
+        ),
+        conformance_observation_schema_version=(
+            conformance_observation_schema_version
+        ),
     )
 
 

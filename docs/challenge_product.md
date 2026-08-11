@@ -159,7 +159,7 @@ Prefer **tune vs champion** for purpose (not a third product axis).
 | Risk hard gates | `risk.accum.hard_gates` (+ `gate_off:<gate>`; mean excess open) |
 | Weekly cron | `scripts/install_challenge_health_cron.sh` → `health --with-diagnostics` |
 | Diagnostics | `challenge diagnostic` (display/promote-candidate only) |
-| Screen hard filters | v2 identity verified; tournament adapter remains `BLOCKED_POLICY` pending its dedicated conformance slice |
+| Screen hard filters | v2 adapter conformance is producer-observed and ADR-068 cohort-bound; tournament remains `BLOCKED_POLICY` pending challenger/protocol registration |
 | Action ENTER desk (P4) | **Deferred** |
 
 Expansion plan: **[challenge_product_roadmap.md](./challenge_product_roadmap.md)**.  

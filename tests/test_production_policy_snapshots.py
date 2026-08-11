@@ -42,11 +42,14 @@ def test_runtime_adapter_specs_contain_no_copied_production_material():
         set(root.glob("*accum*.adapter.v1.json"))
         | set(root.glob("*accum*.adapter.v2.json"))
     )
-    # Active adapters only (hard_gates is v2; ignore retired v1 siblings if present).
+    # Active adapters only; ignore retired v1 siblings after clean adapter bumps.
     active = []
     for path in paths:
         data = json.loads(path.read_text(encoding="utf-8"))
-        if path.name == "risk_accum_hard_gates.adapter.v1.json":
+        if path.name in {
+            "risk_accum_hard_gates.adapter.v1.json",
+            "screener_accum_hard_filters.adapter.v1.json",
+        }:
             continue
         active.append((path, data))
     assert len(active) == 7
@@ -203,7 +206,10 @@ def _create_table(conn: sqlite3.Connection) -> None:
 
 
 def _insert_set(
-    conn: sqlite3.Connection, *, corrupt_digest_for: str | None = None
+    conn: sqlite3.Connection,
+    *,
+    corrupt_digest_for: str | None = None,
+    compatibility_id: str = COMPATIBILITY_ID,
 ) -> None:
     for policy_id, (decision_type, semantic) in REQUIRED_POLICIES.items():
         payload_json = canonical_json(_payload(policy_id, decision_type, semantic))
@@ -214,7 +220,7 @@ def _insert_set(
             "purpose": PURPOSE,
             "learning_observation_contract_id": LEARNING_OBSERVATION_CONTRACT,
             "producer_observation_contract": PRODUCER_OBSERVATION_CONTRACT,
-            "compatibility_id": COMPATIBILITY_ID,
+            "compatibility_id": compatibility_id,
             "policy_id": policy_id,
         }
         row = {
@@ -231,7 +237,7 @@ def _insert_set(
                 PURPOSE,
                 LEARNING_OBSERVATION_CONTRACT,
                 PRODUCER_OBSERVATION_CONTRACT,
-                COMPATIBILITY_ID,
+                compatibility_id,
                 policy_id,
                 POLICY_VERSION,
                 decision_type,
@@ -466,17 +472,50 @@ def test_historical_v1_six_row_cohort_is_not_active_production(tmp_path) -> None
         load_verified_snapshot_set(conn, COMPATIBILITY_ID)
 
 
-def test_hard_filter_adapter_stays_blocked_until_tournament_conformance(
+def test_hard_filter_adapter_conformance_composes_verified_policy_but_not_tournament(
     tmp_path,
 ) -> None:
     conn = sqlite3.connect(tmp_path / "hard-filter.db")
     conn.row_factory = sqlite3.Row
     _create_table(conn)
+    adapter = load_policy_adapter("screener.accum.hard_filters")
+    material = canonical_json(
+        {
+            "contract_id": adapter.conformance_compatibility_contract_id,
+            "behavioral_probe_digest": adapter.conformance_behavioral_probe_digest,
+            "policy_snapshot_payload_digest": MATERIAL_HASH.removeprefix("sha256:"),
+            "observation_payload_schema_version": (
+                adapter.conformance_observation_schema_version
+            ),
+        }
+    )
+    bound_compatibility_id = "sha256:" + hashlib.sha256(
+        material.encode("utf-8")
+    ).hexdigest()
+    _insert_set(conn, compatibility_id=bound_compatibility_id)
+    snapshots = load_verified_snapshot_set(conn, bound_compatibility_id)
+    assert adapter.adapter_version == "v2"
+    assert adapter.conformance_id.startswith("sha256:")
+    policy = compose_execution_policy(
+        snapshots["screener.accum.hard_filters"],
+        adapter,
+    )
+    assert policy.production_snapshot_id
+    assert policy.challenge_adapter_version == "v2"
+    assert policy.panel_kind == "accum_hard_filters"
+    # Conformance closes adapter authority only. The runner deliberately keeps
+    # this panel unsupported until the challenger grid and verdict law land.
+    assert policy.score_kind == "first_match_gate"
+
+
+def test_hard_filter_adapter_rejects_different_behavioral_cohort(tmp_path) -> None:
+    conn = sqlite3.connect(tmp_path / "hard-filter-mismatch.db")
+    conn.row_factory = sqlite3.Row
+    _create_table(conn)
     _insert_set(conn)
     snapshots = load_verified_snapshot_set(conn, COMPATIBILITY_ID)
     adapter = load_policy_adapter("screener.accum.hard_filters")
-    assert adapter.conformance_id == ""
-    with pytest.raises(PolicySnapshotError, match="lacks conformance evidence"):
+    with pytest.raises(PolicySnapshotError, match="does not bind selected"):
         compose_execution_policy(
             snapshots["screener.accum.hard_filters"],
             adapter,

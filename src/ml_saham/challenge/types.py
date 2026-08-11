@@ -94,6 +94,9 @@ class ChallengePolicyAdapter:
     components: tuple[ChallengeAdapterComponent, ...]
     supported_challengers: tuple[str, ...]
     conformance_id: str
+    conformance_behavioral_probe_digest: str = ""
+    conformance_compatibility_contract_id: str = ""
+    conformance_observation_schema_version: int | None = None
 
 
 @dataclass(frozen=True)

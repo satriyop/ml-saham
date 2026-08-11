@@ -1,0 +1,19 @@
+{
+  "adapter_id": "ml-saham.screener.accum.hard_filters.adapter",
+  "adapter_version": "v2",
+  "supported_policy_id": "screener.accum.hard_filters",
+  "supported_snapshot_contract": "production_policy_snapshot.v4",
+  "supported_semantic_engine_contract_ids": ["screen.accum.hard_filters.v1"],
+  "protocol_id": "accum_path_v1",
+  "panel_kind": "accum_hard_filters",
+  "score_kind": "first_match_gate",
+  "supported_challengers": ["production"],
+  "conformance_id": "sha256:197f26f2cc3942a3554a005bd1ff28f021948b57491b32c9f31cdb91a640da24",
+  "conformance_artifact": "screener_accum_hard_filters.conformance.v1.json",
+  "components": [
+    {"key": "market_cap", "aliases": ["market_cap_idr"]},
+    {"key": "piotroski", "aliases": ["piotroski_f_score"]},
+    {"key": "accum_score", "aliases": []},
+    {"key": "signal_score", "aliases": []}
+  ]
+}
