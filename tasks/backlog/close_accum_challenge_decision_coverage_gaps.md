@@ -269,7 +269,9 @@ Remaining before engine registration:
 - [x] predeclare discovery grid, population denominator, H10 target,
   multiplicity discipline, minimum per-side support, and discovery/confirmation
   separation in `screen_accum_hard_filters.preregistration.v1`;
-- implement the H10 excess panel as proposal-only discovery measurement;
+- [x] implement the strict same-session H10 excess panel as proposal-only
+  discovery measurement with train-only thresholds, exact panel digest, and
+  complete denominators;
 - close the still-open material-improvement, tail-risk, and turnover laws in a
   later version before any WIN/LOSE or engine registration;
 - emit the C1 decision-quality metrics, including rejected/control populations;
@@ -430,6 +432,8 @@ do not claim the checkpoint complete.
 - [x] C2 establishes cohort-bound production adapter conformance authority.
 - [x] C2 preregisters a train-only proposal grid and future-confirmation split
       without adopting a production floor or enabling WIN/LOSE.
+- [x] C2 emits proposal-only strict-H10 fold evidence when geometry permits and
+      returns `NOT_READY_GEOMETRY` without partial proposals on the current cohort.
 - [ ] C2 registers the locked challenger grid, Protocol, and tournament.
 - [x] C3 is closed without a challenge under ai-saham ADR-062; configured dead
       code is never challenged or reconstructed as production.

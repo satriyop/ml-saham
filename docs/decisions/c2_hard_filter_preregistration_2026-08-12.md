@@ -67,15 +67,15 @@ with before/after file, SQLite, schema, and row-count fingerprints.
 |---|---:|
 | Explicit ACCUM cohort | `sha256:355e5b59600dbdc9f762f7b373e8879b7cda9a1e55e18bd590461315cfe1e091` |
 | Production snapshots | 9, verified |
-| Selected / extracted / unextractable | 1,125 / 1,125 / 0 |
-| Sessions / tickers | 25 / 45 |
-| Corpus H10 availability only | 675 available / 450 unavailable |
+| Selected / extracted / unextractable | 1,170 / 1,170 / 0 |
+| Sessions / tickers | 26 / 45 |
+| Corpus H10 availability only | 720 available / 450 unavailable |
 | Hard-filter challenge preparation | `BLOCKED_POLICY` |
 | Hard-filter folds formed | 0 |
 | DB unchanged | `true` |
 
 Corpus H10 availability is only a coverage check; it is not the tournament's
-H10 excess-vs-IHSG target. With 25 sessions, the cohort is also below the
+H10 excess-vs-IHSG target. With 26 sessions, the cohort is also below the
 existing 44-session structural point where two post-embargo folds first become
 possible. This snapshot may drift as ai-saham captures more sessions.
 

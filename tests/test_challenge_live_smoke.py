@@ -30,8 +30,14 @@ from ml_saham.challenge.panel_screen_filters import (
 from ml_saham.challenge.panel_signal import extract_signal_components
 from ml_saham.challenge.policy_confirmation_feasibility import (
     audit_accum_cohort_feasibility,
+    capture_read_only_db_fingerprint,
 )
 from ml_saham.challenge.policies.registry import load_policy
+from ml_saham.challenge.screen_filter_discovery import (
+    DISCOVERY_EVIDENCE_NO_SELECTION,
+    NOT_READY_GEOMETRY,
+    run_screen_filter_discovery,
+)
 from ml_saham.data.aisaham_read import connect
 from ml_saham.data.connection import resolve_db_path
 from ml_saham.data.observation_cohort import list_compatibility_cohorts
@@ -190,3 +196,32 @@ def test_live_screen_hard_filter_extract_cohort(live_db: Path):
         assert not ext.is_unextractable
         hit += 1
     assert hit >= 50
+
+
+def test_live_screen_hard_filter_discovery_is_read_only_and_non_verdict(
+    live_db: Path,
+):
+    before = capture_read_only_db_fingerprint(live_db)
+    with connect(live_db) as conn:
+        cohorts = list_compatibility_cohorts(
+            conn,
+            purposes=("ACCUMULATION_DISCOVERY",),
+            purpose_like=None,
+        )
+    results = [
+        run_screen_filter_discovery(live_db, compatibility_id=cid)
+        for cid, _n, _max_captured_at in cohorts
+        if cid
+    ]
+    after = capture_read_only_db_fingerprint(live_db)
+
+    assert before == after
+    assert results
+    current = [
+        result
+        for result in results
+        if result.status in {NOT_READY_GEOMETRY, DISCOVERY_EVIDENCE_NO_SELECTION}
+    ]
+    assert current, [(result.compatibility_id, result.status) for result in results]
+    assert all(result.winner is None for result in current)
+    assert all(result.selected_candidate is None for result in current)

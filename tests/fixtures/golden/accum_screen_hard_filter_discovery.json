@@ -1,0 +1,28 @@
+{
+  "contract_id": "screen_accum_hard_filters.discovery.golden.v1",
+  "sample_unit": "unique_ticker_session",
+  "primary_target": "h10_excess_return",
+  "benchmark": "ihsg_same_h10_sessions",
+  "observation": {
+    "ticker": "PRBA",
+    "session_date": "2026-06-01",
+    "canonical_window": 7,
+    "features_by_window": {
+      "7": {
+        "candidate": {
+          "accum_score": 65.0,
+          "fundamentals": {
+            "market_cap_idr": 25000000000000,
+            "piotroski_f_score": 6
+          }
+        },
+        "signal": {"assessment": {"score": 58.0}}
+      }
+    }
+  },
+  "candles": {
+    "start": {"date": "2026-06-01", "stock_close": 100.0, "ihsg_close": 7000.0},
+    "end_h10": {"date": "2026-06-15", "stock_close": 110.0, "ihsg_close": 7140.0}
+  },
+  "expect": {"h10_excess": 0.08}
+}

@@ -179,10 +179,14 @@ proposal-only and cannot emit WIN/LOSE.
 Decision record:
 [C2 hard-filter methodology preregistration v1](./decisions/c2_hard_filter_preregistration_2026-08-12.md).
 
-The product remains **SKIPPED** until the H10 excess panel exists, adequate
-future folds and per-side support exist, and material-improvement, tail-risk,
-and turnover laws are versioned. Conformance and preregistration do not register
-a PolicySpec or create an engine path.
+The product remains **SKIPPED** until adequate future folds and per-side support
+exist, and material-improvement, tail-risk, and turnover laws are versioned.
+The proposal-only H10 panel is now shipped, but the current live cohort produces
+zero post-embargo folds. Conformance, preregistration, and discovery measurement
+do not register a PolicySpec or create an engine path.
+
+Discovery implementation record:
+[C2 proposal-only discovery panel](./decisions/c2_hard_filter_discovery_panel_2026-08-12.md).
 
 ## Storage
 

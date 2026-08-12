@@ -159,7 +159,7 @@ Prefer **tune vs champion** for purpose (not a third product axis).
 | Risk hard gates | `risk.accum.hard_gates` (+ `gate_off:<gate>`; mean excess open) |
 | Weekly cron | `scripts/install_challenge_health_cron.sh` → `health --with-diagnostics` |
 | Diagnostics | `challenge diagnostic` (display/promote-candidate only) |
-| Screen hard filters | v2 adapter conformance and discovery-only preregistration v1 are shipped; tournament remains `BLOCKED_POLICY` pending H10 panel plus materiality/tail/turnover laws |
+| Screen hard filters | v2 conformance, preregistration, and proposal-only strict-H10 discovery panel are shipped; current cohort is `NOT_READY_GEOMETRY`, and tournament remains blocked pending future folds plus materiality/tail/turnover laws |
 | Action ENTER desk (P4) | **Deferred** |
 
 Expansion plan: **[challenge_product_roadmap.md](./challenge_product_roadmap.md)**.  

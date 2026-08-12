@@ -36,7 +36,7 @@ curriculum                  →  learn explore / demo / compare (never promotion
 |----------|----------------------|
 | Whole material enter stack has explicit validation coverage? | **No — product gaps are tracked below** |
 | What is product-challenged on the **accum** journey? | Accum sleeves, signal policies, and risk gates; diagnostics use a separate display-validity track |
-| Screen hard filters? | Snapshot identity, replay extract, cohort-bound adapter conformance, and discovery-only preregistration shipped; tournament still `BLOCKED_POLICY` pending its H10 panel and verdict/safety laws |
+| Screen hard filters? | Snapshot identity, replay, adapter conformance, preregistration, and proposal-only strict-H10 panel shipped; live cohort forms zero folds, so tournament remains blocked pending future depth and verdict/safety laws |
 | Can challenge tune “should we ENTER this ticker?” | **No** — Action/readiness protocol and usable corpus are both missing |
 | Pre-open? | Separate lane (2 policies already shipped) |
 
@@ -65,8 +65,8 @@ permanent acceptance constants.
 
 | Priority | Gap | Current evidence | Owner / exit condition |
 |----------|-----|------------------|------------------------|
-| **G0** | Snapshot-bound corpus depth | Live read-only vet 2026-08-12 finds one active v4 cohort `sha256:355e5b…`: 1,125 rows / 25 captured sessions / 9 verified snapshots. Only 675 rows across 15 sessions are currently H10-eligible, so the existing 20-session embargo forms zero folds (`NOT_READY_GEOMETRY`). | **ai-saham:** keep prospective captures and H10 maturation. **ml-saham:** keep explicit-cohort and snapshot gates. Exit only when the fixed protocol yields at least two valid post-embargo OOS folds; never pool or retrofit historical cohorts. |
-| **G1** | Screen hard-filter tournament | Four-gate extract, pure replay, producer-observed adapter v2 conformance, and discovery-only preregistration v1 are shipped. Discovery is train-only, one-gate-at-a-time, and non-verdict. The H10 excess panel and materiality/tail/turnover laws remain absent, so execution correctly remains `BLOCKED_POLICY`. | **ml-saham:** implement proposal-only discovery measurement; wait for adequate future folds; close material-improvement, tail-risk, and turnover laws before registering a PolicySpec. |
+| **G0** | Snapshot-bound corpus depth | Live read-only vet 2026-08-12 finds one active v4 cohort `sha256:355e5b…`: 1,170 rows / 26 captured sessions / 9 verified snapshots. The strict discovery target has 720 rows across 16 H10-eligible sessions, so the existing 20-session embargo forms zero folds (`NOT_READY_GEOMETRY`). | **ai-saham:** keep prospective captures and H10 maturation. **ml-saham:** keep explicit-cohort and snapshot gates. Exit only when the fixed protocol yields at least two valid post-embargo OOS folds; never pool or retrofit historical cohorts. |
+| **G1** | Screen hard-filter tournament | Four-gate replay, adapter v2 conformance, preregistration, and proposal-only strict-H10 discovery are shipped. Live vet: 720 labeled rows / 16 sessions / zero post-embargo folds, so no variants or candidate are emitted. Materiality/tail/turnover laws remain absent. | **ai-saham:** continue prospective captures and H10 maturation. **ml-saham:** rerun measurement after adequate folds, freeze at most one proposal, and close materiality/tail/turnover laws before any PolicySpec. |
 | **G2 (closed)** | Configured group-breadth authority | ai-saham ADR-062 retires the dormant conglomerate-group score bonus from production policy. ADR-059 v2 correctly excludes it. Producer clean-removal removes residual config/applier/transport; residual historical payload keys are not baseline authority. | **No ml-saham PolicySpec:** do not reconstruct or challenge the retired rule. A future PIT-governed diagnostic would be a new producer contract and remain non-authoritative until separately promoted. |
 | **G3** | Risk gate decision quality | Measurement-only `gate_decision_quality.v1` now reports fold-wise and pooled allowed/blocked books, false blocks, harmful allows, opportunity cost, and audit-order first/overlap attribution. The existing allowed-book verdict law is intentionally unchanged. | **ml-saham:** predeclare and vet a versioned gate verdict law covering material improvement, per-side support, safety regression, fold agreement, regime stability, and named-gate multiplicity before the new metrics can affect WIN/LOSE. |
 | **G4** | Setup readiness and final Action | These paths materially cap/override ENTER, but there is no Action Protocol. Corpus is not ready: historical cohort has only 8 ENTER and 86/1,890 non-null readiness rows; active v2 cohort has 0 ENTER and 11/304 non-null readiness rows. | **ai-saham:** produce dense PIT-bound readiness/Action observations and compatible outcomes. **ml-saham:** define a real Action H0, population, class handling, costs, and walk-forward protocol. Rank IC is not an acceptable substitute. |
@@ -141,10 +141,10 @@ Suggested policy evolution:
 
 The four-gate extract, missing-state contract, cohort reconciliation, pure
 first-match replay, v2 production identity, cohort-bound producer conformance,
-and a discovery-only grid are shipped. The production tournament is not: the
-H10 excess panel, materiality/tail/turnover law, blocked-book fold evidence,
-and engine registration remain open. Mostly-off default floors lower urgency
-but do not remove the validation obligation for logic that can reject
+discovery-only grid, and strict-H10 proposal panel are shipped. The production
+tournament is not: materiality/tail/turnover law, adequate blocked-book fold
+evidence, and engine registration remain open. Mostly-off default floors lower
+urgency but do not remove the validation obligation for logic that can reject
 candidates when enabled.
 
 ---
@@ -241,7 +241,7 @@ Copy into the PR / decision memo:
 ```text
 G0 v4 corpus time/fold depth      🚧 capture and H10 maturation required
 P0 Accum sleeves honesty          ✅ group-breadth bonus retired (G2 closed)
-P1 hard filters                   🚧 discovery preregistered; tournament blocked (G1)
+P1 hard filters                   🚧 proposal panel shipped; awaiting folds/laws (G1)
 P2 signal policies                ✅ thin
 P3 risk hard gates                🚧 measurement shipped; verdict law open (G3)
 P4 readiness + Action protocol    ⛔ data/protocol blocked (G4)
