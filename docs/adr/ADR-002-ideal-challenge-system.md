@@ -71,8 +71,10 @@ The nine active policy IDs are the v3 eight-row set plus
 bind production identity but have no fabricated tournament adapters. The
 hard-filter snapshot is verified with the cohort, and adapter v2 now binds
 producer-observed counterfactual conformance to that exact behavioral cohort.
-Its tournament remains `BLOCKED_POLICY` until a challenger grid and Protocol
-are registered. Ordinary baselines use frozen observed
+Discovery-only preregistration v1 now locks a train-only one-gate grid without
+granting a verdict. Its tournament remains `BLOCKED_POLICY` until the H10 panel
+and materiality/tail/turnover laws are registered in a later Protocol. Ordinary
+baselines use frozen observed
 outputs (not reconstructed production scores); in particular
 `signal.accum.raw_score` reads
 `features_by_window.<canonical_window>.signal.raw_exact_score`.

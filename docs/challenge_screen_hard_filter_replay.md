@@ -170,10 +170,19 @@ Numeric null coverage (e.g. missing market_cap) is **not** automatically insuffi
 
 ## Tournament checkpoint (not authorized here)
 
-Still product-**SKIPPED** until the exact off/threshold grid, population,
-minimum per-side support, multiplicity, safety rule, and fold-wise verdict law
-are predeclared. Conformance closes adapter authority only; it does not register
-a PolicySpec or create a WIN/LOSE path.
+Discovery methodology is preregistered by
+`screen_accum_hard_filters.preregistration.v1`: train-fold q25/q50/q75, one
+gate at a time, explicit cohort/capture-evaluated population, H10 excess target,
+all variants reported, and exactly one future confirmation candidate. It is
+proposal-only and cannot emit WIN/LOSE.
+
+Decision record:
+[C2 hard-filter methodology preregistration v1](./decisions/c2_hard_filter_preregistration_2026-08-12.md).
+
+The product remains **SKIPPED** until the H10 excess panel exists, adequate
+future folds and per-side support exist, and material-improvement, tail-risk,
+and turnover laws are versioned. Conformance and preregistration do not register
+a PolicySpec or create an engine path.
 
 ## Storage
 

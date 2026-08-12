@@ -93,17 +93,17 @@ Current executable/data evidence, refreshed 2026-08-02:
   snapshots. Current ml-saham candle-based execution yields only one OOS fold:
   `screener.accum.score_weights` is `INCONCLUSIVE`; the `gate_off` risk
   challenger is `LOSE` because its allowed-book mean is worse than production;
-  the hard-filter policy is `BLOCKED_POLICY` because its adapter lacks
-  production conformance authority. Do not summarize these distinct states as
+  the hard-filter policy was `BLOCKED_POLICY` because its adapter then lacked
+  production conformance authority. Do not summarize these historical states as
   "production verdicts remain INCONCLUSIVE";
 - on that slice, risk gates block about 83% OOS and the production allowed book
   is better than `gate_off`, while the score tournament remains inconclusive;
 - risk output does not quantify false-block cost, harmful allows, gate-family
   contribution, or multi-regime stability;
 - screen hard-filter extraction, pure first-match replay, live-shaped goldens,
-  and v2 identity exist. The challenge adapter still has an empty production
-  `conformance_id`, supports no counterfactual challenger, and is not registered
-  in the screener engine portfolio;
+  v2 identity, producer conformance, and discovery-only preregistration now
+  exist. It still supports no executable counterfactual challenger and is not
+  registered in the screener engine portfolio;
 - sector/group breadth remains as dormant ai-saham removal debt, but ADR-062
   retires the score bonus from production policy. No production challenge
   baseline exists, and ml-saham must not reconstruct one from residual fields;
@@ -266,8 +266,12 @@ Remaining before engine registration:
 - [x] establish a non-empty versioned production adapter `conformance_id` by
   proving the adapter/replay reproduces producer-observed frozen results and
   binding that evidence to the exact behavioral cohort;
-- predeclare the off/threshold grid, population denominator, H10 target,
-  multiplicity law, minimum per-side support, and verdict rule;
+- [x] predeclare discovery grid, population denominator, H10 target,
+  multiplicity discipline, minimum per-side support, and discovery/confirmation
+  separation in `screen_accum_hard_filters.preregistration.v1`;
+- implement the H10 excess panel as proposal-only discovery measurement;
+- close the still-open material-improvement, tail-risk, and turnover laws in a
+  later version before any WIN/LOSE or engine registration;
 - emit the C1 decision-quality metrics, including rejected/control populations;
 - register the PolicySpec only after conformance and protocol tests pass.
 
@@ -424,6 +428,8 @@ do not claim the checkpoint complete.
 - [x] C2 foundation has live-shaped extract/replay goldens and shipped pure
       first-match replay.
 - [x] C2 establishes cohort-bound production adapter conformance authority.
+- [x] C2 preregisters a train-only proposal grid and future-confirmation split
+      without adopting a production floor or enabling WIN/LOSE.
 - [ ] C2 registers the locked challenger grid, Protocol, and tournament.
 - [x] C3 is closed without a challenge under ai-saham ADR-062; configured dead
       code is never challenged or reconstructed as production.
