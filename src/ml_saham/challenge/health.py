@@ -17,6 +17,7 @@ from ml_saham.challenge.engines import (
 )
 from ml_saham.challenge.factor_validity import run_factor_challenge_batch
 from ml_saham.challenge.runner import run_policy_challenge
+from ml_saham.challenge.readiness import build_accum_challenge_readiness
 from ml_saham.challenge.types import ChallengeResult, HealthReportResult
 
 ACCUM_POLICY = "screener.accum.score_weights"
@@ -251,6 +252,7 @@ def build_summary_md(
     champion_payload: dict[str, Any] | None,
     factors_payload: dict[str, Any] | None,
     diagnostics_payload: dict[str, Any] | None,
+    readiness_payload: dict[str, Any] | None,
     notes: list[str],
 ) -> str:
     sc = scenario or "all"
@@ -266,11 +268,38 @@ def build_summary_md(
         "- **Disclaimer:** gross metrics · not investment advice · "
         "**never auto-promotes** ai-saham",
         "",
-        "## Engine rollup (tune)",
-        "",
-        "| scenario | policy | status | n | IC_prod | IC_ag |",
-        "|----------|--------|--------|---|---------|-------|",
     ]
+    if readiness_payload is not None:
+        producer = readiness_payload["producer_handoff"]
+        protocol = readiness_payload["protocol_readiness"]
+        lines.extend(
+            [
+                "## ACCUM readiness (C0; no verdict)",
+                "",
+                "| axis | status | evidence |",
+                "|---|---|---|",
+                f"| producer handoff | {producer['status']} | "
+                f"observations={producer['valid_observation_count']}/{producer['observation_count']}; "
+                f"sessions={producer['session_count']}; snapshots="
+                f"{producer['snapshot_verified_count']}/{producer['snapshot_required_count']} |",
+                f"| Protocol | {protocol['status']} | panel={protocol['panel_rows']}; "
+                f"sessions={protocol['panel_sessions']}; valid post-embargo folds="
+                f"{protocol['estimated_valid_post_embargo_folds']}/"
+                f"{protocol['min_folds_for_verdict']} |",
+                "",
+                "> Producer readiness and Protocol readiness are independent. "
+                "Neither is WIN/LOSE or promotion authority.",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## Engine rollup (tune)",
+            "",
+            "| scenario | policy | status | n | IC_prod | IC_ag |",
+            "|----------|--------|--------|---|---------|-------|",
+        ]
+    )
     for r in engine_payload.get("rows") or []:
         lines.append(
             f"| {r.get('scenario')} | `{r.get('policy_id')}` | {r.get('status')} | "
@@ -522,6 +551,15 @@ def build_health_report(
         )
         diagnostics_payload = _diagnostics_payload(dbatch)
 
+    readiness_payload: dict[str, Any] | None = None
+    pairs, _ = resolve_engine_policies(engine_id, sc)
+    if any(pid == ACCUM_POLICY for _, pid in pairs):
+        readiness_payload = build_accum_challenge_readiness(
+            path,
+            compatibility_id=compatibility_id,
+            policy_id=ACCUM_POLICY,
+        ).to_dict()
+
     summary_md = build_summary_md(
         db_path=path.resolve(),
         scenario=sc,
@@ -532,6 +570,7 @@ def build_health_report(
         champion_payload=champion_payload,
         factors_payload=factors_payload,
         diagnostics_payload=diagnostics_payload,
+        readiness_payload=readiness_payload,
         notes=notes,
     )
 
@@ -600,6 +639,7 @@ def build_health_report(
         champion_payload=champion_payload,
         factors_payload=factors_payload,
         diagnostics_payload=diagnostics_payload,
+        readiness_payload=readiness_payload,
         production_identities=_production_identities(
             engine_payload, champion_payload, factors_payload
         ),

@@ -18,7 +18,7 @@ promote packet). CLI remains automation, cron, and recovery.
 | Step | When | CLI | Desk (optional) | Purpose |
 |------|------|-----|-----------------|---------|
 | **1. Catalog** | Always start here | `ml-saham challenge list` | **Policy Catalog** | One entry point for PolicySpecs + dig hints |
-| **2. Weekly tower** | Weekly (or after capture refresh) | `ml-saham challenge health --with-diagnostics --compatibility-id …` | **Control Tower** → open last health pack / Run health | Screener rollup + display bags (not Action) |
+| **2. Weekly tower** | Weekly (or after capture refresh) | `ml-saham challenge health --with-diagnostics --compatibility-id …` | **Control Tower** / **Cohort Discovery** | Separate producer/Protocol readiness + screener rollup + display bags (not Action) |
 | **3. Deep dig** | Only when retuning | `challenge engine …` · `challenge run …` | **Run Challenge** (policy_run) | Signal/risk/engine digs or single-policy tournaments |
 | **4. Reopen / compare** | After packs exist | open `artifacts/challenge/…` | **Artifact History** · **Compare** | Validated reopen; no cross-contract winners |
 | **5. Diagnostics → production?** | After `PROMOTE_CANDIDATE` | design PolicySpec → run/factor → human memo | promote packet from History | Never treat diagnostic as Action |

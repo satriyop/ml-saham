@@ -10,6 +10,7 @@ import pytest
 
 from ml_saham.challenge.runner import list_policies
 from ml_saham.challenge.workbench import (
+    CAPABILITY_AVAILABLE,
     CAPABILITY_NOT_IMPLEMENTED,
     CAPABILITY_UNAVAILABLE,
     build_challenge_workbench,
@@ -65,7 +66,7 @@ def test_policy_catalog_matches_list_policies_ids():
     assert catalog_ids == list_ids
     assert catalog
     for row in catalog:
-        assert row.readiness_capability.status == CAPABILITY_NOT_IMPLEMENTED
+        assert row.readiness_capability.status == CAPABILITY_AVAILABLE
         assert "C0" in row.readiness_capability.detail
         assert row.support_status in {"registered", "error"}
         assert row.protocol_id

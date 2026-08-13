@@ -66,6 +66,12 @@ For opening-session chapters, `"scoreboard.type": "open_session"`.
 
 Curriculum artifacts are learning-only. Product promotion notes live under `artifacts/challenge/` and `challenge promote-packet` (ADR-002) — never auto-applied to ai-saham.
 
+Challenge health packs use manifest schema v4 and include `readiness.json`.
+That file contains two independent non-verdict axes under
+`accum_challenge_readiness.v1`: producer handoff (C0A) and the selected
+ml-saham Protocol (C0B). It never converts readiness into WIN/LOSE or promotion
+authority.
+
 ---
 
 ## When artifacts are written

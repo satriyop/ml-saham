@@ -351,6 +351,7 @@ class HealthReportResult:
     champion_payload: dict[str, Any] | None = None
     factors_payload: dict[str, Any] | None = None
     diagnostics_payload: dict[str, Any] | None = None
+    readiness_payload: dict[str, Any] | None = None
     production_identities: list[dict[str, str]] = field(default_factory=list)
     artifact_dir: Path | None = None
     resolve_error: str | None = None

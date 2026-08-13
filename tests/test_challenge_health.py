@@ -34,9 +34,30 @@ def test_health_engine_only_fixture(fixture_db: Path, tmp_path: Path):
     assert (result.artifact_dir / "summary.md").is_file()
     assert (result.artifact_dir / "engine.json").is_file()
     assert (result.artifact_dir / "index.json").is_file()
+    assert (result.artifact_dir / "readiness.json").is_file()
     manifest = json.loads(
         (result.artifact_dir / "manifest.json").read_text(encoding="utf-8")
     )
+    assert manifest["schema_version"] == 4
+    assert manifest["readiness_contract_id"] == "accum_challenge_readiness.v1"
+    assert result.readiness_payload is not None
+    assert set(result.readiness_payload) == {
+        "contract_id",
+        "producer_handoff",
+        "protocol_readiness",
+    }
+    assert result.readiness_payload["producer_handoff"]["status"] in {
+        "LEGACY_RAW_ONLY",
+        "BLOCKED_POLICY",
+        "COLLECTING",
+        "CHALLENGE_INPUT_READY",
+    }
+    assert result.readiness_payload["protocol_readiness"]["status"] in {
+        "BLOCKED_POLICY",
+        "BLOCKED_DATA",
+        "INCONCLUSIVE_DEPTH",
+        "READY_FOR_PROTOCOL",
+    }
     assert manifest["production_identities"]
     assert {
         "observation_compatibility_id",
@@ -206,6 +227,11 @@ def test_health_preopen_skips_champion(fixture_db: Path, tmp_path: Path):
 
 
 def test_health_bad_scenario(fixture_db: Path):
-    result = build_health_report(fixture_db, scenario="nope", write_artifact=False, compatibility_id=FIXTURE_COMPATIBILITY_ID)
+    result = build_health_report(
+        fixture_db,
+        scenario="nope",
+        write_artifact=False,
+        compatibility_id=FIXTURE_COMPATIBILITY_ID,
+    )
     assert result.exit_code() == 2
     assert result.resolve_error

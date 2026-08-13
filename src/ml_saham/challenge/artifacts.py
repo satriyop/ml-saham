@@ -13,7 +13,7 @@ from ml_saham.artifacts.writer import resolve_artifacts_root
 from ml_saham.challenge.champion import is_champion_against
 from ml_saham.challenge.types import (
     EVIDENCE_GRADE_EXPLORATORY,
-    VERDICT_SEMANTICS_CONTRACT_ID,
+    VERDICT_SEMANTICS_CONTRACT_ID,  # noqa: F401 - re-exported compatibility surface
     BatchDiagnosticResult,
     BatchFactorResult,
     ChallengeResult,
@@ -33,11 +33,13 @@ JAKARTA = ZoneInfo("Asia/Jakarta")
 #     ``session_native_purged.v1`` with per-fold session geometry fields.
 # v4: sealed digests only — **historical / display-only** (pre ML-OOS-01 geometry
 #     enforcement; may contain broken row-based splits).
-# v3 display artifacts: factor/diagnostic/batch/engine/health/promote-packet
-#     writers stamp this without seals. v2 and earlier remain historical.
+# v3 display artifacts: factor/batch/engine/promote-packet writers stamp this
+#     without seals. Health and diagnostic display packs use their own v4
+#     schemas. v2 and earlier remain historical.
 # Promote reopen accepts only schema v5 sealed evidence with geometry contract.
 CHALLENGE_PROMOTE_EVIDENCE_SCHEMA_VERSION = 5
 CHALLENGE_DISPLAY_ARTIFACT_SCHEMA_VERSION = 3
+HEALTH_ARTIFACT_SCHEMA_VERSION = 4
 DIAGNOSTIC_ARTIFACT_SCHEMA_VERSION = 4
 DIAGNOSTIC_ARTIFACT_CONTRACT_ID = "diagnostic_result_artifact.v4"
 
@@ -749,7 +751,7 @@ def write_health_artifact(
     out = root / "challenge" / "health" / ts
     out.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "schema_version": CHALLENGE_DISPLAY_ARTIFACT_SCHEMA_VERSION,
+        "schema_version": HEALTH_ARTIFACT_SCHEMA_VERSION,
         "mode": "challenge_health",
         "engine_id": result.engine_id,
         "scenario_filter": result.scenario_filter,
@@ -760,6 +762,7 @@ def write_health_artifact(
         "created_at": datetime.now(tz=JAKARTA).isoformat(),
         "n_index": len(result.index),
         "production_identities": result.production_identities,
+        "readiness_contract_id": ((result.readiness_payload or {}).get("contract_id")),
     }
     (out / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
@@ -771,6 +774,10 @@ def write_health_artifact(
     (out / "index.json").write_text(
         json.dumps(result.index, indent=2) + "\n", encoding="utf-8"
     )
+    if result.readiness_payload is not None:
+        (out / "readiness.json").write_text(
+            json.dumps(result.readiness_payload, indent=2) + "\n", encoding="utf-8"
+        )
     if result.champion_payload is not None:
         (out / "champion.json").write_text(
             json.dumps(result.champion_payload, indent=2) + "\n", encoding="utf-8"

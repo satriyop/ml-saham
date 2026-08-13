@@ -2,7 +2,7 @@
 
 Phase 0: configuration and product-boundary context only.
 Phase 1A: read-only Control Tower, cohort inventory, Policy Catalog.
-Phase 1B: deferred optional C0 readiness enrichment (not required for Phase 2).
+Phase 1B: typed C0 readiness for an explicitly selected ACCUM cohort.
 Phase 2: explicit immutable policy-run requests + synchronous Result Inspector
 DTO (session-scoped attempt idempotency owned by the presentation adapter).
 """
@@ -27,6 +27,10 @@ from ml_saham.challenge.diagnostics.registry import list_diagnostics
 from ml_saham.challenge.policies.registry import load_policy, load_policy_adapter
 from ml_saham.challenge.production_policy_snapshots import REQUIRED_POLICIES
 from ml_saham.challenge.health import build_health_report
+from ml_saham.challenge.readiness import (
+    AccumChallengeReadiness,
+    build_accum_challenge_readiness,
+)
 from ml_saham.challenge.promote import build_promote_packet
 from ml_saham.challenge.protocols import get_protocol
 from ml_saham.challenge.runner import list_policies, run_policy_challenge
@@ -474,10 +478,10 @@ class ChallengeWorkbenchService:
         """Canonical policy inventory equal to the registry behind challenge list."""
         readiness = CapabilityField(
             name="cohort_protocol_readiness",
-            status=CAPABILITY_NOT_IMPLEMENTED,
+            status=CAPABILITY_AVAILABLE,
             detail=(
-                "C0 producer/Protocol readiness projection is not available in "
-                "Phase 1A; no eligibility, fold estimate, or blocker is inferred."
+                "C0 is available after an exact ACCUM cohort is selected; "
+                "producer and Protocol statuses remain separate."
             ),
         )
         rows: list[PolicyCatalogRow] = []
@@ -541,6 +545,19 @@ class ChallengeWorkbenchService:
                 )
             )
         return tuple(rows)
+
+    def get_accum_readiness(
+        self,
+        *,
+        compatibility_id: str,
+        policy_id: str = "screener.accum.score_weights",
+    ) -> AccumChallengeReadiness:
+        """Typed C0 projection for one explicit ACCUM cohort and policy."""
+        return build_accum_challenge_readiness(
+            self._config.upstream_db_path,
+            compatibility_id=compatibility_id,
+            policy_id=policy_id,
+        )
 
     def list_diagnostic_catalog(self) -> tuple[DiagnosticCatalogRow, ...]:
         """Explain-only diagnostic bags — never Action / ENTER authority."""

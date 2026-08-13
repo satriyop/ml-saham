@@ -21,7 +21,7 @@ blanket readiness state:
 
 | Checkpoint | Current availability |
 |---|---|
-| C0 | Contract locked below. Implementation waits for the companion producer task to refresh and close its current code-hardening gate; do not bind to stale producer output. |
+| C0 | Implemented and live-vetted on 2026-08-13. Typed producer and Protocol axes ship through health artifacts/CLI and Challenge Desk. |
 | C1 | Ready for protocol/metric implementation and deterministic fixtures. A confirmatory live result still requires multi-session depth. |
 | C2 | Replay extraction, live-shaped goldens, and cohort-bound production adapter conformance are shipped. The locked tournament remains open and may build on C1. |
 | C3 | Resolved externally by ai-saham ADR-062: the dormant score bonus is retired. No production PolicySpec or challenge implementation is authorized. |
@@ -187,7 +187,9 @@ UI/report.
 
 - exact `compatibility_id`; never implicit largest/latest selection;
 - observation count, distinct session count, min/max economic date;
-- required snapshot contract, verified policy IDs, and `7/7` completeness;
+- required snapshot contract, verified policy IDs, and active v4 `9/9`
+  completeness (the earlier seven-policy wording is superseded by executable
+  `REQUIRED_POLICIES`);
 - corpus-label availability/integrity by H3/H10/H20, explicitly labeled as
   ai-saham producer labels rather than `accum_path_v1` targets;
 - Action distribution and readiness present/missing counts;
@@ -429,7 +431,7 @@ do not claim the checkpoint complete.
 
 ## 11. Acceptance Criteria
 
-- [ ] C0 reports producer handoff and Protocol readiness as two separate typed
+- [x] C0 reports producer handoff and Protocol readiness as two separate typed
       axes with explicit label sources and no inferred status conversion.
 - [ ] C1 reports allowed and blocked books, false blocks, harmful allows,
       opportunity cost, attribution, and multi-fold stability.
@@ -485,6 +487,29 @@ population assumption. Do not silently weaken this contract.
 - Do not write `ai-saham` DB/YAML or auto-promote a result.
 
 ## 15. Completion Record
+
+C0 completion slice (2026-08-13):
+
+- contract: `accum_challenge_readiness.v1`; health artifact schema v4;
+- live exact cohort:
+  `sha256:355e5b59600dbdc9f762f7b373e8879b7cda9a1e55e18bd590461315cfe1e091`;
+- C0A: `CHALLENGE_INPUT_READY`, 1,170/1,170 valid observations, 26 sessions,
+  2026-07-08 through 2026-08-12, v4 snapshots 9/9, available producer labels
+  H3/H10/H20 = 1,035/720/270, Action and readiness tallies independently
+  matched the ai-saham executable status projection;
+- C0B for `screener.accum.score_weights` / `accum_path_v1`:
+  `INCONCLUSIVE_DEPTH`, 720 H10 candle/IHSG panel rows, 16 sessions, zero valid
+  post-embargo folds against minimum two;
+- no upstream writes, imports, CLI scraping, inferred cohort selection,
+  verdict conversion, or auto-promotion.
+- verification: scoped Ruff clean; C0/health/Desk 24 passed; challenge contract
+  gate 49 passed; complete suite run in memory-safe file batches totaled 585
+  passed, 1 skipped, and 8 failures in untouched curriculum/demo paths
+  (`broker-flow`, retired Risk/Signal/Market demos, `research-pipeline` undefined
+  `mom`, and missing Prophet); compileall and `git diff --check` passed;
+- live read-only tripwire: upstream DB SHA-256 remained
+  `9273372e6544d7e01c91e9dc07421a8bfc1ba73dc57b1bae1a0f1aac310485fd`
+  before and after the C0A+C0B projection.
 
 ```text
 Completed date:

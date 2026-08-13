@@ -9,7 +9,8 @@ Product map + **operator ritual SSOT:** [challenge_product.md](./challenge_produ
 
 ```bash
 # Weekly control tower (recommended)
-ml-saham challenge health --with-diagnostics
+ml-saham challenge health --with-diagnostics \
+  --compatibility-id <ACCUM_COHORT_ID>
 
 # Optional deeper weekly pack
 ml-saham challenge health --with-diagnostics --with-factors
@@ -50,6 +51,7 @@ ml-saham challenge health --with-diagnostics --with-champion --with-factors
 | Step | Default |
 |------|---------|
 | Engine portfolio | `screener` vs **equal_sleeves** (tune) |
+| ACCUM C0 readiness | independent producer-handoff and Protocol axes; no verdict |
 | `--with-diagnostics` | display bags (KEEP_DISPLAY / PROMOTE_CANDIDATE) — **not Action** |
 | `--with-champion` | accum only: `lgbm_reweight` (skipped if scenario excludes accum) |
 | `--with-factors` | always `screener.accum.score_weights --all` (note in pack) |
@@ -60,12 +62,21 @@ ml-saham challenge health --with-diagnostics --with-champion --with-factors
 artifacts/challenge/health/<ts>/
   manifest.json
   summary.md      # read this first
+  readiness.json  # C0A producer handoff + C0B Protocol readiness; separate axes
   engine.json
   index.json
   champion.json   # if --with-champion and not skipped
   factors.json    # if --with-factors
   diagnostics.json  # if --with-diagnostics (display bags; not Action)
 ```
+
+Health manifest schema v4 adds the C0 readiness contract and
+`readiness.json`. It does not change challenge verdict semantics. C0A validates
+the exact ACCUM cohort, current schema-15 observation/population contract,
+producer H3/H10/H20 labels, and the exact nine-policy v4 snapshot set. C0B uses
+the same candle/IHSG panel and post-embargo fold builder as the named Protocol.
+`CHALLENGE_INPUT_READY` therefore does not imply `READY_FOR_PROTOCOL`; neither
+status is WIN/LOSE or promotion authority.
 
 ### Exit codes
 

@@ -514,6 +514,39 @@ def render_cohort_discovery(service: ChallengeWorkbenchService) -> None:
             f"Selected for session prefill: family=`{family}` "
             f"compatibility_id=`{cid}` (not production authority by itself)."
         )
+        if family == "ACCUM":
+            with st.spinner("Building read-only C0 readiness…"):
+                readiness = service.get_accum_readiness(compatibility_id=cid)
+            payload = readiness.to_dict()
+            producer = payload["producer_handoff"]
+            protocol = payload["protocol_readiness"]
+            st.subheader("ACCUM readiness (C0; no verdict)")
+            st.dataframe(
+                [
+                    {
+                        "axis": "producer handoff",
+                        "status": producer["status"],
+                        "sessions": producer["session_count"],
+                        "rows": producer["valid_observation_count"],
+                        "valid_post_embargo_folds": "n/a",
+                    },
+                    {
+                        "axis": "Protocol",
+                        "status": protocol["status"],
+                        "sessions": protocol["panel_sessions"],
+                        "rows": protocol["panel_rows"],
+                        "valid_post_embargo_folds": (
+                            f"{protocol['estimated_valid_post_embargo_folds']}/"
+                            f"{protocol['min_folds_for_verdict']}"
+                        ),
+                    },
+                ],
+                use_container_width=True,
+            )
+            st.caption(
+                "Producer readiness does not imply Protocol readiness. Neither "
+                "axis is WIN/LOSE, promotion authority, or a trading signal."
+            )
 
     st.caption(
         "Selection does not start a challenge. It only prefills Run Challenge "
@@ -525,7 +558,7 @@ def render_policy_catalog(service: ChallengeWorkbenchService) -> None:
     st.title("Policy Catalog")
     st.caption(
         "Same registry as `ml-saham challenge list`. No parallel inventory. "
-        "No cohort-specific readiness in Phase 1A."
+        "C0 readiness is evaluated only after an explicit ACCUM cohort selection."
     )
     rows: tuple[PolicyCatalogRow, ...] = service.list_policy_catalog()
     records = [
@@ -550,8 +583,8 @@ def render_policy_catalog(service: ChallengeWorkbenchService) -> None:
     ]
     st.dataframe(records, use_container_width=True)
     st.caption(
-        f"Readiness column is `{CAPABILITY_NOT_IMPLEMENTED}` — not a challenge "
-        "verdict and not producer/Protocol readiness."
+        "Readiness availability is a capability flag. Actual producer and "
+        "Protocol statuses require an explicit ACCUM cohort and remain non-verdicts."
     )
 
     st.subheader("Diagnostic bags (explain-only)")
