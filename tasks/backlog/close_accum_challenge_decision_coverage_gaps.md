@@ -272,9 +272,15 @@ Remaining before engine registration:
 - [x] implement the strict same-session H10 excess panel as proposal-only
   discovery measurement with train-only thresholds, exact panel digest, and
   complete denominators;
-- close the still-open material-improvement, tail-risk, and turnover laws in a
-  later version before any WIN/LOSE or engine registration;
-- emit the C1 decision-quality metrics, including rejected/control populations;
+- [x] vet the session-native material-improvement, lower-tail, and
+  decision-change metric form without inspecting a new confirmation result;
+- obtain maintainer-approved numerical limits and cost/capacity rationale for
+  those three gates before any WIN/LOSE or engine registration (the rank-IC
+  margin, ranking tail proxy, and discovery quantiles are explicitly invalid
+  substitutes); see
+  `docs/decisions/c2_hard_filter_decision_law_vet_2026-08-13.md`;
+- [x] emit the C1 decision-quality metrics, including rejected/control
+  populations, in the proposal-only fold evidence;
 - register the PolicySpec only after conformance and protocol tests pass.
 
 Snapshot absence/mismatch, unsupported semantics, missing control population,

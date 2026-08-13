@@ -69,5 +69,7 @@ labels.
 - More prospective captures and H10 maturation until at least two valid folds.
 - Per-side support must pass for every contributing fold.
 - One proposal must be frozen before future confirmation data is observed.
-- Material improvement, tail-risk, and turnover laws remain open.
+- The session-native decision-law form is vetted, but its material-improvement,
+  tail-risk, and decision-change constants remain blocked on an explicit
+  maintainer utility/capacity decision.
 - Only a later Protocol/version may authorize engine registration or verdicts.

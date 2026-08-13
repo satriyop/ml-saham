@@ -58,6 +58,12 @@ Until a later version closes all three, the contract states
 `engine_registration_authorized=false`; no PolicySpec, CLI tournament, or
 WIN/LOSE path may be registered.
 
+The 2026-08-13 decision-law vet locks a session-native candidate metric form,
+but confirms that the numerical limits require a maintainer-owned
+utility/capacity contract. It explicitly rejects reusing the rank-IC win margin,
+ranking tail proxy, or discovery quantiles as gate constants. See
+[C2 hard-filter decision-law vet](./c2_hard_filter_decision_law_vet_2026-08-13.md).
+
 ## Live read-only vet snapshot (2026-08-12)
 
 The current maintainer DB was inspected through existing read-only boundaries

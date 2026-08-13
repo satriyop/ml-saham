@@ -188,6 +188,11 @@ do not register a PolicySpec or create an engine path.
 Discovery implementation record:
 [C2 proposal-only discovery panel](./decisions/c2_hard_filter_discovery_panel_2026-08-12.md).
 
+Decision-law vet:
+[C2 session-native metric form](./decisions/c2_hard_filter_decision_law_vet_2026-08-13.md).
+The metric form is vetted, but numerical materiality, tail, and decision-change
+limits remain blocked on an explicit maintainer utility/capacity contract.
+
 ## Storage
 
 - DB access: `ml_saham.data.aisaham_read.connect` (`mode=ro`)
