@@ -85,6 +85,23 @@ status is WIN/LOSE or promotion authority.
 | 0 | Recipe finished (BLOCKED rows allowed) |
 | 2 | Bad scenario / missing DB / resolve error |
 
+### Snapshot contract mismatch
+
+`challenge health` stays `BLOCKED_POLICY` when a selected cohort snapshot
+`contract_id` does not match `SNAPSHOT_CONTRACT` (`production_policy_snapshot.v4`).
+That is a live closed-set disagreement, not documentation drift. The printed
+reason names:
+
+- the ML-owned adapter file that still declares `supported_snapshot_contract`
+  (hard-gates: `src/ml_saham/challenge/policies/risk_accum_hard_gates.adapter.v2.json`),
+  or the verifier file for identity-only policies
+- producer `contract_id` versus `SNAPSHOT_CONTRACT`
+- one-step reconcile: retarget that adapter field and `SNAPSHOT_CONTRACT` in
+  `src/ml_saham/challenge/production_policy_snapshots.py` together as one
+  reviewed closed-set bump
+
+Do not copy ai-saham configs or auto-promote a champion to clear the block.
+
 ### Cron install (recommended)
 
 ```bash

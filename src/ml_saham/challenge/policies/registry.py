@@ -39,6 +39,14 @@ _ADAPTER_FILES: dict[str, str] = {
 }
 
 
+def adapter_repo_path(policy_id: str) -> str | None:
+    """Repo-relative packaged adapter path, or None for identity-only policies."""
+    name = _ADAPTER_FILES.get(policy_id)
+    if name is None:
+        return None
+    return f"src/ml_saham/challenge/policies/{name}"
+
+
 def list_policy_ids() -> list[str]:
     return sorted(set(_POLICY_FILES) | set(_ADAPTER_FILES))
 

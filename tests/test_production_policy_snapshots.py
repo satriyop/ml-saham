@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from ml_saham.challenge.policies.registry import load_policy_adapter
+from ml_saham.challenge.policies.registry import adapter_repo_path, load_policy_adapter
 from ml_saham.challenge.panel import PanelRow
 from ml_saham.challenge.production_policy_snapshots import (
     LEARNING_OBSERVATION_CONTRACT,
@@ -18,11 +18,13 @@ from ml_saham.challenge.production_policy_snapshots import (
     PURPOSE,
     REQUIRED_POLICIES,
     SNAPSHOT_CONTRACT,
+    VERIFIER_SNAPSHOT_FILE,
     PolicySnapshotError,
     _stable_snapshot_id,
     canonical_json,
     compose_execution_policy,
     load_verified_snapshot_set,
+    snapshot_contract_mismatch_reason,
 )
 from ml_saham.challenge.scorers import score_production
 
@@ -520,3 +522,68 @@ def test_hard_filter_adapter_rejects_different_behavioral_cohort(tmp_path) -> No
             snapshots["screener.accum.hard_filters"],
             adapter,
         )
+
+
+def test_hard_gates_adapter_path_is_active_v2() -> None:
+    path = adapter_repo_path("risk.accum.hard_gates")
+    assert path == (
+        "src/ml_saham/challenge/policies/risk_accum_hard_gates.adapter.v2.json"
+    )
+    assert adapter_repo_path("risk.accum.unevaluable_policy") is None
+
+
+def test_foreign_snapshot_contract_stays_blocked_with_file_and_reconcile(
+    tmp_path,
+) -> None:
+    """Producer contract != SNAPSHOT_CONTRACT is a live disagreement, not doc drift."""
+    foreign = "production_policy_snapshot.v5"
+    conn = sqlite3.connect(tmp_path / "foreign-hard-gates.db")
+    conn.row_factory = sqlite3.Row
+    _create_table(conn)
+    _insert_set(conn)
+    conn.execute(
+        "UPDATE learning_policy_snapshots SET contract_id = ? WHERE policy_id = ?",
+        (foreign, "risk.accum.hard_gates"),
+    )
+    adapter_file = adapter_repo_path("risk.accum.hard_gates")
+    assert adapter_file is not None
+    with pytest.raises(PolicySnapshotError) as excinfo:
+        load_verified_snapshot_set(conn, COMPATIBILITY_ID)
+    reason = str(excinfo.value)
+    expected = snapshot_contract_mismatch_reason(
+        "risk.accum.hard_gates",
+        foreign,
+        SNAPSHOT_CONTRACT,
+    )
+    assert reason == expected
+    assert foreign in reason
+    assert SNAPSHOT_CONTRACT in reason
+    assert adapter_file in reason
+    assert VERIFIER_SNAPSHOT_FILE in reason
+    assert "Reconcile:" in reason
+    assert "do not copy ai-saham configs" in reason
+    assert "auto-promote" in reason
+
+
+def test_identity_only_snapshot_contract_mismatch_names_verifier(
+    tmp_path,
+) -> None:
+    foreign = "production_policy_snapshot.v5"
+    conn = sqlite3.connect(tmp_path / "foreign-unevaluable.db")
+    conn.row_factory = sqlite3.Row
+    _create_table(conn)
+    _insert_set(conn)
+    conn.execute(
+        "UPDATE learning_policy_snapshots SET contract_id = ? WHERE policy_id = ?",
+        (foreign, "risk.accum.unevaluable_policy"),
+    )
+    with pytest.raises(PolicySnapshotError) as excinfo:
+        load_verified_snapshot_set(conn, COMPATIBILITY_ID)
+    reason = str(excinfo.value)
+    assert reason == snapshot_contract_mismatch_reason(
+        "risk.accum.unevaluable_policy",
+        foreign,
+        SNAPSHOT_CONTRACT,
+    )
+    assert VERIFIER_SNAPSHOT_FILE in reason
+    assert "risk_accum_hard_gates.adapter" not in reason

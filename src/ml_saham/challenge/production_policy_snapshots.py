@@ -10,6 +10,7 @@ import sqlite3
 from collections.abc import Mapping
 from typing import Any
 
+from ml_saham.challenge.policies.registry import adapter_repo_path
 from ml_saham.challenge.types import (
     ChallengeExecutionPolicy,
     ChallengePolicyAdapter,
@@ -37,6 +38,8 @@ REQUIRED_POLICIES: dict[str, tuple[str, str]] = {
     "signal.accum.decision_policy": ("gate", "signal.decision_policy.accum.v1"),
 }
 
+VERIFIER_SNAPSHOT_FILE = "src/ml_saham/challenge/production_policy_snapshots.py"
+
 SNAPSHOT_COLUMNS = {
     "snapshot_id",
     "schema_version",
@@ -59,6 +62,28 @@ SNAPSHOT_COLUMNS = {
 
 class PolicySnapshotError(ValueError):
     """Snapshot absence or verification failure; callers map to BLOCKED_POLICY."""
+
+
+def snapshot_contract_mismatch_reason(
+    policy_id: str, actual: str, expected: str
+) -> str:
+    """Honest BLOCKED_POLICY text for a live snapshot-contract disagreement.
+
+    Names the ML-owned adapter file that still declares the expected contract,
+    or the verifier file for identity-only rows. Does not accept the producer
+    contract.
+    """
+    adapter_file = adapter_repo_path(policy_id) or VERIFIER_SNAPSHOT_FILE
+    return (
+        f"{policy_id}: contract_id={actual!r} does not match {expected!r} "
+        f"(file {adapter_file} supported_snapshot_contract={expected}; "
+        f"producer contract={actual}). "
+        f"Reconcile: set supported_snapshot_contract in {adapter_file} and "
+        f"SNAPSHOT_CONTRACT in {VERIFIER_SNAPSHOT_FILE} from {expected} to "
+        f"{actual} only as one reviewed closed-set bump — live policy "
+        f"disagreement, not documentation drift; do not copy ai-saham configs "
+        f"or auto-promote a champion."
+    )
 
 
 def _require_exact_value(
@@ -347,6 +372,12 @@ def _verify_row(
     }
     for field, (actual, wanted) in bindings.items():
         if actual != wanted:
+            if field == "contract_id":
+                raise PolicySnapshotError(
+                    snapshot_contract_mismatch_reason(
+                        policy_id, str(actual), str(wanted)
+                    )
+                )
             raise PolicySnapshotError(
                 f"{policy_id}: {field}={actual!r} does not match {wanted!r}"
             )

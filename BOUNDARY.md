@@ -139,6 +139,12 @@ Hard rules (unchanged): **no** ai-saham Python imports · **no** scrapers · **n
   adapter.
 - Historical `production_policy_snapshot.v1`/v2/v3 cohorts are audit history,
   not eligible for current `baseline=production`.
+- A live snapshot `contract_id` disagreement against `SNAPSHOT_CONTRACT`
+  (`production_policy_snapshot.v4`) is `BLOCKED_POLICY`. The reason names the
+  ML-owned adapter file (or `src/ml_saham/challenge/production_policy_snapshots.py`
+  for identity-only rows) and one reviewed closed-set bump of that file's
+  `supported_snapshot_contract` together with `SNAPSHOT_CONTRACT`. Do not treat
+  this as documentation drift, copy ai-saham configs, or auto-promote a champion.
 - Snapshot or adapter integrity failures are `BLOCKED_POLICY`; valid policy
   with insufficient rows/folds is `BLOCKED_DATA`.
 - Operators must pass `--compatibility-id` for every production-facing ACCUM or

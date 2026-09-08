@@ -50,8 +50,14 @@ rule must be predeclared and vetted before these fields may affect WIN/LOSE.
 ## Baseline
 
 `src/ml_saham/challenge/policies/risk_accum_hard_gates.adapter.v2.json`
+(`supported_snapshot_contract=production_policy_snapshot.v4`)
 `score_kind=gate_block` · panel from observation
 `features_by_window.7.risk.gate_evaluations` (schema 15).
+
+A snapshot `contract_id` other than `production_policy_snapshot.v4` stays
+`BLOCKED_POLICY` and names that adapter file plus one reviewed closed-set bump
+of `supported_snapshot_contract` together with `SNAPSHOT_CONTRACT`. Do not copy
+ai-saham configs or auto-promote a champion.
 
 | Outcome | Component |
 |---------|-----------|

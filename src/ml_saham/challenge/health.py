@@ -30,6 +30,23 @@ def _fmt_ic(x: float | None) -> str:
     return f"{x:+.4f}" if x is not None else "n/a"
 
 
+def _blocked_policy_contract_notes(engine_rows: list[dict[str, Any]]) -> list[str]:
+    """Deduped BLOCKED notes that name a snapshot-contract disagreement."""
+    seen: set[str] = set()
+    notes: list[str] = []
+    for row in engine_rows:
+        if not str(row.get("status") or "").startswith("BLOCKED"):
+            continue
+        for note in row.get("notes") or []:
+            if "Reconcile:" not in note and "contract_id=" not in note:
+                continue
+            if note in seen:
+                continue
+            seen.add(note)
+            notes.append(note)
+    return notes
+
+
 def _engine_payload(eng) -> dict[str, Any]:
     return {
         "engine_id": eng.engine_id,
@@ -185,6 +202,8 @@ def _attention(
             f"{len(blocked)} engine policy row(s) BLOCKED: "
             + ", ".join(r["policy_id"] for r in blocked[:5])
         )
+        for note in _blocked_policy_contract_notes(blocked):
+            attn.append(f"BLOCKED_POLICY: {note}")
     loses = [r for r in engine_rows if r.get("status") == "LOSE"]
     if loses:
         attn.append(
@@ -306,6 +325,9 @@ def build_summary_md(
             f"{r.get('n_rows')} | {_fmt_ic(r.get('primary_ic_baseline'))} | "
             f"{_fmt_ic(r.get('primary_ic_against'))} |"
         )
+    for note in _blocked_policy_contract_notes(engine_payload.get("rows") or []):
+        lines.append("")
+        lines.append(f"**BLOCKED_POLICY:** {note}")
     if engine_payload.get("resolve_error"):
         lines.append("")
         lines.append(f"**Engine resolve error:** {engine_payload['resolve_error']}")

@@ -8,7 +8,16 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from ml_saham.challenge.health import build_health_report
+from ml_saham.challenge.health import (
+    _attention,
+    build_health_report,
+    build_summary_md,
+)
+from ml_saham.challenge.policies.registry import adapter_repo_path
+from ml_saham.challenge.production_policy_snapshots import (
+    SNAPSHOT_CONTRACT,
+    snapshot_contract_mismatch_reason,
+)
 from ml_saham.cli.app import app
 from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
 
@@ -235,3 +244,43 @@ def test_health_bad_scenario(fixture_db: Path):
     )
     assert result.exit_code() == 2
     assert result.resolve_error
+
+
+def test_health_summary_names_hard_gates_contract_file_and_reconcile() -> None:
+    adapter_file = adapter_repo_path("risk.accum.hard_gates")
+    assert adapter_file is not None
+    reason = snapshot_contract_mismatch_reason(
+        "risk.accum.hard_gates",
+        "production_policy_snapshot.v5",
+        SNAPSHOT_CONTRACT,
+    )
+    row = {
+        "scenario": "accum",
+        "policy_id": "risk.accum.hard_gates",
+        "status": "BLOCKED_POLICY",
+        "n_rows": 0,
+        "primary_ic_baseline": None,
+        "primary_ic_against": None,
+        "notes": [reason],
+    }
+    md = build_summary_md(
+        db_path=Path("/tmp/data.db"),
+        scenario="accum",
+        with_champion=False,
+        with_factors=False,
+        with_diagnostics=False,
+        engine_payload={"rows": [row]},
+        champion_payload=None,
+        factors_payload=None,
+        diagnostics_payload=None,
+        readiness_payload=None,
+        notes=[],
+    )
+    assert "**BLOCKED_POLICY:**" in md
+    assert adapter_file in md
+    assert "production_policy_snapshot.v5" in md
+    assert SNAPSHOT_CONTRACT in md
+    assert "Reconcile:" in md
+    assert "do not copy ai-saham configs" in md
+    attn = _attention([row], None, None, None, [])
+    assert any(note.startswith("BLOCKED_POLICY:") and adapter_file in note for note in attn)
