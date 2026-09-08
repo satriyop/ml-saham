@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from ml_saham.challenge.health import build_health_report
+from ml_saham.challenge.health import build_health_report, build_summary_md
+from ml_saham.challenge.production_policy_snapshots import (
+    SNAPSHOT_CONTRACT,
+    snapshot_contract_mismatch_reason,
+)
 from ml_saham.cli.app import app
 from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
 
@@ -207,3 +211,41 @@ def test_health_bad_scenario(fixture_db: Path):
     result = build_health_report(fixture_db, scenario="nope", write_artifact=False, compatibility_id=FIXTURE_COMPATIBILITY_ID)
     assert result.exit_code() == 2
     assert result.resolve_error
+
+
+def test_health_summary_names_hard_gates_contract_file_and_reconcile() -> None:
+    reason = snapshot_contract_mismatch_reason(
+        "risk.accum.hard_gates",
+        "production_policy_snapshot.v4",
+        SNAPSHOT_CONTRACT,
+    )
+    md = build_summary_md(
+        db_path=Path("/tmp/data.db"),
+        scenario="accum",
+        with_champion=False,
+        with_factors=False,
+        with_diagnostics=False,
+        engine_payload={
+            "rows": [
+                {
+                    "scenario": "accum",
+                    "policy_id": "screener.accum.score_weights",
+                    "status": "BLOCKED_POLICY",
+                    "n_rows": 0,
+                    "primary_ic_baseline": None,
+                    "primary_ic_against": None,
+                    "notes": [reason],
+                }
+            ]
+        },
+        champion_payload=None,
+        factors_payload=None,
+        diagnostics_payload=None,
+        notes=[],
+    )
+    assert "BLOCKED_POLICY" in md
+    assert "src/ml_saham/challenge/policies/risk_accum_hard_gates.adapter.v1.json" in md
+    assert "production_policy_snapshot.v4" in md
+    assert "production_policy_snapshot.v2" in md
+    assert "Reconcile:" in md
+    assert "do not copy ai-saham configs" in md

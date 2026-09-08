@@ -12,17 +12,20 @@ import pytest
 from ml_saham.challenge.policies.registry import load_policy_adapter
 from ml_saham.challenge.panel import PanelRow
 from ml_saham.challenge.production_policy_snapshots import (
+    ADAPTER_SNAPSHOT_FILES,
     LEARNING_OBSERVATION_CONTRACT,
     POLICY_VERSION,
     PRODUCER_OBSERVATION_CONTRACT,
     PURPOSE,
     REQUIRED_POLICIES,
     SNAPSHOT_CONTRACT,
+    VERIFIER_SNAPSHOT_FILE,
     PolicySnapshotError,
     _stable_snapshot_id,
     canonical_json,
     compose_execution_policy,
     load_verified_snapshot_set,
+    snapshot_contract_mismatch_reason,
 )
 from ml_saham.challenge.scorers import score_production
 
@@ -338,3 +341,35 @@ def test_hard_filter_adapter_stays_blocked_until_tournament_conformance(
             snapshots["screener.accum.hard_filters"],
             adapter,
         )
+
+
+def test_v4_hard_gates_contract_stays_blocked_with_file_and_reconcile(
+    tmp_path,
+) -> None:
+    """v4 producer vs v2 verifier is a live disagreement, not doc drift."""
+    conn = sqlite3.connect(tmp_path / "v4-hard-gates.db")
+    conn.row_factory = sqlite3.Row
+    _create_table(conn)
+    _insert_set(conn)
+    conn.execute(
+        "UPDATE learning_policy_snapshots SET contract_id = ? "
+        "WHERE policy_id = ?",
+        ("production_policy_snapshot.v4", "risk.accum.hard_gates"),
+    )
+    adapter_file = ADAPTER_SNAPSHOT_FILES["risk.accum.hard_gates"]
+    with pytest.raises(PolicySnapshotError) as excinfo:
+        load_verified_snapshot_set(conn, COMPATIBILITY_ID)
+    reason = str(excinfo.value)
+    expected = snapshot_contract_mismatch_reason(
+        "risk.accum.hard_gates",
+        "production_policy_snapshot.v4",
+        SNAPSHOT_CONTRACT,
+    )
+    assert reason == expected
+    assert "production_policy_snapshot.v4" in reason
+    assert "production_policy_snapshot.v2" in reason
+    assert adapter_file in reason
+    assert VERIFIER_SNAPSHOT_FILE in reason
+    assert "Reconcile:" in reason
+    assert "do not copy ai-saham configs" in reason
+    assert "auto-promote" in reason

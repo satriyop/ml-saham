@@ -121,6 +121,15 @@ Hard rules (unchanged): **no** ai-saham Python imports · **no** scrapers · **n
   adapter.
 - Historical `production_policy_snapshot.v1` six-row cohorts are audit history,
   not eligible for current `baseline=production`.
+- ai-saham's active writer is `production_policy_snapshot.v4` (nine-row closed
+  set). ml-saham still requires the seven-row `production_policy_snapshot.v2`
+  set. A v4 `risk.accum.hard_gates` row is `BLOCKED_POLICY` naming
+  `src/ml_saham/challenge/policies/risk_accum_hard_gates.adapter.v1.json`
+  (`supported_snapshot_contract=production_policy_snapshot.v2`) and one
+  reconcile step: retarget that field and `SNAPSHOT_CONTRACT` in
+  `src/ml_saham/challenge/production_policy_snapshots.py` together in a reviewed
+  closed-set bump. Do not treat this as documentation drift, copy ai-saham
+  configs, or auto-promote a champion.
 - Snapshot or adapter integrity failures are `BLOCKED_POLICY`; valid policy
   with insufficient rows/folds is `BLOCKED_DATA`.
 - Because default cohort selection remains largest, operators auditing a thin

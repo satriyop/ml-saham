@@ -30,8 +30,25 @@ Enabled gates: bandar, liquidity, fundamental, free_float, technical (when prese
 
 ## Baseline
 
-`src/ml_saham/challenge/policies/risk_accum_hard_gates.v1.json`  
+`src/ml_saham/challenge/policies/risk_accum_hard_gates.adapter.v1.json`  
+(`supported_snapshot_contract=production_policy_snapshot.v2`)  
 `score_kind=gate_block` · panel from observation `trade_setup.blocking_gates`.
+
+Semantic engine contract stays `risk.hard_gates.accum.v1` on both sides.
+The live disagreement is the snapshot artifact contract, not a copied gate config.
+
+## Snapshot contract (live mismatch — stay blocked)
+
+ai-saham writes active accum cohorts as `production_policy_snapshot.v4`
+(nine-row closed set). ml-saham still verifies the historical seven-row
+`production_policy_snapshot.v2` set. That is a live policy disagreement, not
+documentation drift. `challenge health` stays `BLOCKED_POLICY` and names the
+exact file plus one reconcile step:
+
+`risk.accum.hard_gates: contract_id='production_policy_snapshot.v4' does not match 'production_policy_snapshot.v2' (file src/ml_saham/challenge/policies/risk_accum_hard_gates.adapter.v1.json supported_snapshot_contract=production_policy_snapshot.v2; producer contract=production_policy_snapshot.v4). Reconcile: set supported_snapshot_contract in src/ml_saham/challenge/policies/risk_accum_hard_gates.adapter.v1.json and SNAPSHOT_CONTRACT in src/ml_saham/challenge/production_policy_snapshots.py from production_policy_snapshot.v2 to production_policy_snapshot.v4 only as one reviewed closed-set bump — live policy disagreement, not documentation drift; do not copy ai-saham configs or auto-promote a champion.`
+
+Do not retarget the adapter or `SNAPSHOT_CONTRACT` in a docs-only change.
+Do not copy ai-saham configs into ml-saham as a promotion.
 
 ## Never
 

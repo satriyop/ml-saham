@@ -74,6 +74,24 @@ artifacts/challenge/health/<ts>/
 | 0 | Recipe finished (BLOCKED rows allowed) |
 | 2 | Bad scenario / missing DB / resolve error |
 
+### Accum hard_gates snapshot contract
+
+`challenge health` stays `BLOCKED_POLICY` when the selected cohort's
+`risk.accum.hard_gates` row is ai-saham `production_policy_snapshot.v4` and
+ml-saham still requires `production_policy_snapshot.v2`. That is a live
+closed-set disagreement (v4 is nine rows; ml-saham verifies seven), not
+documentation drift. The printed reason names:
+
+- file `src/ml_saham/challenge/policies/risk_accum_hard_gates.adapter.v1.json`
+  (`supported_snapshot_contract=production_policy_snapshot.v2`)
+- producer contract `production_policy_snapshot.v4`
+- one-step reconcile: set that adapter field and `SNAPSHOT_CONTRACT` in
+  `src/ml_saham/challenge/production_policy_snapshots.py` from
+  `production_policy_snapshot.v2` to `production_policy_snapshot.v4` only as
+  one reviewed closed-set bump
+
+Do not copy ai-saham configs or auto-promote a champion to clear the block.
+
 ### Cron install (recommended)
 
 ```bash

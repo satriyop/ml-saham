@@ -210,6 +210,13 @@ def _attention(
             f"{len(blocked)} engine policy row(s) BLOCKED: "
             + ", ".join(r["policy_id"] for r in blocked[:5])
         )
+        seen: set[str] = set()
+        for row in blocked:
+            for note in row.get("notes") or []:
+                if "Reconcile:" not in note or note in seen:
+                    continue
+                seen.add(note)
+                attn.append(f"BLOCKED_POLICY: {note}")
     loses = [r for r in engine_rows if r.get("status") == "LOSE"]
     if loses:
         attn.append(
@@ -303,6 +310,18 @@ def build_summary_md(
             f"{r.get('n_rows')} | {_fmt_ic(r.get('primary_ic_baseline'))} | "
             f"{_fmt_ic(r.get('primary_ic_against'))} |"
         )
+    seen_reasons: set[str] = set()
+    for r in engine_payload.get("rows") or []:
+        if not str(r.get("status") or "").startswith("BLOCKED"):
+            continue
+        for note in r.get("notes") or []:
+            if "Reconcile:" not in note and "contract_id=" not in note:
+                continue
+            if note in seen_reasons:
+                continue
+            seen_reasons.add(note)
+            lines.append("")
+            lines.append(f"**BLOCKED_POLICY:** {note}")
     if engine_payload.get("resolve_error"):
         lines.append("")
         lines.append(f"**Engine resolve error:** {engine_payload['resolve_error']}")
