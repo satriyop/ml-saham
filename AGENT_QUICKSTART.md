@@ -267,9 +267,10 @@ A SHA is not eligible for `main` until GitHub Actions is green on it. Local
 focused tests and CI-equivalent commands are necessary, not sufficient. This
 rule is the same in sibling `ai-saham`.
 
-GitHub ruleset `main requires CI` rejects updates to `main` whose SHA lacks a
-green `challenge + core tests` check. A new commit therefore cannot be pushed
-straight to `main`.
+Workflow `.github/workflows/ci.yml` runs on every branch push and on pull
+requests. GitHub ruleset `main requires CI` rejects updates to `main` whose
+SHA lacks a green `challenge + core tests` check. A new commit therefore
+cannot be pushed straight to `main`.
 
 1. Push owned commits to a working branch (or open a PR).
 2. Wait until a workflow run exists for the SHA
