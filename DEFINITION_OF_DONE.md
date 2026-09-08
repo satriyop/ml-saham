@@ -152,6 +152,12 @@ applicable. Broad/shared changes require full `pytest -q`. Live-data claims
 require the marked live smoke when the maintainer DB is available, with an
 upstream mutation tripwire.
 
+A SHA is not eligible for `main` while GitHub Actions workflow `ci` is
+pending or red on it. Close-gate evidence is the GitHub run on the exact
+commit (`challenge + core tests`). Local compile/pytest is not a substitute.
+Push a working branch first, wait for green, then update `main`. If CI fails,
+fix the branch and wait again.
+
 The repository does not yet have an accepted green Ruff baseline. Do not claim
 one. Once the dedicated Ruff foundation change lands and updates this file,
 whole-repo Ruff check and format become mandatory.

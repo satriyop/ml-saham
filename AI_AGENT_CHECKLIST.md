@@ -142,6 +142,9 @@ not load unrelated documents merely to tick boxes.
 - [ ] Focused happy and negative tests pass.
 - [ ] Identity/provenance/cohort/PIT/leakage cases are tested.
 - [ ] Affected commands from `.github/workflows/ci.yml` pass.
+- [ ] GitHub Actions `ci` is green on the SHA before it updates `main`
+      (`gh run watch --exit-status` on the working-branch push). Do not
+      leave `main` red.
 - [ ] Broad/shared changes ran full `pytest -q`.
 - [ ] `python -m compileall -q src tests` passes for Python changes.
 - [ ] `git diff --check` passes.

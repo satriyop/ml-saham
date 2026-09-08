@@ -39,7 +39,10 @@ Always confirm explicitly that:
 - you will not confuse curriculum demonstrations with challenge authority;
 - you will protect shared worktree changes and use no destructive git cleanup
   without explicit approval and file scope;
-- you will obey the verification matrix in `AGENT_QUICKSTART.md`.
+- you will obey the verification matrix in `AGENT_QUICKSTART.md`;
+- you will not update `main` or report a task done while GitHub Actions is
+  pending or red on that commit — push a branch, wait until the required
+  workflow is green, then update `main`.
 
 Before coding, state:
 

@@ -261,6 +261,26 @@ CI's current executable gate is `.github/workflows/ci.yml`. At minimum, do not
 close Python work unless every affected CI command passes locally or an exact,
 unrelated environment failure is documented.
 
+### Push CI gate
+
+A SHA is not eligible for `main` until GitHub Actions is green on it. Local
+focused tests and CI-equivalent commands are necessary, not sufficient. This
+rule is the same in sibling `ai-saham`.
+
+GitHub ruleset `main requires CI` rejects updates to `main` whose SHA lacks a
+green `challenge + core tests` check. A new commit therefore cannot be pushed
+straight to `main`.
+
+1. Push owned commits to a working branch (or open a PR).
+2. Wait until a workflow run exists for the SHA
+   (`gh run list --commit <sha>`).
+3. Watch it to completion: `gh run watch --exit-status <run-id>`.
+4. Required workflow here is `.github/workflows/ci.yml`
+   (`challenge + core tests`).
+5. After it is green, update `main` (fast-forward that SHA, or merge the PR).
+6. If CI fails, fix and push the branch again. Do not report the task done on
+   a pending or red run. Do not leave `main` red.
+
 ### Ruff foundation gap
 
 This repository currently has no accepted Ruff dependency/configuration or
@@ -430,7 +450,9 @@ Lead with the result. Report:
 - live DB/cohort evidence when used;
 - any known limitations or unrelated failures;
 - files/commit IDs when committed;
+- GitHub Actions conclusion on the pushed SHA when a push happened;
 - confirmation that upstream SQLite and unrelated worktree changes were not
   modified.
 
-Do not call work complete when a mandatory acceptance item remains open.
+Do not call work complete when a mandatory acceptance item remains open, or
+when GitHub Actions is still pending or red on a commit that updated `main`.
