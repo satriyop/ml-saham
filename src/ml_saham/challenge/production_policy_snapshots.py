@@ -39,6 +39,7 @@ REQUIRED_POLICIES: dict[str, tuple[str, str]] = {
 }
 
 VERIFIER_SNAPSHOT_FILE = "src/ml_saham/challenge/production_policy_snapshots.py"
+SNAPSHOT_CONTRACT_MISMATCH_MARK = "snapshot_contract_mismatch"
 
 SNAPSHOT_COLUMNS = {
     "snapshot_id",
@@ -69,21 +70,21 @@ def snapshot_contract_mismatch_reason(
 ) -> str:
     """Honest BLOCKED_POLICY text for a live snapshot-contract disagreement.
 
-    Names the ML-owned adapter file that still declares the expected contract,
-    or the verifier file for identity-only rows. Does not accept the producer
-    contract.
+    Names the ML-owned adapter file, or the verifier file for identity-only
+    rows. Does not accept the producer contract.
     """
     adapter_file = adapter_repo_path(policy_id) or VERIFIER_SNAPSHOT_FILE
     return (
-        f"{policy_id}: contract_id={actual!r} does not match {expected!r} "
-        f"(file {adapter_file} supported_snapshot_contract={expected}; "
-        f"producer contract={actual}). "
-        f"Reconcile: set supported_snapshot_contract in {adapter_file} and "
-        f"SNAPSHOT_CONTRACT in {VERIFIER_SNAPSHOT_FILE} from {expected} to "
-        f"{actual} only as one reviewed closed-set bump — live policy "
-        f"disagreement, not documentation drift; do not copy ai-saham configs "
-        f"or auto-promote a champion."
+        f"{SNAPSHOT_CONTRACT_MISMATCH_MARK}: {policy_id}: "
+        f"contract_id={actual!r} does not match {expected!r} "
+        f"(file {adapter_file}). One reviewed closed-set bump of that file "
+        f"and SNAPSHOT_CONTRACT; do not copy ai-saham configs or "
+        f"auto-promote a champion."
     )
+
+
+def is_snapshot_contract_mismatch_note(note: str) -> bool:
+    return str(note).startswith(f"{SNAPSHOT_CONTRACT_MISMATCH_MARK}:")
 
 
 def _require_exact_value(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -16,7 +17,13 @@ from ml_saham.challenge.health import (
 from ml_saham.challenge.policies.registry import adapter_repo_path
 from ml_saham.challenge.production_policy_snapshots import (
     SNAPSHOT_CONTRACT,
-    snapshot_contract_mismatch_reason,
+    PolicySnapshotError,
+    load_verified_snapshot_set,
+)
+from tests.test_production_policy_snapshots import (
+    COMPATIBILITY_ID,
+    _create_table,
+    _insert_set,
 )
 from ml_saham.cli.app import app
 from tests.fixtures.build_mvp_fixture import FIXTURE_COMPATIBILITY_ID, build_mvp_fixture
@@ -246,14 +253,20 @@ def test_health_bad_scenario(fixture_db: Path):
     assert result.resolve_error
 
 
-def test_health_summary_names_hard_gates_contract_file_and_reconcile() -> None:
+def test_health_reprints_hard_gates_mismatch_from_verifier(tmp_path: Path) -> None:
     adapter_file = adapter_repo_path("risk.accum.hard_gates")
     assert adapter_file is not None
-    reason = snapshot_contract_mismatch_reason(
-        "risk.accum.hard_gates",
-        "production_policy_snapshot.v5",
-        SNAPSHOT_CONTRACT,
+    foreign = "production_policy_snapshot.v5"
+    conn = sqlite3.connect(tmp_path / "health-hard-gates.db")
+    conn.row_factory = sqlite3.Row
+    _create_table(conn)
+    _insert_set(conn)
+    conn.execute(
+        "UPDATE learning_policy_snapshots SET contract_id = ? WHERE policy_id = ?",
+        (foreign, "risk.accum.hard_gates"),
     )
+    with pytest.raises(PolicySnapshotError) as excinfo:
+        load_verified_snapshot_set(conn, COMPATIBILITY_ID)
     row = {
         "scenario": "accum",
         "policy_id": "risk.accum.hard_gates",
@@ -261,10 +274,10 @@ def test_health_summary_names_hard_gates_contract_file_and_reconcile() -> None:
         "n_rows": 0,
         "primary_ic_baseline": None,
         "primary_ic_against": None,
-        "notes": [reason],
+        "notes": [str(excinfo.value)],
     }
     md = build_summary_md(
-        db_path=Path("/tmp/data.db"),
+        db_path=tmp_path / "data.db",
         scenario="accum",
         with_champion=False,
         with_factors=False,
@@ -278,9 +291,9 @@ def test_health_summary_names_hard_gates_contract_file_and_reconcile() -> None:
     )
     assert "**BLOCKED_POLICY:**" in md
     assert adapter_file in md
-    assert "production_policy_snapshot.v5" in md
+    assert foreign in md
     assert SNAPSHOT_CONTRACT in md
-    assert "Reconcile:" in md
-    assert "do not copy ai-saham configs" in md
     attn = _attention([row], None, None, None, [])
-    assert any(note.startswith("BLOCKED_POLICY:") and adapter_file in note for note in attn)
+    assert any(
+        note.startswith("BLOCKED_POLICY:") and adapter_file in note for note in attn
+    )

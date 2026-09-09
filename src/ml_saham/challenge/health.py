@@ -18,6 +18,9 @@ from ml_saham.challenge.engines import (
 from ml_saham.challenge.factor_validity import run_factor_challenge_batch
 from ml_saham.challenge.runner import run_policy_challenge
 from ml_saham.challenge.readiness import build_accum_challenge_readiness
+from ml_saham.challenge.production_policy_snapshots import (
+    is_snapshot_contract_mismatch_note,
+)
 from ml_saham.challenge.types import ChallengeResult, HealthReportResult
 
 ACCUM_POLICY = "screener.accum.score_weights"
@@ -38,7 +41,7 @@ def _blocked_policy_contract_notes(engine_rows: list[dict[str, Any]]) -> list[st
         if not str(row.get("status") or "").startswith("BLOCKED"):
             continue
         for note in row.get("notes") or []:
-            if "Reconcile:" not in note and "contract_id=" not in note:
+            if not is_snapshot_contract_mismatch_note(str(note)):
                 continue
             if note in seen:
                 continue
