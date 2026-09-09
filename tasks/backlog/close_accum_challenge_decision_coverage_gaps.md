@@ -1,6 +1,6 @@
 # Close Accum Challenge Decision-Coverage Gaps (G0-G4)
 
-Status: `READY_FOR_PHASED_EXECUTION`
+Status: `PAUSED_PENDING_C0B_FOLDS` (observation mode; see §0 pause guard)
 
 Source: code-first product-gap audit on 2026-07-31, rebased against current
 executable code, focused tests, and read-only maintainer-DB evidence on
@@ -22,10 +22,34 @@ blanket readiness state:
 | Checkpoint | Current availability |
 |---|---|
 | C0 | Implemented and live-vetted on 2026-08-13. Typed producer and Protocol axes ship through health artifacts/CLI and Challenge Desk. |
-| C1 | Ready for protocol/metric implementation and deterministic fixtures. A confirmatory live result still requires multi-session depth. |
-| C2 | Replay extraction, live-shaped goldens, and cohort-bound production adapter conformance are shipped. The locked tournament remains open and may build on C1. |
+| C1 | Pause confirmatory protocol/metric implementation. Verdict-law drafting (lock a versioned gate verdict law before outcome inspection) remains allowed. Fixtures and live confirmation wait on C0B folds. |
+| C2 | Replay extraction, live-shaped goldens, and cohort-bound production adapter conformance are shipped. Pause proposal grids, PolicySpec registration, and the confirmatory tournament until C0B shows two valid post-embargo OOS folds. Numerical-limit approval without confirmation inspection may proceed. |
 | C3 | Resolved externally by ai-saham ADR-062: the dormant score bonus is retired. No production PolicySpec or challenge implementation is authorized. |
 | C4 | Data-blocked. Do not implement the Action verdict while per-fold ENTER/readiness support remains insufficient. |
+
+### Maintainer pause / no-overengineering guard (2026-08-13)
+
+`ml-saham` is intentionally in **observation mode** for this program. Do not
+add a new model, scorer, feature, fold workaround, threshold/floor, engine
+wiring, alternate readiness surface, proposal grid, or PolicySpec
+registration merely to make progress while C0B remains `INCONCLUSIVE_DEPTH`.
+Locking the existing named Protocol's versioned gate verdict law before
+outcome inspection (C1 drafting) is still in scope; do not add a second
+Protocol identity.
+
+Resume proposal/tournament work only when the existing typed C0 report shows
+at least **two valid post-embargo OOS folds** for the exact selected ACCUM
+cohort and named Protocol. Until then, let `ai-saham` capture new sessions
+and let H10 labels mature, and monitor that through the shipped
+`challenge health` / Challenge Desk readiness output. Do not weaken the
+20-session embargo, pool incompatible cohorts, reinterpret immature rows,
+retrofit historical snapshots or labels, or adopt a floor to manufacture
+folds.
+
+Exception: a confidently reproduced bug, security issue, upstream read-only
+violation, identity corruption, or fail-open contract defect may be fixed after
+normal code-first vetting. Such a fix must not be used as a pretext for adding
+new product scope.
 
 The C0 projection has two independent axes and must never collapse them into
 one inferred status:
@@ -68,8 +92,9 @@ that Protocol only.
 Sequencing guard: snapshot/cohort/promotion hardening has continued in both
 repositories. The current companion task still records an in-progress code
 gate; C0 implementation must recheck that completion record and current
-producer DTO before coding. C1 and C2 contract/conformance work may proceed in
-parallel, but confirmatory verdicts remain data-dependent. Preserve the
+producer DTO before coding. While C0B is `INCONCLUSIVE_DEPTH`, only C1
+verdict-law drafting and C2 numerical-limit approval without confirmation
+inspection may proceed; confirmatory C1/C2 execution stays paused. Preserve the
 unrelated Streamlit/Challenge Desk work in this repository and all unrelated
 ai-saham worktree changes.
 
