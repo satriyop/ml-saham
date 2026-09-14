@@ -44,6 +44,7 @@ coverage.xml
 Thumbs.db
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
 *~

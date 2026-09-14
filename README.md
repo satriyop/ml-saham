@@ -180,3 +180,19 @@ ml-saham  →  read-only DB
 
 ADRs: [docs/adr/](./docs/adr/) · Architecture: [architecture.md](./architecture.md) · Boundary: [BOUNDARY.md](./BOUNDARY.md)  
 SOTA vocabulary (not literature frontier): [docs/sota_vocabulary_and_literature.md](./docs/sota_vocabulary_and_literature.md)
+
+---
+
+## Disclaimer
+
+This repository is provided solely for educational, research, and technical evaluation purposes.
+
+- **Not Financial Advice:** Nothing contained in this codebase, documentation, or generated challenge outputs constitutes financial, investment, legal, or tax advice.
+- **No Warranty & Risk Assumption:** Trading Indonesian equities (IDX) or any financial assets involves substantial risk of loss. The authors and contributors make no representations or warranties regarding accuracy, completeness, or profitability, and disclaim all liability for any financial loss or damages incurred directly or indirectly from using this software.
+- **Offline Decision Support Only:** `ml-saham` provides deterministic, offline statistical challenge evaluation and never automatically executes trades or promotes configurations to live systems.
+
+---
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](./LICENSE) file for details.
