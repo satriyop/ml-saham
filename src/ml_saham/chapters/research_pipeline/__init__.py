@@ -97,7 +97,7 @@ def run_demo(ctx: ChapterContext) -> DemoResult:
 
     order = sorted(range(len(tickers)), key=lambda i: scores[i], reverse=True)
     top = [
-        {"ticker": tickers[i], "score": scores[i], "mom20": mom[tickers[i]], "fwd": rets[i]}
+        {"ticker": tickers[i], "score": scores[i], "mom20": mom_vals[i], "fwd": rets[i]}
         for i in order[:10]
     ]
 

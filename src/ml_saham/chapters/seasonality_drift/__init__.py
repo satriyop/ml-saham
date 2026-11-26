@@ -39,79 +39,11 @@ def explore_text(*, verbose: bool = False) -> str:
     return "\n".join(lines)
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
-    try:
-        import pandas as pd
-        from prophet import Prophet
-        import logging
-        logging.getLogger("cmdstanpy").disabled = True
-    except ImportError as exc:
-        raise ChapterError("Butuh pandas & prophet: pip install pandas prophet") from exc
-
-    with connect(ctx.db_path) as conn:
-        rows = load_candles(conn, ctx.universe)
-
-    if not rows:
-        raise ChapterDataError("Candles kosong.", hint="ml-saham fetch market")
-
-    df = pd.DataFrame(rows)
-    df["date"] = pd.to_datetime(df["date"])
-    df = df.sort_values(["ticker", "date"])
-    df["return"] = df.groupby("ticker")["close"].pct_change() * 100
-    df = df.dropna(subset=["return"])
-
-    ticker = ctx.universe[0] if ctx.universe else df["ticker"].iloc[0]
-    df_t = df[df["ticker"] == ticker].copy()
-
-    if len(df_t) < 252:
-        raise ChapterDataError(f"Data candles {ticker} terlalu sedikit.")
-
-    df_t = df_t.rename(columns={"date": "ds", "return": "y"})
-
-    # Fit Prophet
-    model = Prophet(yearly_seasonality=True, weekly_seasonality=False, daily_seasonality=False)
-    model.fit(df_t[["ds", "y"]])
-
-    # Extract seasonal component for each month
-    future = pd.DataFrame({'ds': pd.date_range(start='2023-01-01', end='2023-12-31', freq='D')})
-    forecast = model.predict(future)
-    
-    forecast['month'] = forecast['ds'].dt.month
-    if 'yearly' in forecast.columns:
-        monthly_seasonality = forecast.groupby('month')['yearly'].mean().to_dict()
-    else:
-        # Fallback if yearly component is somehow named differently
-        monthly_seasonality = forecast.groupby('month')['yhat'].mean().to_dict()
-
-    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    monthly_stats = []
-    for m in range(1, 13):
-        monthly_stats.append((m, month_names[m-1], monthly_seasonality.get(m, 0.0)))
-        
-    monthly_stats.sort(key=lambda x: -x[2])
-
-    lines = [
-        f"Ticker: {ticker} (n={len(df_t)})",
-        "Default (Prophet) Yearly Seasonality Component:",
-        "",
-        "Ranking rata-rata efek musiman bulanan:"
-    ]
-    for m, name, effect in monthly_stats:
-        lines.append(f"  {name:<4} (Bulan {m:2d})  seasonality_effect={effect:+.3f}%")
-
-    metrics = {
-        "n_records": len(df_t),
-        "ticker": ticker,
-    }
-
-    return DemoResult(
-        title="Seasonality drift · Default Prophet Demo",
-        lines=lines,
-        metrics=metrics,
-        model="prophet_seasonality",
-        summary_md=f"# Seasonality drift\n\nProphet model fitted on {ticker}.\n",
-        scoreboard=False,
-        scoreboard_kind="none",
-    )
+    # Prophet is not a project dependency. Reuse the compare illustration:
+    # naive month-of-year average and Ridge month dummies, with Prophet only
+    # when it is already importable and history is long enough (>= 200 bars).
+    # The non-prophet path accepts >= 40 bars, so the 80-bar MVP fixture works.
+    return run_compare(ctx)
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
     try:
