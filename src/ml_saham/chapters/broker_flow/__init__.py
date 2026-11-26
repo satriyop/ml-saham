@@ -33,8 +33,8 @@ def explore_text(*, verbose: bool = False) -> str:
         lines.append("\nDetail: Evaluasi Sub-Ensemble Flow Engine.")
     return "\n".join(lines)
 
-def run_demo(ctx: ChapterContext) -> DemoResult:
-    raise NotImplementedError("Gunakan mode challenge (run_compare) untuk evaluasi Flow Engine.")
+def run_demo(ctx: ChapterContext, **kwargs) -> DemoResult:
+    return run_compare(ctx, **kwargs)
 
 def run_compare(ctx: ChapterContext, **kwargs) -> DemoResult:
     # 1. Tentukan purpose berdasarkan scenario (default: ACCUMULATION_DISCOVERY)

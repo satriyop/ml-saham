@@ -108,6 +108,15 @@ def test_screen_factor_broker_demos(fixture_db: Path):
     for slug in ("screen-rules", "factor-score", "broker-flow"):
         mod = load_chapter(slug)
         result = mod.run_demo(ChapterContext(db_path=fixture_db, universe=[]))
+        if slug == "broker-flow":
+            # Compare illustration: populated sample count, not an IHSG scoreboard.
+            assert (
+                result.metrics.get("n_samples")
+                or result.metrics.get("n")
+                or result.metrics.get("n_tickers")
+            )
+            assert result.scoreboard is False
+            continue
         assert result.metrics.get("n") or result.metrics.get("n_tickers")
         assert result.scoreboard is True
 

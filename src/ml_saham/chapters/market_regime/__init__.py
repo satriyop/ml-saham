@@ -35,7 +35,7 @@ def explore_text(*, verbose: bool = False) -> str:
     return "\n".join(lines)
 
 def run_demo(ctx: ChapterContext) -> DemoResult:
-    raise NotImplementedError("Gunakan mode challenge (run_compare) untuk evaluasi Market Regime.")
+    return run_compare(ctx)
 
 def run_compare(ctx: ChapterContext) -> DemoResult:
     with connect(ctx.db_path) as conn:
